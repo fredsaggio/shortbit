@@ -19,18 +19,17 @@ const (
 
 type Config struct {
 	DatabaseURL string
-	HTTP    HTTPConfig
+	HTTP        HTTPConfig
 	Log         LogConfig
 }
 
-
 type HTTPConfig struct {
-	Addr string
+	Addr              string
 	ReadHeaderTimeout time.Duration
-	ReadTimeout time.Duration
-	WriteTimeout time.Duration
-	IdleTimeout time.Duration
-	ShutdownTimeout time.Duration
+	ReadTimeout       time.Duration
+	WriteTimeout      time.Duration
+	IdleTimeout       time.Duration
+	ShutdownTimeout   time.Duration
 }
 
 type LogConfig struct {
@@ -42,12 +41,12 @@ func Load(getEnv func(string) string) (Config, error) {
 	cfg := Config{
 		DatabaseURL: getEnv("DATABASE_URL"),
 		HTTP: HTTPConfig{
-			Addr: envOrDefault(getEnv, "HTTP_ADDR", ":8080"),
+			Addr:              envOrDefault(getEnv, "HTTP_ADDR", defaultHTTPAddr),
 			ReadHeaderTimeout: defaultReadHeaderTimeout,
-  			ReadTimeout:       defaultReadTimeout,
-  			WriteTimeout:      defaultWriteTimeout,
-  			IdleTimeout:       defaultIdleTimeout,
-  			ShutdownTimeout:   defaultShutdownTimeout,
+			ReadTimeout:       defaultReadTimeout,
+			WriteTimeout:      defaultWriteTimeout,
+			IdleTimeout:       defaultIdleTimeout,
+			ShutdownTimeout:   defaultShutdownTimeout,
 		},
 		Log: LogConfig{
 			Format: strings.ToLower(envOrDefault(getEnv, "LOG_FORMAT", "json")),
