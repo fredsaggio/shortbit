@@ -14,6 +14,8 @@ import (
 )
 
 func main() {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer cancel()
@@ -28,9 +30,6 @@ func Run(ctx context.Context, getEnv func(string) string) error {
 	if err != nil {
 		return err
 	}
-
-	logger := newLogger(cfg.Log)
-	slog.SetDefault(logger)
 
 	pool, err := db.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
@@ -64,7 +63,7 @@ func Run(ctx context.Context, getEnv func(string) string) error {
 		return err
 
 	case <-ctx.Done():
-		logger.Info("shutting down server...")
+		slog.Info("shutting down server...")
 
 		shutdownCtx, cancel := context.WithTimeout(
 			context.Background(),
@@ -84,22 +83,4 @@ func Run(ctx context.Context, getEnv func(string) string) error {
 
 		return err
 	}
-}
-
-func newLogger(cfg config.LogConfig) *slog.Logger {
-	options := &slog.HandlerOptions{
-		Level: cfg.Level,
-	}
-
-	var handler slog.Handler
-
-	switch cfg.Format {
-	case "text":
-		handler = slog.NewTextHandler(os.Stdout, options)
-	default:
-		handler = slog.NewJSONHandler(os.Stdout, options)
-	}
-
-	return slog.New(handler)
-
 }

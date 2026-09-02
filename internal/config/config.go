@@ -2,9 +2,6 @@ package config
 
 import (
 	"errors"
-	"fmt"
-	"log/slog"
-	"strings"
 	"time"
 )
 
@@ -20,7 +17,6 @@ const (
 type Config struct {
 	DatabaseURL string
 	HTTP        HTTPConfig
-	Log         LogConfig
 }
 
 type HTTPConfig struct {
@@ -30,11 +26,6 @@ type HTTPConfig struct {
 	WriteTimeout      time.Duration
 	IdleTimeout       time.Duration
 	ShutdownTimeout   time.Duration
-}
-
-type LogConfig struct {
-	Level  slog.Level
-	Format string
 }
 
 func Load(getEnv func(string) string) (Config, error) {
@@ -48,23 +39,10 @@ func Load(getEnv func(string) string) (Config, error) {
 			IdleTimeout:       defaultIdleTimeout,
 			ShutdownTimeout:   defaultShutdownTimeout,
 		},
-		Log: LogConfig{
-			Format: strings.ToLower(envOrDefault(getEnv, "LOG_FORMAT", "json")),
-		},
 	}
 
 	if cfg.DatabaseURL == "" {
 		return Config{}, errors.New("DATABASE_URL is required")
-	}
-
-	if err := cfg.Log.Level.UnmarshalText(
-		[]byte(envOrDefault(getEnv, "LOG_LEVEL", "info")),
-	); err != nil {
-		return Config{}, fmt.Errorf("invalid LOG_LEVEL: %w", err)
-	}
-
-	if cfg.Log.Format != "json" && cfg.Log.Format != "text" {
-		return Config{}, fmt.Errorf("invalid LOG_FORMAT %q: expected json or text", cfg.Log.Format)
 	}
 
 	return cfg, nil

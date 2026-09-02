@@ -1,7 +1,6 @@
 package config_test
 
 import (
-	"log/slog"
 	"strings"
 	"testing"
 	"time"
@@ -21,8 +20,6 @@ func TestLoad(t *testing.T) {
 			env: map[string]string{
 				"DATABASE_URL": "postgres://user:password@localhost:5432/app",
 				"HTTP_ADDR":    ":9090",
-				"LOG_LEVEL":    "debug",
-				"LOG_FORMAT":   "text",
 			},
 			want: config.Config{
 				DatabaseURL: "postgres://user:password@localhost:5432/app",
@@ -33,10 +30,6 @@ func TestLoad(t *testing.T) {
 					WriteTimeout:      15 * time.Second,
 					IdleTimeout:       60 * time.Second,
 					ShutdownTimeout:   10 * time.Second,
-				},
-				Log: config.LogConfig{
-					Level:  slog.LevelDebug,
-					Format: "text",
 				},
 			},
 		},
@@ -55,32 +48,12 @@ func TestLoad(t *testing.T) {
 					IdleTimeout:       60 * time.Second,
 					ShutdownTimeout:   10 * time.Second,
 				},
-				Log: config.LogConfig{
-					Level:  slog.LevelInfo,
-					Format: "json",
-				},
 			},
 		},
 		{
 			name:            "rejects missing database URL",
 			env:             map[string]string{},
 			wantErrContains: "DATABASE_URL is required",
-		},
-		{
-			name: "rejects invalid log level",
-			env: map[string]string{
-				"DATABASE_URL": "postgres://localhost/app",
-				"LOG_LEVEL":    "verbose",
-			},
-			wantErrContains: "invalid LOG_LEVEL",
-		},
-		{
-			name: "rejects invalid log format",
-			env: map[string]string{
-				"DATABASE_URL": "postgres://localhost/app",
-				"LOG_FORMAT":   "xml",
-			},
-			wantErrContains: "invalid LOG_FORMAT",
 		},
 	}
 
