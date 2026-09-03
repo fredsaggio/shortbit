@@ -30,6 +30,7 @@ func (srv *Server) NewRouterHTTP() http.Handler {
 
 	handler := http.Handler(mux)
 
+	handler = middleware.Recovery(handler)
 	handler = middleware.AccessLog(handler)
 	handler = middleware.RequestID(handler)
 
