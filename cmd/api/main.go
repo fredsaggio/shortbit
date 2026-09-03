@@ -9,8 +9,10 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/fredsaggio/url-shortener/internal/app"
 	"github.com/fredsaggio/url-shortener/internal/config"
 	"github.com/fredsaggio/url-shortener/internal/db"
+	"github.com/fredsaggio/url-shortener/internal/server"
 )
 
 func main() {
@@ -37,11 +39,14 @@ func Run(ctx context.Context, getEnv func(string) string) error {
 	}
 	defer pool.Close()
 
-	mux := http.NewServeMux()
+	handlers := app.CompositionRoot(pool)
+	srv := server.NewServer(handlers)
+
+	handler := srv.NewRouterHTTP()
 
 	server := &http.Server{
 		Addr:              cfg.HTTP.Addr,
-		Handler:           mux,
+		Handler:           handler,
 		ReadHeaderTimeout: cfg.HTTP.ReadHeaderTimeout,
 		ReadTimeout:       cfg.HTTP.ReadTimeout,
 		WriteTimeout:      cfg.HTTP.WriteTimeout,
