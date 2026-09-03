@@ -62,44 +62,43 @@ func TestAccessLog(t *testing.T) {
 	}
 
 	if logEntry.Message != "http request" {
-  		t.Errorf(
-  			"expected message %q, got %q",
-  			"http request",
-  			logEntry.Message,
-  		)
-  	}
+		t.Errorf(
+			"expected message %q, got %q",
+			"http request",
+			logEntry.Message,
+		)
+	}
 
-  	if logEntry.Method != http.MethodPost {
-  		t.Errorf(
-  			"expected method %q, got %q",
-  			http.MethodPost,
-  			logEntry.Method,
-  		)
-  	}
+	if logEntry.Method != http.MethodPost {
+		t.Errorf(
+			"expected method %q, got %q",
+			http.MethodPost,
+			logEntry.Method,
+		)
+	}
 
-  	if logEntry.Path != "/urls" {
-  		t.Errorf(
-  			"expected path %q, got %q",
-  			"/urls",
-  			logEntry.Path,
-  		)
-  	}
+	if logEntry.Path != "/urls" {
+		t.Errorf(
+			"expected path %q, got %q",
+			"/urls",
+			logEntry.Path,
+		)
+	}
 
-  	if logEntry.Status != http.StatusCreated {
-  		t.Errorf(
-  			"expected logged status %d, got %d",
-  			http.StatusCreated,
-  			logEntry.Status,
-  		)
-  	}
+	if logEntry.Status != http.StatusCreated {
+		t.Errorf(
+			"expected logged status %d, got %d",
+			http.StatusCreated,
+			logEntry.Status,
+		)
+	}
 
-  	if logEntry.ResponseBytes != len(responseBody) {
-  		t.Errorf(
-  			"expected %d response bytes, got %d",
-  			len(responseBody),
-  			logEntry.ResponseBytes,
-  		)
-  	}
-
+	if logEntry.ResponseBytes != len(responseBody) {
+		t.Errorf(
+			"expected %d response bytes, got %d",
+			len(responseBody),
+			logEntry.ResponseBytes,
+		)
+	}
 
 }
