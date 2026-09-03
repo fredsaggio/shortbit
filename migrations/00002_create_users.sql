@@ -42,7 +42,7 @@ CREATE TRIGGER set_updated_at_password_credentials
 CREATE TABLE auth_identities (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     provider TEXT NOT NULL,
-    provider_subject TEXT NOT NULL,
+    provider_user_id TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     CONSTRAINT pk_auth_identities
