@@ -12,20 +12,23 @@ type User struct {
 	UpdatedAt time.Time
 }
 
-type UserWithPassword struct {
-	ID uuid.UUID
+type PasswordCredential struct {
+	UserID       uuid.UUID
 	PasswordHash string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
-type UserWithProvider struct {
-	ID uuid.UUID
-	Provider string
+type AuthIdentity struct {
+	UserID         uuid.UUID
+	Provider       string
 	ProviderUserID string
-	CreatedAt time.Time
+	CreatedAt      time.Time
 }
 
-type UserSessions struct {
-	
+type UserSession struct {
+	TokenHash []byte
+	UserID    uuid.UUID
+	CreatedAt time.Time
+	ExpiresAt time.Time
 }

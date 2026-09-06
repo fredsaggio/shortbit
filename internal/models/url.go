@@ -21,9 +21,6 @@ type URL struct {
 type Visibility string
 
 const (
-	Public Visibility = "public"
-	Private Visibility = "private"
+	VisibilityPublic  Visibility = "public"
+	VisibilityPrivate Visibility = "private"
 )
-
-
-

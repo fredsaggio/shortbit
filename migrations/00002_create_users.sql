@@ -46,7 +46,7 @@ CREATE TABLE auth_identities (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     CONSTRAINT pk_auth_identities
-        PRIMARY KEY (provider, provider_subject),
+        PRIMARY KEY (provider, provider_user_id),
 
     CONSTRAINT uq_auth_identities_user_provider
         UNIQUE (user_id, provider),
@@ -57,8 +57,8 @@ CREATE TABLE auth_identities (
     CONSTRAINT chk_auth_identities_provider_canonical
         CHECK (provider = LOWER(BTRIM(provider))),
 
-    CONSTRAINT chk_auth_identities_provider_subject_not_blank
-        CHECK (BTRIM(provider_subject) <> '')
+    CONSTRAINT chk_auth_identities_provider_user_id_not_blank
+        CHECK (BTRIM(provider_user_id) <> '')
 );
 -- +goose StatementEnd
 

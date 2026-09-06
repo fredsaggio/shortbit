@@ -1,6 +1,6 @@
 -- +goose Up
 -- +goose StatementBegin
-CREATE TYPE url_visibility AS ENUM ('public', 'password_protected');
+CREATE TYPE url_visibility AS ENUM ('public', 'private');
 
 CREATE TABLE urls (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -34,7 +34,7 @@ CREATE TABLE urls (
             (visibility = 'public' AND password_hash IS NULL)
             OR
             (
-                visibility = 'password_protected'
+                visibility = 'private'
                 AND password_hash IS NOT NULL
                 AND BTRIM(password_hash) <> ''
             )
