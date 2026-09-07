@@ -237,3 +237,38 @@ func replacePHCPart(
 
 	return strings.Join(parts, "$")
 }
+
+func BenchmarkArgon2idHash(b *testing.B) {
+	hasher := password.Argon2id{}
+
+	b.ReportAllocs()
+
+	for b.Loop() {
+		_, err := hasher.Hash("senha-segura")
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkArgon2idCompare(b *testing.B) {
+	hasher := password.Argon2id{}
+
+	encodedHash, err := hasher.Hash("senha-segura")
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	b.ReportAllocs()
+
+	for b.Loop() {
+		match, err := hasher.Compare("senha-segura", encodedHash)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		if !match {
+			b.Fatal("password should match")
+		}
+	}
+}
