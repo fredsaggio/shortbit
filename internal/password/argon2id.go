@@ -101,9 +101,19 @@ func decodeHash(encodedHash string) (hashParameters, []byte, []byte, error) {
 		return hashParameters{}, nil, nil, ErrInvalidHash
 	}
 
+	var version int
+
+	n, err := fmt.Sscanf(parts[2], "v=%d", &version)
+	if err != nil ||
+		n != 1 ||
+		parts[2] != fmt.Sprintf("v=%d", version) ||
+		version != argon2.Version {
+		return hashParameters{}, nil, nil, ErrInvalidHash
+	}
+
 	var parameters hashParameters
 
-	n, err := fmt.Sscanf(
+	n, err = fmt.Sscanf(
 		parts[3],
 		"m=%d,t=%d,p=%d",
 		&parameters.memory,
@@ -111,21 +121,30 @@ func decodeHash(encodedHash string) (hashParameters, []byte, []byte, error) {
 		&parameters.parallelism,
 	)
 
-	if err != nil || n != 3 {
+	if err != nil ||
+		n != 3 ||
+		parts[3] != fmt.Sprintf(
+			"m=%d,t=%d,p=%d",
+			parameters.memory,
+			parameters.iterations,
+			parameters.parallelism,
+		) {
 		return hashParameters{}, nil, nil, ErrInvalidHash
 	}
 
-	if parameters.memory == 0 || parameters.iterations == 0 || parameters.parallelism == 0 {
+	if parameters.memory != memory ||
+		parameters.iterations != iterations ||
+		parameters.parallelism != parallelism {
 		return hashParameters{}, nil, nil, ErrInvalidHash
 	}
 
 	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
-	if err != nil || len(salt) == 0 {
+	if err != nil || len(salt) != saltLength {
 		return hashParameters{}, nil, nil, ErrInvalidHash
 	}
 
 	hash, err := base64.RawStdEncoding.DecodeString(parts[5])
-	if err != nil || len(hash) == 0 {
+	if err != nil || len(hash) != keyLength {
 		return hashParameters{}, nil, nil, ErrInvalidHash
 	}
 
