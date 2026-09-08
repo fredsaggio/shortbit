@@ -13,17 +13,17 @@ import (
 
 var ErrEmailAlreadyExists = errors.New("email already exists")
 
-type AccountRepository struct {
+type UserRepository struct {
 	db db.DB
 }
 
-func NewAccountRepository(db db.DB) *AccountRepository {
-	return &AccountRepository{
+func NewUserRepository(db db.DB) *UserRepository {
+	return &UserRepository{
 		db: db,
 	}
 }
 
-func (r *AccountRepository) CreateWithPassword(ctx context.Context, email, passwordHash string) (models.User, error) {
+func (r *UserRepository) CreateWithPassword(ctx context.Context, email, passwordHash string) (models.User, error) {
 	tx, err := r.db.Begin(ctx)
 
 	if err != nil {
