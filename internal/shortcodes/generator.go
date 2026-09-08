@@ -9,7 +9,7 @@ const (
 	alphabet   = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 	codeLength = 10
 
-	// Tem que ser 248, números após isso dariam vantagem para cair em letras específicas.
+	// Tem que ser 248, números após isso dariam vantagem para cair em letras específicas. Necessário para criação de shortcodes imprevisíveis.
 	maxUnbiasedByte = 256 - (256 % len(alphabet))
 )
 
@@ -25,7 +25,7 @@ func (Generator) Generate() (string, error) {
 	for position < codeLength {
 		remaining := codeLength - position
 
-		// Gera bytes aleatórios e aloca no array randomBytes
+		// Gera bytes aleatórios e aloca no array randomBytes.
 		if _, err := rand.Read(randomBytes[:remaining]); err != nil {
 			return "", fmt.Errorf("generate random short code: %w", err)
 		}
