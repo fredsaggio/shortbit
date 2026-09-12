@@ -52,7 +52,7 @@ func (srv *Server) registerRoutes(mux *http.ServeMux) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	mux.HandleFunc("POST /users", srv.h.UserHandler.CreateWithPassword)
+	mux.HandleFunc("POST /users", srv.h.UserHandler.RegisterWithPassword)
 
 }
 

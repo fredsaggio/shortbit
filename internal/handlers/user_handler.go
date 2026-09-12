@@ -36,7 +36,7 @@ func NewUserHandler(userServ UserService) *UserHandler {
 	}
 }
 
-func (h *UserHandler) CreateWithPassword(w http.ResponseWriter, r *http.Request) {
+func (h *UserHandler) RegisterWithPassword(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var req createUserWithPasswordRequest
 

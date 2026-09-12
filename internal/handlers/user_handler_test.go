@@ -67,7 +67,7 @@ func TestUserHandlerCreateWithPassword(t *testing.T) {
 	)
 	response := httptest.NewRecorder()
 
-	handler.CreateWithPassword(response, request)
+	handler.RegisterWithPassword(response, request)
 
 	result := response.Result()
 	defer result.Body.Close()
@@ -140,7 +140,7 @@ func TestUserHandlerCreateWithPasswordRejectsInvalidJSON(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, "/users", strings.NewReader(tt.body))
 			response := httptest.NewRecorder()
 
-			handler.CreateWithPassword(response, request)
+			handler.RegisterWithPassword(response, request)
 
 			if response.Code != http.StatusBadRequest {
 				t.Errorf("status code = %d, want %d", response.Code, http.StatusBadRequest)
@@ -149,7 +149,7 @@ func TestUserHandlerCreateWithPasswordRejectsInvalidJSON(t *testing.T) {
 	}
 }
 
-func TestUserHandlerCreateWithPasswordMapsServiceErrors(t *testing.T) {
+func TestUserHandlerRegisterWithPasswordMapsServiceErrors(t *testing.T) {
 	unexpectedErr := errors.New("database unavailable")
 
 	tests := []struct {
@@ -206,7 +206,7 @@ func TestUserHandlerCreateWithPasswordMapsServiceErrors(t *testing.T) {
 			)
 			response := httptest.NewRecorder()
 
-			handler.CreateWithPassword(response, request)
+			handler.RegisterWithPassword(response, request)
 
 			if response.Code != tt.wantStatus {
 				t.Errorf("status code = %d, want %d", response.Code, tt.wantStatus)
