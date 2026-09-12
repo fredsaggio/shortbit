@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/fredsaggio/url-shortener/internal/handlers"
 	"github.com/fredsaggio/url-shortener/internal/middleware"
 )
 
@@ -15,6 +16,7 @@ type DatabasePinger interface {
 }
 
 type Handlers struct {
+	UserHandler *handlers.UserHandler
 }
 
 type Server struct {
@@ -49,6 +51,10 @@ func (srv *Server) registerRoutes(mux *http.ServeMux) {
 
 		w.WriteHeader(http.StatusOK)
 	})
+
+	mux.HandleFunc("POST /users", srv.h.UserHandler.CreateWithPassword)
+
+
 }
 
 func (srv *Server) NewRouterHTTP() http.Handler {
@@ -58,6 +64,7 @@ func (srv *Server) NewRouterHTTP() http.Handler {
 
 	handler := http.Handler(mux)
 
+	handler = middleware.LimitRequestBody(handler)
 	handler = middleware.Recovery(handler)
 	handler = middleware.AccessLog(handler)
 	handler = middleware.RequestID(handler)
