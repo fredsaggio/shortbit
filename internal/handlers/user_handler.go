@@ -1,17 +1,23 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
 	"net/http"
 
+	"github.com/fredsaggio/url-shortener/internal/models"
 	"github.com/fredsaggio/url-shortener/internal/services"
 )
 
+type UserService interface {
+	RegisterWithPassword(ctx context.Context, email string, password string) (models.User, error)
+}
+
 type UserHandler struct {
-	userServ *services.UserService
+	userServ UserService
 }
 
 type createUserWithPasswordRequest struct {
@@ -24,7 +30,7 @@ type createUserResponse struct {
 	Email string `json:"email"`
 }
 
-func NewUserHandler(userServ *services.UserService) *UserHandler {
+func NewUserHandler(userServ UserService) *UserHandler {
 	return &UserHandler{
 		userServ: userServ,
 	}
