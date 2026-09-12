@@ -85,18 +85,18 @@ func (h *UserHandler) CreateWithPassword(w http.ResponseWriter, r *http.Request)
 				http.StatusText(http.StatusInternalServerError),
 				http.StatusInternalServerError,
 			)
-			return
 		}
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
+	w.WriteHeader(http.StatusCreated)
 
-		if err := json.NewEncoder(w).Encode(createUserResponse{
-			ID:    user.ID.String(),
-			Email: user.Email,
-		}); err != nil {
-			slog.Error("error to encode response")
-			return
-		}
+	if err := json.NewEncoder(w).Encode(createUserResponse{
+		ID:    user.ID.String(),
+		Email: user.Email,
+	}); err != nil {
+		slog.Error("error to encode response")
+		return
+	}
 }

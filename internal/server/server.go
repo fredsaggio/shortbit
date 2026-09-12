@@ -54,7 +54,6 @@ func (srv *Server) registerRoutes(mux *http.ServeMux) {
 
 	mux.HandleFunc("POST /users", srv.h.UserHandler.CreateWithPassword)
 
-
 }
 
 func (srv *Server) NewRouterHTTP() http.Handler {
