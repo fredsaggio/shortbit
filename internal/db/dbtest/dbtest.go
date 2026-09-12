@@ -1,3 +1,5 @@
+//go:build integration
+
 package dbtest
 
 import (
@@ -9,6 +11,7 @@ import (
 	"github.com/fredsaggio/url-shortener/internal/db"
 	"github.com/fredsaggio/url-shortener/migrations"
 	"github.com/jackc/pgx/v5/pgxpool"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -76,6 +79,6 @@ func applyMigrations(ctx context.Context, connectionString string) error {
 	if _, err := provider.Up(ctx); err != nil {
 		return fmt.Errorf("run migrations: %w", err)
 	}
-	
+
 	return nil
 }

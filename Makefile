@@ -17,6 +17,7 @@ help:
 	@echo "  make migration/down"
 	@echo "  make migration/status"
 	@echo "  make test"
+	@echo "  make test/integration"
 	@echo "  make run"
 
 # Exemplo: make infra/up
@@ -64,6 +65,11 @@ migration/status:
 .PHONY: test
 test:
 	@go test ./... -count=1
+
+# Exemplo: make test/integration
+.PHONY: test/integration
+test/integration:
+	@go test -tags=integration ./internal/repositories -v -count=1
 
 # Exemplo: make run
 .PHONY: run
