@@ -9,7 +9,13 @@ import (
 	"github.com/fredsaggio/url-shortener/internal/middleware"
 )
 
-const readinessTimeout = 2 * time.Second
+const (
+	readinessTimeout                 = 2 * time.Second
+	globalRateLimitRequestsPerSecond = 10
+	globalRateLimitBurst             = 20
+	globalRateLimitMaxClients        = 10_000
+	globalRateLimitStaleAfter        = 10 * time.Minute
+)
 
 type DatabasePinger interface {
 	Ping(ctx context.Context) error
@@ -21,14 +27,16 @@ type Handlers struct {
 }
 
 type Server struct {
-	h        *Handlers
-	database DatabasePinger
+	h           *Handlers
+	database    DatabasePinger
+	rateLimiter *middleware.IPRateLimiter
 }
 
 func NewServer(h *Handlers, database DatabasePinger) *Server {
 	return &Server{
-		h:        h,
-		database: database,
+		h:           h,
+		database:    database,
+		rateLimiter: middleware.NewIPRateLimiter(globalRateLimitRequestsPerSecond, globalRateLimitBurst, globalRateLimitMaxClients, globalRateLimitStaleAfter),
 	}
 }
 
@@ -67,6 +75,7 @@ func (srv *Server) NewRouterHTTP() http.Handler {
 	handler := http.Handler(mux)
 
 	handler = middleware.LimitRequestBody(handler)
+	handler = srv.rateLimiter.Middleware(handler)
 	handler = middleware.Recovery(handler)
 	handler = middleware.AccessLog(handler)
 	handler = middleware.RequestID(handler)
