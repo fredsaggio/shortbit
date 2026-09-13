@@ -16,6 +16,7 @@ func setUserSessionCookie(w http.ResponseWriter, token string, expiresAt time.Ti
 		Value:    token,
 		Path:     "/",
 		MaxAge:   maxAge,
+		Expires: expiresAt.UTC(),
 		HttpOnly: true,
 		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
