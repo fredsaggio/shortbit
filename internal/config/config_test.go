@@ -55,7 +55,7 @@ func TestLoad(t *testing.T) {
 					ShutdownTimeout:   10 * time.Second,
 				},
 				Session: config.SessionConfig{
-					TTL:          24 * time.Hour,
+					TTL:          72 * time.Hour,
 					CookieSecure: true,
 				},
 			},
