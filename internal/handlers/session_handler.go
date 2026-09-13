@@ -21,13 +21,13 @@ type SessionHandler struct {
 }
 
 type createSessionRequest struct {
-  	Email    string `json:"email"`
-  	Password string `json:"password"`
-  }
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
 
 func NewSessionHandler(authServ AuthService, cookieSecure bool) *SessionHandler {
 	return &SessionHandler{
-		authServ: authServ,
+		authServ:     authServ,
 		cookieSecure: cookieSecure,
 	}
 }
