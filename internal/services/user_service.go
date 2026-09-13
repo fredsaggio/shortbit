@@ -81,7 +81,6 @@ func (s *UserService) RegisterWithPassword(ctx context.Context, email, password 
 
 }
 
-
 func normalizeEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
 }
