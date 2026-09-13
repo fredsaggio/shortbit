@@ -44,7 +44,7 @@ func (srv *Server) registerRoutes(mux *http.ServeMux) {
 		if err := srv.database.Ping(ctx); err != nil {
 			http.Error(
 				w,
-				http.StatusText(http.StatusServiceUnavailable),
+				"serviço indisponível",
 				http.StatusServiceUnavailable,
 			)
 			return

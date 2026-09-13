@@ -44,12 +44,12 @@ func (h *UserHandler) RegisterWithPassword(w http.ResponseWriter, r *http.Reques
 	decoder.DisallowUnknownFields()
 
 	if err := decoder.Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		http.Error(w, "corpo da requisição inválido", http.StatusBadRequest)
 		return
 	}
 
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		http.Error(w, "request body must contain one JSON object", http.StatusBadRequest)
+		http.Error(w, "corpo da requisição deve conter exatamente um objeto JSON", http.StatusBadRequest)
 		return
 	}
 
@@ -60,35 +60,35 @@ func (h *UserHandler) RegisterWithPassword(w http.ResponseWriter, r *http.Reques
 		case errors.Is(err, services.ErrInvalidEmail):
 			http.Error(
 				w,
-				"invalid email",
+				"email inválido",
 				http.StatusBadRequest,
 			)
 
 		case errors.Is(err, services.ErrPasswordTooShort):
 			http.Error(
 				w,
-				"password is too short",
+				"senha muito curta",
 				http.StatusBadRequest,
 			)
 
 		case errors.Is(err, services.ErrPasswordTooLong):
 			http.Error(
 				w,
-				"password is too long",
+				"senha muito longa",
 				http.StatusBadRequest,
 			)
 
 		case errors.Is(err, services.ErrEmailAlreadyExists):
 			http.Error(
 				w,
-				"email already exists",
+				"email já está em uso",
 				http.StatusConflict,
 			)
 
 		default:
 			http.Error(
 				w,
-				http.StatusText(http.StatusInternalServerError),
+				"erro interno do servidor",
 				http.StatusInternalServerError,
 			)
 		}

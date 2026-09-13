@@ -162,31 +162,31 @@ func TestUserHandlerRegisterWithPasswordMapsServiceErrors(t *testing.T) {
 			name:       "invalid email",
 			serviceErr: services.ErrInvalidEmail,
 			wantStatus: http.StatusBadRequest,
-			wantBody:   "invalid email\n",
+			wantBody:   "email inválido\n",
 		},
 		{
 			name:       "password too short",
 			serviceErr: services.ErrPasswordTooShort,
 			wantStatus: http.StatusBadRequest,
-			wantBody:   "password is too short\n",
+			wantBody:   "senha muito curta\n",
 		},
 		{
 			name:       "password too long",
 			serviceErr: services.ErrPasswordTooLong,
 			wantStatus: http.StatusBadRequest,
-			wantBody:   "password is too long\n",
+			wantBody:   "senha muito longa\n",
 		},
 		{
 			name:       "email already exists",
 			serviceErr: services.ErrEmailAlreadyExists,
 			wantStatus: http.StatusConflict,
-			wantBody:   "email already exists\n",
+			wantBody:   "email já está em uso\n",
 		},
 		{
 			name:       "unexpected error",
 			serviceErr: unexpectedErr,
 			wantStatus: http.StatusInternalServerError,
-			wantBody:   "Internal Server Error\n",
+			wantBody:   "erro interno do servidor\n",
 		},
 	}
 

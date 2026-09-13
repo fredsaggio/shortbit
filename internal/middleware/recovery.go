@@ -23,7 +23,7 @@ func Recovery(next http.Handler) http.Handler {
 
 			http.Error(
 				w,
-				http.StatusText(http.StatusInternalServerError),
+				"erro interno do servidor",
 				http.StatusInternalServerError,
 			)
 		}()

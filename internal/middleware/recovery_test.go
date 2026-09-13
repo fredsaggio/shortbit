@@ -45,7 +45,7 @@ func TestRecoveryHandlesPanic(t *testing.T) {
 		)
 	}
 
-	expectedBody := http.StatusText(http.StatusInternalServerError) + "\n"
+	expectedBody := "erro interno do servidor\n"
 
 	if response.Body.String() != expectedBody {
 		t.Errorf(

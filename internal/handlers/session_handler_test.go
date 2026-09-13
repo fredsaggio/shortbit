@@ -170,13 +170,13 @@ func TestSessionHandlerLoginMapsServiceErrors(t *testing.T) {
 			name:       "incorrect credentials",
 			serviceErr: services.ErrIncorrectEmailOrPassword,
 			wantStatus: http.StatusUnauthorized,
-			wantBody:   "email or password is incorrect\n",
+			wantBody:   "email ou senha incorretos\n",
 		},
 		{
 			name:       "unexpected error",
 			serviceErr: unexpectedErr,
 			wantStatus: http.StatusInternalServerError,
-			wantBody:   "Internal Server Error\n",
+			wantBody:   "erro interno do servidor\n",
 		},
 	}
 

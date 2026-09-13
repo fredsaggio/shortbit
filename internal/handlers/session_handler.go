@@ -41,12 +41,12 @@ func (h *SessionHandler) Login(w http.ResponseWriter, r *http.Request) {
 	decoder.DisallowUnknownFields()
 
 	if err := decoder.Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		http.Error(w, "corpo da requisição inválido", http.StatusBadRequest)
 		return
 	}
 
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		http.Error(w, "request body must contain one JSON object", http.StatusBadRequest)
+		http.Error(w, "corpo da requisição deve conter exatamente um objeto JSON", http.StatusBadRequest)
 		return
 	}
 
@@ -54,12 +54,12 @@ func (h *SessionHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		if errors.Is(err, services.ErrIncorrectEmailOrPassword) {
-			http.Error(w, "email or password is incorrect", http.StatusUnauthorized)
+			http.Error(w, "email ou senha incorretos", http.StatusUnauthorized)
 			return
 		}
 
 		slog.Error("login failed", "error", err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		http.Error(w, "erro interno do servidor", http.StatusInternalServerError)
 		return
 	}
 
