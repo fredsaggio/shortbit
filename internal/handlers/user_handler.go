@@ -7,13 +7,16 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"uuid"
 
+	"github.com/fredsaggio/url-shortener/internal/ctxval"
 	"github.com/fredsaggio/url-shortener/internal/models"
 	"github.com/fredsaggio/url-shortener/internal/services"
 )
 
 type UserService interface {
 	RegisterWithPassword(ctx context.Context, email string, password string) (models.User, error)
+	GetByID(ctx context.Context, userID uuid.UUID) (models.User, error)
 }
 
 type UserHandler struct {
@@ -25,7 +28,7 @@ type createUserWithPasswordRequest struct {
 	Password string `json:"password"`
 }
 
-type createUserResponse struct {
+type userResponse struct {
 	ID    string `json:"id"`
 	Email string `json:"email"`
 }
@@ -98,11 +101,41 @@ func (h *UserHandler) RegisterWithPassword(w http.ResponseWriter, r *http.Reques
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 
-	if err := json.NewEncoder(w).Encode(createUserResponse{
+	if err := json.NewEncoder(w).Encode(userResponse{
 		ID:    user.ID.String(),
 		Email: user.Email,
 	}); err != nil {
 		slog.Error("error to encode response")
 		return
+	}
+}
+
+func (h *UserHandler) GetUserInfo(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID, ok := ctxval.UserIDFromContext(ctx)
+
+	if !ok {
+		http.Error(w, "Erro interno no servidor", http.StatusInternalServerError)
+		return
+	}
+
+	user, err := h.userServ.GetByID(ctx, userID)
+
+	if err != nil {
+		slog.ErrorContext(ctx, "get authenticated user failed", "error", err)
+		http.Error(w, "erro interno no servidor", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	resp := userResponse{
+		ID:    user.ID.String(),
+		Email: user.Email,
+	}
+
+	if err := json.NewEncoder(w).Encode(&resp); err != nil {
+		slog.ErrorContext(ctx, "encode authenticated user response failed", "error", err)
 	}
 }

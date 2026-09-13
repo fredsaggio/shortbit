@@ -151,6 +151,31 @@ func TestUserRepositoryCreateWithPasswordIntegration(t *testing.T) {
 		}
 	})
 
+	t.Run("finds user by ID", func(t *testing.T) {
+		createdUser, err := repository.CreateWithPassword(t.Context(), "find-by-id@example.com", "$argon2id$find-by-id-test-hash")
+		if err != nil {
+			t.Fatalf("CreateWithPassword() error = %v", err)
+		}
+
+		user, err := repository.FindByID(t.Context(), createdUser.ID)
+		if err != nil {
+			t.Fatalf("FindByID() error = %v", err)
+		}
+
+		if user != createdUser {
+			t.Errorf("FindByID() user = %+v, want %+v", user, createdUser)
+		}
+	})
+
+	t.Run("returns not found for unknown user ID", func(t *testing.T) {
+		unknownUserID := uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c399")
+
+		_, err := repository.FindByID(t.Context(), unknownUserID)
+		if !errors.Is(err, repositories.ErrUserNotFound) {
+			t.Fatalf("FindByID() error = %v, want %v", err, repositories.ErrUserNotFound)
+		}
+	})
+
 	t.Run("returns not found for unknown email", func(t *testing.T) {
 		_, _, err := repository.FindPasswordCredentialsByEmail(
 			t.Context(),

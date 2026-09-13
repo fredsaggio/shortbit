@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"uuid"
 
 	"github.com/fredsaggio/url-shortener/internal/db"
 	"github.com/fredsaggio/url-shortener/internal/models"
@@ -14,6 +15,7 @@ import (
 var (
 	ErrEmailAlreadyExists         = errors.New("email already exists")
 	ErrPasswordCredentialNotFound = errors.New("password credential not found")
+	ErrUserNotFound               = errors.New("user not found")
 )
 
 type UserRepository struct {
@@ -138,4 +140,27 @@ func isEmailConflict(err error) bool {
 	var pgErr *pgconn.PgError
 
 	return errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "uq_users_email"
+}
+
+func (r *UserRepository) FindByID(ctx context.Context, userID uuid.UUID) (models.User, error) {
+	const q = `
+		SELECT id, email, created_at, updated_at
+		FROM users
+		WHERE id = @userID
+	`
+
+	args := pgx.StrictNamedArgs{
+		"userID": userID,
+	}
+
+	var user models.User
+
+	if err := r.db.QueryRow(ctx, q, args).Scan(&user.ID, &user.Email, &user.CreatedAt, &user.UpdatedAt); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.User{}, ErrUserNotFound
+		}
+		return models.User{}, fmt.Errorf("find user by ID: %w", err)
+	}
+
+	return user, nil
 }

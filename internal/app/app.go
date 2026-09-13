@@ -1,10 +1,10 @@
 package app
 
 import (
+	"github.com/fredsaggio/url-shortener/internal/argon2"
 	"github.com/fredsaggio/url-shortener/internal/config"
 	"github.com/fredsaggio/url-shortener/internal/db"
 	"github.com/fredsaggio/url-shortener/internal/handlers"
-	"github.com/fredsaggio/url-shortener/internal/password"
 	"github.com/fredsaggio/url-shortener/internal/repositories"
 	"github.com/fredsaggio/url-shortener/internal/server"
 	"github.com/fredsaggio/url-shortener/internal/services"
@@ -12,7 +12,7 @@ import (
 )
 
 func CompositionRoot(pool db.DB, sessionConfig config.SessionConfig) *server.Handlers {
-	passwordHasher := password.Argon2id{}
+	passwordHasher := argon2.Argon2id{}
 
 	userRepository := repositories.NewUserRepository(pool)
 	userService := services.NewUserService(userRepository, passwordHasher)

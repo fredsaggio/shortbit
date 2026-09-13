@@ -19,6 +19,7 @@ type userRepositoryStub struct {
 		email string,
 		passwordHash string,
 	) (models.User, error)
+	findByIDFunc func(ctx context.Context, userID uuid.UUID) (models.User, error)
 }
 
 func (s userRepositoryStub) CreateWithPassword(
@@ -27,6 +28,10 @@ func (s userRepositoryStub) CreateWithPassword(
 	passwordHash string,
 ) (models.User, error) {
 	return s.createWithPasswordFunc(ctx, email, passwordHash)
+}
+
+func (s userRepositoryStub) FindByID(ctx context.Context, userID uuid.UUID) (models.User, error) {
+	return s.findByIDFunc(ctx, userID)
 }
 
 type passwordHasherStub struct {
@@ -264,5 +269,65 @@ func TestUserServiceRegisterWithPasswordPropagatesRepositoryError(t *testing.T) 
 	)
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("RegisterWithPassword() error = %v, want wrapped %v", err, wantErr)
+	}
+}
+
+func TestUserServiceGetByID(t *testing.T) {
+	wantUserID := uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c317")
+	wantUser := models.User{
+		ID:        wantUserID,
+		Email:     "user@example.com",
+		CreatedAt: time.Date(2026, time.September, 13, 10, 0, 0, 0, time.UTC),
+		UpdatedAt: time.Date(2026, time.September, 13, 11, 0, 0, 0, time.UTC),
+	}
+
+	type contextKey struct{}
+	ctx := context.WithValue(context.Background(), contextKey{}, "request-context")
+	repository := userRepositoryStub{
+		findByIDFunc: func(gotCtx context.Context, gotUserID uuid.UUID) (models.User, error) {
+			if got := gotCtx.Value(contextKey{}); got != "request-context" {
+				t.Errorf("FindByID() context value = %v, want %q", got, "request-context")
+			}
+			if gotUserID != wantUserID {
+				t.Errorf("FindByID() user ID = %s, want %s", gotUserID, wantUserID)
+			}
+			return wantUser, nil
+		},
+	}
+
+	service := services.NewUserService(repository, unexpectedPasswordHasher(t))
+	user, err := service.GetByID(ctx, wantUserID)
+	if err != nil {
+		t.Fatalf("GetByID() error = %v", err)
+	}
+
+	if user != wantUser {
+		t.Errorf("GetByID() user = %+v, want %+v", user, wantUser)
+	}
+}
+
+func TestUserServiceGetByIDPropagatesRepositoryError(t *testing.T) {
+	wantErr := errors.New("database unavailable")
+	repository := userRepositoryStub{
+		findByIDFunc: func(context.Context, uuid.UUID) (models.User, error) {
+			return models.User{}, wantErr
+		},
+	}
+
+	service := services.NewUserService(repository, unexpectedPasswordHasher(t))
+	_, err := service.GetByID(context.Background(), uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c317"))
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("GetByID() error = %v, want wrapped %v", err, wantErr)
+	}
+}
+
+func unexpectedPasswordHasher(t *testing.T) passwordHasherStub {
+	t.Helper()
+
+	return passwordHasherStub{
+		hashFunc: func(string) (string, error) {
+			t.Fatal("Hash() should not be called")
+			return "", nil
+		},
 	}
 }

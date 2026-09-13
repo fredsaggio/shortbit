@@ -7,6 +7,7 @@ import (
 	"net/mail"
 	"strings"
 	"unicode/utf8"
+	"uuid"
 
 	"github.com/fredsaggio/url-shortener/internal/models"
 	"github.com/fredsaggio/url-shortener/internal/repositories"
@@ -27,6 +28,7 @@ var (
 
 type UserRepository interface {
 	CreateWithPassword(ctx context.Context, email, passwordHash string) (models.User, error)
+	FindByID(ctx context.Context, userID uuid.UUID) (models.User, error)
 }
 
 type PasswordHasher interface {
@@ -97,4 +99,14 @@ func isValidEmail(email string) bool {
 	}
 
 	return address.Address == email
+}
+
+func (s *UserService) GetByID(ctx context.Context, userID uuid.UUID) (models.User, error) {
+	user, err := s.userRepo.FindByID(ctx, userID)
+
+	if err != nil {
+		return models.User{}, fmt.Errorf("get user by ID: %w", err)
+	}
+
+	return user, nil
 }

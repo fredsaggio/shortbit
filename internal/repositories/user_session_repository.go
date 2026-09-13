@@ -47,13 +47,13 @@ func (r *UserSessionRepository) Create(ctx context.Context, userID uuid.UUID, to
 func (r *UserSessionRepository) FindSessionByTokenHash(ctx context.Context, tokenHash []byte) (models.UserSession, error) {
 	const q = `
 		SELECT
-			us.token_hash,
-			us.user_id,
-			us.created_at,
-			us.expires_at
-		FROM user_sessions AS us
-		WHERE us.token_hash = @tokenHash
-			AND us.expires_at > NOW()
+			token_hash,
+			user_id,
+			created_at,
+			expires_at
+		FROM user_sessions
+		WHERE token_hash = @tokenHash
+			AND expires_at > NOW()
 			`
 
 	args := pgx.StrictNamedArgs{
