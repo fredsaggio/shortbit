@@ -18,8 +18,10 @@ func TestLoad(t *testing.T) {
 		{
 			name: "loads provided configuration",
 			env: map[string]string{
-				"DATABASE_URL": "postgres://user:password@localhost:5432/app",
-				"HTTP_ADDR":    ":9090",
+				"DATABASE_URL":     "postgres://user:password@localhost:5432/app",
+				"HTTP_ADDR":        ":9090",
+				"USER_SESSION_TTL": "12h",
+				"COOKIE_SECURE":    "false",
 			},
 			want: config.Config{
 				DatabaseURL: "postgres://user:password@localhost:5432/app",
@@ -30,6 +32,10 @@ func TestLoad(t *testing.T) {
 					WriteTimeout:      15 * time.Second,
 					IdleTimeout:       60 * time.Second,
 					ShutdownTimeout:   10 * time.Second,
+				},
+				Session: config.SessionConfig{
+					TTL:          12 * time.Hour,
+					CookieSecure: false,
 				},
 			},
 		},
@@ -48,7 +54,43 @@ func TestLoad(t *testing.T) {
 					IdleTimeout:       60 * time.Second,
 					ShutdownTimeout:   10 * time.Second,
 				},
+				Session: config.SessionConfig{
+					TTL:          24 * time.Hour,
+					CookieSecure: true,
+				},
 			},
+		},
+		{
+			name: "rejects invalid session TTL",
+			env: map[string]string{
+				"DATABASE_URL":     "postgres://localhost/app",
+				"USER_SESSION_TTL": "one day",
+			},
+			wantErrContains: "USER_SESSION_TTL must be a valid duration",
+		},
+		{
+			name: "rejects zero session TTL",
+			env: map[string]string{
+				"DATABASE_URL":     "postgres://localhost/app",
+				"USER_SESSION_TTL": "0s",
+			},
+			wantErrContains: "USER_SESSION_TTL must be greater than zero",
+		},
+		{
+			name: "rejects negative session TTL",
+			env: map[string]string{
+				"DATABASE_URL":     "postgres://localhost/app",
+				"USER_SESSION_TTL": "-1h",
+			},
+			wantErrContains: "USER_SESSION_TTL must be greater than zero",
+		},
+		{
+			name: "rejects invalid cookie secure value",
+			env: map[string]string{
+				"DATABASE_URL":  "postgres://localhost/app",
+				"COOKIE_SECURE": "sometimes",
+			},
+			wantErrContains: "COOKIE_SECURE must be a valid boolean",
 		},
 		{
 			name:            "rejects missing database URL",
