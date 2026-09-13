@@ -24,6 +24,7 @@ type DatabasePinger interface {
 type Handlers struct {
 	UserHandler    *handlers.UserHandler
 	SessionHandler *handlers.SessionHandler
+	MeHandler      http.Handler
 }
 
 type Server struct {
@@ -62,6 +63,7 @@ func (srv *Server) registerRoutes(mux *http.ServeMux) {
 	})
 
 	mux.HandleFunc("POST /users", srv.h.UserHandler.RegisterWithPassword)
+	mux.Handle("GET /me", srv.h.MeHandler)
 
 	mux.HandleFunc("POST /sessions", srv.h.SessionHandler.Login)
 

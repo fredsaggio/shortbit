@@ -15,6 +15,7 @@ func TestNewRouterHTTPAppliesGlobalRateLimit(t *testing.T) {
 	applicationHandlers := &Handlers{
 		UserHandler:    &handlers.UserHandler{},
 		SessionHandler: &handlers.SessionHandler{},
+		MeHandler:      http.NotFoundHandler(),
 	}
 
 	srv := NewServer(applicationHandlers, nil)
