@@ -11,6 +11,7 @@ import (
 	"github.com/fredsaggio/url-shortener/internal/models"
 	"github.com/fredsaggio/url-shortener/internal/repositories"
 	"github.com/fredsaggio/url-shortener/internal/services"
+	"github.com/fredsaggio/url-shortener/internal/sessiontoken"
 )
 
 type passwordCredentialRepositoryStub struct {
@@ -22,11 +23,16 @@ func (s passwordCredentialRepositoryStub) FindPasswordCredentialsByEmail(ctx con
 }
 
 type userSessionRepositoryStub struct {
-	createFunc func(ctx context.Context, userID uuid.UUID, tokenHash []byte, expiresAt time.Time) error
+	createFunc                 func(ctx context.Context, userID uuid.UUID, tokenHash []byte, expiresAt time.Time) error
+	findSessionByTokenHashFunc func(ctx context.Context, tokenHash []byte) (models.UserSession, error)
 }
 
 func (s userSessionRepositoryStub) Create(ctx context.Context, userID uuid.UUID, tokenHash []byte, expiresAt time.Time) error {
 	return s.createFunc(ctx, userID, tokenHash, expiresAt)
+}
+
+func (s userSessionRepositoryStub) FindSessionByTokenHash(ctx context.Context, tokenHash []byte) (models.UserSession, error) {
+	return s.findSessionByTokenHashFunc(ctx, tokenHash)
 }
 
 type passwordComparatorStub struct {
@@ -258,12 +264,131 @@ func TestAuthServiceLoginPropagatesSessionRepositoryError(t *testing.T) {
 	}
 }
 
+func TestAuthServiceAuthenticate(t *testing.T) {
+	const (
+		rawToken     = "raw-session-token"
+		contextValue = "request-context"
+	)
+
+	wantUserID := uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c317")
+	wantTokenHash := sessiontoken.Hash(rawToken)
+	type contextKey struct{}
+	ctx := context.WithValue(context.Background(), contextKey{}, contextValue)
+
+	sessionRepository := userSessionRepositoryStub{
+		findSessionByTokenHashFunc: func(gotCtx context.Context, gotTokenHash []byte) (models.UserSession, error) {
+			if got := gotCtx.Value(contextKey{}); got != contextValue {
+				t.Errorf("FindSessionByTokenHash() context value = %v, want %q", got, contextValue)
+			}
+
+			if !bytes.Equal(gotTokenHash, wantTokenHash) {
+				t.Errorf("FindSessionByTokenHash() token hash = %x, want %x", gotTokenHash, wantTokenHash)
+			}
+
+			if bytes.Equal(gotTokenHash, []byte(rawToken)) {
+				t.Error("FindSessionByTokenHash() received the raw token")
+			}
+
+			return models.UserSession{UserID: wantUserID}, nil
+		},
+	}
+
+	service := services.NewAuthService(unexpectedPasswordCredentialRepository(t), sessionRepository, unexpectedComparator(t), unexpectedTokenGenerator(t), time.Hour)
+	userID, err := service.Authenticate(ctx, rawToken)
+	if err != nil {
+		t.Fatalf("Authenticate() error = %v", err)
+	}
+
+	if userID != wantUserID {
+		t.Errorf("Authenticate() user ID = %s, want %s", userID, wantUserID)
+	}
+}
+
+func TestAuthServiceAuthenticateRejectsEmptyToken(t *testing.T) {
+	repositoryCalled := false
+	sessionRepository := userSessionRepositoryStub{
+		findSessionByTokenHashFunc: func(context.Context, []byte) (models.UserSession, error) {
+			repositoryCalled = true
+			return models.UserSession{}, repositories.ErrUserSessionNotFound
+		},
+	}
+
+	service := services.NewAuthService(unexpectedPasswordCredentialRepository(t), sessionRepository, unexpectedComparator(t), unexpectedTokenGenerator(t), time.Hour)
+	userID, err := service.Authenticate(context.Background(), "")
+
+	if !errors.Is(err, services.ErrUnauthenticated) {
+		t.Errorf("Authenticate() error = %v, want %v", err, services.ErrUnauthenticated)
+	}
+
+	if userID != uuid.Nil() {
+		t.Errorf("Authenticate() user ID = %s, want nil UUID", userID)
+	}
+
+	if repositoryCalled {
+		t.Error("FindSessionByTokenHash() was called for an empty token")
+	}
+}
+
+func TestAuthServiceAuthenticateTranslatesMissingSession(t *testing.T) {
+	sessionRepository := userSessionRepositoryStub{
+		findSessionByTokenHashFunc: func(context.Context, []byte) (models.UserSession, error) {
+			return models.UserSession{}, repositories.ErrUserSessionNotFound
+		},
+	}
+
+	service := services.NewAuthService(unexpectedPasswordCredentialRepository(t), sessionRepository, unexpectedComparator(t), unexpectedTokenGenerator(t), time.Hour)
+	userID, err := service.Authenticate(context.Background(), "unknown-session-token")
+
+	if !errors.Is(err, services.ErrUnauthenticated) {
+		t.Errorf("Authenticate() error = %v, want %v", err, services.ErrUnauthenticated)
+	}
+
+	if userID != uuid.Nil() {
+		t.Errorf("Authenticate() user ID = %s, want nil UUID", userID)
+	}
+}
+
+func TestAuthServiceAuthenticatePropagatesRepositoryError(t *testing.T) {
+	wantErr := errors.New("database unavailable")
+	sessionRepository := userSessionRepositoryStub{
+		findSessionByTokenHashFunc: func(context.Context, []byte) (models.UserSession, error) {
+			return models.UserSession{}, wantErr
+		},
+	}
+
+	service := services.NewAuthService(unexpectedPasswordCredentialRepository(t), sessionRepository, unexpectedComparator(t), unexpectedTokenGenerator(t), time.Hour)
+	userID, err := service.Authenticate(context.Background(), "validly-shaped-token")
+
+	if !errors.Is(err, wantErr) {
+		t.Errorf("Authenticate() error = %v, want wrapped %v", err, wantErr)
+	}
+
+	if errors.Is(err, services.ErrUnauthenticated) {
+		t.Errorf("Authenticate() error = %v, do not want %v", err, services.ErrUnauthenticated)
+	}
+
+	if userID != uuid.Nil() {
+		t.Errorf("Authenticate() user ID = %s, want nil UUID", userID)
+	}
+}
+
 func validPasswordCredentialRepository() passwordCredentialRepositoryStub {
 	userID := uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c317")
 
 	return passwordCredentialRepositoryStub{
 		findPasswordCredentialsByEmailFunc: func(context.Context, string) (models.User, models.PasswordCredential, error) {
 			return models.User{ID: userID, Email: "user@example.com"}, models.PasswordCredential{UserID: userID, PasswordHash: "$argon2id$test-hash"}, nil
+		},
+	}
+}
+
+func unexpectedPasswordCredentialRepository(t *testing.T) passwordCredentialRepositoryStub {
+	t.Helper()
+
+	return passwordCredentialRepositoryStub{
+		findPasswordCredentialsByEmailFunc: func(context.Context, string) (models.User, models.PasswordCredential, error) {
+			t.Fatal("FindPasswordCredentialsByEmail() should not be called")
+			return models.User{}, models.PasswordCredential{}, nil
 		},
 	}
 }
@@ -283,6 +408,10 @@ func unexpectedSessionRepository(t *testing.T) userSessionRepositoryStub {
 		createFunc: func(context.Context, uuid.UUID, []byte, time.Time) error {
 			t.Fatal("Create() should not be called")
 			return nil
+		},
+		findSessionByTokenHashFunc: func(context.Context, []byte) (models.UserSession, error) {
+			t.Fatal("FindSessionByTokenHash() should not be called")
+			return models.UserSession{}, nil
 		},
 	}
 }

@@ -9,12 +9,17 @@ import (
 
 	"github.com/fredsaggio/url-shortener/internal/models"
 	"github.com/fredsaggio/url-shortener/internal/repositories"
+	"github.com/fredsaggio/url-shortener/internal/sessiontoken"
 )
 
-var ErrIncorrectEmailOrPassword = errors.New("email or password incorrect(s)")
+var (
+	ErrIncorrectEmailOrPassword = errors.New("email or password incorrect(s)")
+	ErrUnauthenticated          = errors.New("unauthenticated")
+)
 
 type UserSessionRepository interface {
 	Create(ctx context.Context, userID uuid.UUID, tokenHash []byte, expiresAt time.Time) error
+	FindSessionByTokenHash(ctx context.Context, tokenHash []byte) (models.UserSession, error)
 }
 
 type PasswordCredentialRepository interface {
@@ -94,4 +99,23 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (LoginR
 		ExpiresAt: expirationTime,
 	}, nil
 
+}
+
+func (s *AuthService) Authenticate(ctx context.Context, token string) (uuid.UUID, error) {
+	if token == "" {
+		return uuid.Nil(), ErrUnauthenticated
+	}
+	tokenHash := sessiontoken.Hash(token)
+
+	session, err := s.userSessionRepo.FindSessionByTokenHash(ctx, tokenHash)
+
+	if err != nil {
+		if errors.Is(err, repositories.ErrUserSessionNotFound) {
+			return uuid.Nil(), ErrUnauthenticated
+		}
+
+		return uuid.Nil(), fmt.Errorf("find user session by token: %w", err)
+	}
+
+	return session.UserID, nil
 }
