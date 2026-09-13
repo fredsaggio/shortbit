@@ -2,13 +2,17 @@ package repositories
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 	"uuid"
 
 	"github.com/fredsaggio/url-shortener/internal/db"
+	"github.com/fredsaggio/url-shortener/internal/models"
 	"github.com/jackc/pgx/v5"
 )
+
+var ErrUserSessionNotFound = errors.New("user session not found")
 
 type UserSessionRepository struct {
 	db db.DB
@@ -38,4 +42,34 @@ func (r *UserSessionRepository) Create(ctx context.Context, userID uuid.UUID, to
 
 	return nil
 
+}
+
+func (r *UserSessionRepository) FindSessionByTokenHash(ctx context.Context, tokenHash []byte) (models.UserSession, error) {
+	const q = `
+		SELECT
+			us.token_hash,
+			us.user_id,
+			us.created_at,
+			us.expires_at
+		FROM user_sessions AS us
+		WHERE us.token_hash = @tokenHash
+			AND us.expires_at > NOW()
+			`
+
+	args := pgx.StrictNamedArgs{
+		"tokenHash": tokenHash,
+	}
+
+	var userSession models.UserSession
+
+	err := r.db.QueryRow(ctx, q, args).Scan(&userSession.TokenHash, &userSession.UserID, &userSession.CreatedAt, &userSession.ExpiresAt)
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.UserSession{}, ErrUserSessionNotFound
+		}
+		return models.UserSession{}, fmt.Errorf("find user session with token: %w", err)
+	}
+
+	return userSession, nil
 }
