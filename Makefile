@@ -69,7 +69,7 @@ test:
 # Exemplo: make test/integration
 .PHONY: test/integration
 test/integration:
-	@go test -tags=integration ./internal/repositories -v -count=1
+	@go test -tags=integration ./internal/repositories ./internal/integration -v -count=1
 
 # Exemplo: make run
 .PHONY: run
