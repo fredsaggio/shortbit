@@ -9,26 +9,19 @@ import (
 
 const tokenSize = 32
 
-type Pair struct {
-	Raw  string
-	Hash [32]byte
-}
-
-func Generate() (Pair, error) {
+func Generate() (string, []byte, error) {
 	randomBytes := make([]byte, tokenSize)
 
 	if _, err := rand.Read(randomBytes); err != nil {
-		return Pair{}, fmt.Errorf("generate random token: %w", err)
+		return "", nil, fmt.Errorf("generate random token: %w", err)
 	}
 
-	raw := base64.RawURLEncoding.EncodeToString(randomBytes)
+	token := base64.RawURLEncoding.EncodeToString(randomBytes)
 
-	return Pair{
-		Raw:  raw,
-		Hash: Hash(raw),
-	}, nil
+	return token, Hash(token), nil
 }
 
-func Hash(raw string) [32]byte {
-	return sha256.Sum256([]byte(raw))
+func Hash(token string) []byte {
+	tokenHash := sha256.Sum256([]byte(token))
+	return tokenHash[:]
 }
