@@ -1,22 +1,29 @@
 package app
 
 import (
+	"github.com/fredsaggio/url-shortener/internal/config"
 	"github.com/fredsaggio/url-shortener/internal/db"
 	"github.com/fredsaggio/url-shortener/internal/handlers"
 	"github.com/fredsaggio/url-shortener/internal/password"
 	"github.com/fredsaggio/url-shortener/internal/repositories"
 	"github.com/fredsaggio/url-shortener/internal/server"
 	"github.com/fredsaggio/url-shortener/internal/services"
+	"github.com/fredsaggio/url-shortener/internal/sessiontoken"
 )
 
-func CompositionRoot(pool db.DB) *server.Handlers {
+func CompositionRoot(pool db.DB, sessionConfig config.SessionConfig) *server.Handlers {
 	passwordHasher := password.Argon2id{}
 
 	userRepository := repositories.NewUserRepository(pool)
 	userService := services.NewUserService(userRepository, passwordHasher)
 	userHandler := handlers.NewUserHandler(userService)
 
+	userSessionRepository := repositories.NewUserSessionRepository(pool)
+	authService := services.NewAuthService(userRepository, userSessionRepository, passwordHasher, sessiontoken.Generate, sessionConfig.TTL)
+	sessionHandler := handlers.NewSessionHandler(authService, sessionConfig.CookieSecure)
+
 	return &server.Handlers{
-		UserHandler: userHandler,
+		UserHandler:    userHandler,
+		SessionHandler: sessionHandler,
 	}
 }
