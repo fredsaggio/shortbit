@@ -11,7 +11,10 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-var ErrEmailAlreadyExists = errors.New("email already exists")
+var (
+	ErrEmailAlreadyExists         = errors.New("email already exists")
+	ErrPasswordCredentialNotFound = errors.New("password credential not found")
+)
 
 type UserRepository struct {
 	db db.DB
@@ -76,6 +79,59 @@ func (r *UserRepository) CreateWithPassword(ctx context.Context, email, password
 	}
 
 	return user, nil
+}
+
+func (r *UserRepository) FindPasswordCredentialsByEmail(
+	ctx context.Context,
+	email string,
+) (models.User, models.PasswordCredential, error) {
+	const q = `
+		SELECT
+			u.id,
+			u.email,
+			u.created_at,
+			u.updated_at,
+			pc.user_id,
+			pc.password_hash,
+			pc.created_at,
+			pc.updated_at
+		FROM users AS u
+		JOIN password_credentials AS pc
+			ON pc.user_id = u.id
+		WHERE u.email = @email
+	`
+
+	args := pgx.StrictNamedArgs{
+		"email": email,
+	}
+
+	var (
+		user       models.User
+		credential models.PasswordCredential
+	)
+
+	err := r.db.QueryRow(ctx, q, args).Scan(
+		&user.ID,
+		&user.Email,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+		&credential.UserID,
+		&credential.PasswordHash,
+		&credential.CreatedAt,
+		&credential.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.User{}, models.PasswordCredential{}, ErrPasswordCredentialNotFound
+		}
+
+		return models.User{}, models.PasswordCredential{}, fmt.Errorf(
+			"find password credentials by email: %w",
+			err,
+		)
+	}
+
+	return user, credential, nil
 }
 
 func isEmailConflict(err error) bool {
