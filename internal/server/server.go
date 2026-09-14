@@ -74,6 +74,7 @@ func (srv *Server) registerRoutes(mux *http.ServeMux) {
 
 	loginHandler := srv.loginRateLimiter.MiddlewareByIP(http.HandlerFunc(srv.h.SessionHandler.Login))
 	mux.Handle("POST /sessions", loginHandler)
+	mux.HandleFunc("DELETE /sessions/current", srv.h.SessionHandler.Logout)
 
 }
 
