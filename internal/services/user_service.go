@@ -83,6 +83,16 @@ func (s *UserService) RegisterWithPassword(ctx context.Context, email, password 
 
 }
 
+func (s *UserService) GetByID(ctx context.Context, userID uuid.UUID) (models.User, error) {
+	user, err := s.userRepo.FindByID(ctx, userID)
+
+	if err != nil {
+		return models.User{}, fmt.Errorf("get user by ID: %w", err)
+	}
+
+	return user, nil
+}
+
 func normalizeEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
 }
@@ -99,14 +109,4 @@ func isValidEmail(email string) bool {
 	}
 
 	return address.Address == email
-}
-
-func (s *UserService) GetByID(ctx context.Context, userID uuid.UUID) (models.User, error) {
-	user, err := s.userRepo.FindByID(ctx, userID)
-
-	if err != nil {
-		return models.User{}, fmt.Errorf("get user by ID: %w", err)
-	}
-
-	return user, nil
 }
