@@ -10,6 +10,8 @@ import (
 	"github.com/fredsaggio/url-shortener/internal/repositories"
 )
 
+const googleProvider = "google"
+
 type GoogleUserRepository interface {
 	CreateWithIdentity(ctx context.Context, email, provider, providerUserID string) (models.User, error)
 	FindUserByProviderIdentity(ctx context.Context, provider, providerUserID string) (models.User, error)
@@ -31,48 +33,29 @@ func NewGoogleAuthService(userRepo GoogleUserRepository, sessionCreator UserSess
 	}
 }
 
-func (s *GoogleAuthService) LoginWithProvider(ctx context.Context, provider, providerUserID string) (LoginResult, error) {
-	user, err := s.FindUserByProviderIdentity(ctx, provider, providerUserID)
+func (s *GoogleAuthService) LoginWithProvider(ctx context.Context, email, providerUserID string) (LoginResult, error) {
+	user, err := s.googleRepo.FindUserByProviderIdentity(ctx, googleProvider, providerUserID)
 
-	if err != nil {
-		return LoginResult{}, fmt.Errorf("find user with provider id: %w", err)
-	}
+	switch {
+	case err == nil:
+	case errors.Is(err, repositories.ErrAuthIdentityNotFound):
+		normalizedEmail := normalizeEmail(email)
 
-	login, err := s.sessionCreator.CreateSession(ctx, user.ID)
-
-	if err != nil {
-		return LoginResult{}, fmt.Errorf("create session: %w", err)
-	}
-
-	return login, nil
-}
-
-func (s *GoogleAuthService) RegisterWithProvider(ctx context.Context, email, provider, providerUserID string) (models.User, error) {
-	normalizedEmail := normalizeEmail(email)
-
-	if !isValidEmail(normalizedEmail) {
-		return models.User{}, ErrInvalidEmail
-	}
-
-	user, err := s.googleRepo.CreateWithIdentity(ctx, normalizedEmail, provider, providerUserID)
-
-	if err != nil {
-		if errors.Is(err, repositories.ErrEmailAlreadyExists) {
-			return models.User{}, ErrEmailAlreadyExists
+		if !isValidEmail(normalizedEmail) {
+			return LoginResult{}, ErrInvalidEmail
 		}
 
-		return models.User{}, fmt.Errorf("create user with identity: %w", err)
+		user, err = s.googleRepo.CreateWithIdentity(ctx, normalizedEmail, googleProvider, providerUserID)
+		if errors.Is(err, repositories.ErrEmailAlreadyExists) {
+			return LoginResult{}, ErrEmailAlreadyExists
+		}
+		if err != nil {
+			return LoginResult{}, fmt.Errorf("create user with Google identity: %w", err)
+		}
+
+	default:
+		return LoginResult{}, fmt.Errorf("find user by Google identity: %w", err)
 	}
 
-	return user, nil
-}
-
-func (s *GoogleAuthService) FindUserByProviderIdentity(ctx context.Context, provider, providerUserID string) (models.User, error) {
-	user, err := s.googleRepo.FindUserByProviderIdentity(ctx, provider, providerUserID)
-
-	if err != nil {
-		return models.User{}, fmt.Errorf("get user by provider: %w", err)
-	}
-
-	return user, nil
+	return s.sessionCreator.CreateSession(ctx, user.ID)
 }
