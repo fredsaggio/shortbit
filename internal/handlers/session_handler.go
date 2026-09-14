@@ -14,7 +14,7 @@ import (
 )
 
 type AuthService interface {
-	Login(ctx context.Context, email, password string) (services.LoginResult, error)
+	LoginWithPassword(ctx context.Context, email, password string) (services.LoginResult, error)
 	Logout(ctx context.Context, token string) error
 }
 
@@ -41,7 +41,7 @@ func NewSessionHandler(authServ AuthService, emailRateLimiter LoginRateLimiter, 
 	}
 }
 
-func (h *SessionHandler) Login(w http.ResponseWriter, r *http.Request) {
+func (h *SessionHandler) LoginWithPassword(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	var req createSessionRequest
@@ -67,7 +67,7 @@ func (h *SessionHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	login, err := h.authServ.Login(ctx, normalizedEmail, req.Password)
+	login, err := h.authServ.LoginWithPassword(ctx, normalizedEmail, req.Password)
 
 	if err != nil {
 		if errors.Is(err, services.ErrIncorrectEmailOrPassword) {

@@ -17,7 +17,7 @@ type loginAuthServiceStub struct {
 	loginCalls int
 }
 
-func (s *loginAuthServiceStub) Login(context.Context, string, string) (services.LoginResult, error) {
+func (s *loginAuthServiceStub) LoginWithPassword(context.Context, string, string) (services.LoginResult, error) {
 	s.loginCalls++
 	return services.LoginResult{}, services.ErrIncorrectEmailOrPassword
 }

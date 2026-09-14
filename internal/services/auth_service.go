@@ -56,7 +56,7 @@ func NewAuthService(userRepo PasswordCredentialRepository, userSessionRepo UserS
 	}
 }
 
-func (s *AuthService) Login(ctx context.Context, email, password string) (LoginResult, error) {
+func (s *AuthService) LoginWithPassword(ctx context.Context, email, password string) (LoginResult, error) {
 	normalizedEmail := normalizeEmail(email)
 
 	if normalizedEmail == "" || password == "" {
@@ -83,6 +83,11 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (LoginR
 		return LoginResult{}, ErrIncorrectEmailOrPassword
 	}
 
+	// Não é preciso pegar o erro e tratar aqui porque as duas funções retornam a mesma coisa (Essa atual e essa que tá retornando), ou seja, no handler as variáveis já estão sendo passadas.
+	return s.CreateSession(ctx, user.ID)
+}
+
+func (s *AuthService) CreateSession(ctx context.Context, userID uuid.UUID) (LoginResult, error) {
 	token, tokenHash, err := s.generateToken()
 
 	if err != nil {
@@ -91,7 +96,7 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (LoginR
 
 	expirationTime := time.Now().UTC().Add(s.sessionTTL)
 
-	if err = s.userSessionRepo.Create(ctx, user.ID, tokenHash, expirationTime); err != nil {
+	if err = s.userSessionRepo.Create(ctx, userID, tokenHash, expirationTime); err != nil {
 		return LoginResult{}, fmt.Errorf("create session: %w", err)
 	}
 
@@ -99,7 +104,6 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (LoginR
 		Token:     token,
 		ExpiresAt: expirationTime,
 	}, nil
-
 }
 
 func (s *AuthService) Authenticate(ctx context.Context, token string) (uuid.UUID, error) {

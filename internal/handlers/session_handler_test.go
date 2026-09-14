@@ -26,7 +26,7 @@ func (s loginRateLimiterStub) Allow(key string) (bool, int) {
 	return s.allowFunc(key)
 }
 
-func (s authServiceStub) Login(ctx context.Context, email, password string) (services.LoginResult, error) {
+func (s authServiceStub) LoginWithPassword(ctx context.Context, email, password string) (services.LoginResult, error) {
 	return s.loginFunc(ctx, email, password)
 }
 
@@ -68,7 +68,7 @@ func TestSessionHandlerLogin(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "/sessions", strings.NewReader(`{"email":"USER@example.com","password":"senha-segura"}`)).WithContext(ctx)
 	response := httptest.NewRecorder()
 
-	handler.Login(response, request)
+	handler.LoginWithPassword(response, request)
 
 	result := response.Result()
 	defer result.Body.Close()
@@ -125,7 +125,7 @@ func TestSessionHandlerLoginUsesCookieSecureConfiguration(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "/sessions", strings.NewReader(`{"email":"user@example.com","password":"senha-segura"}`))
 	response := httptest.NewRecorder()
 
-	handler.Login(response, request)
+	handler.LoginWithPassword(response, request)
 
 	cookie := findCookie(t, response.Result().Cookies(), "user_session")
 	if cookie.Secure {
@@ -157,7 +157,7 @@ func TestSessionHandlerLoginRejectsInvalidJSON(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, "/sessions", strings.NewReader(tt.body))
 			response := httptest.NewRecorder()
 
-			handler.Login(response, request)
+			handler.LoginWithPassword(response, request)
 
 			if response.Code != http.StatusBadRequest {
 				t.Errorf("status code = %d, want %d", response.Code, http.StatusBadRequest)
@@ -205,7 +205,7 @@ func TestSessionHandlerLoginMapsServiceErrors(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, "/sessions", strings.NewReader(`{"email":"user@example.com","password":"senha-segura"}`))
 			response := httptest.NewRecorder()
 
-			handler.Login(response, request)
+			handler.LoginWithPassword(response, request)
 
 			if response.Code != tt.wantStatus {
 				t.Errorf("status code = %d, want %d", response.Code, tt.wantStatus)
@@ -249,7 +249,7 @@ func TestSessionHandlerLoginRateLimitsNormalizedEmail(t *testing.T) {
 	handler := handlers.NewSessionHandler(service, limiter, false)
 	request := httptest.NewRequest(http.MethodPost, "/sessions", strings.NewReader(`{"email":"  USER@Example.COM  ","password":"senha-segura"}`))
 	response := httptest.NewRecorder()
-	handler.Login(response, request)
+	handler.LoginWithPassword(response, request)
 
 	if response.Code != http.StatusTooManyRequests {
 		t.Errorf("status code = %d, want %d", response.Code, http.StatusTooManyRequests)

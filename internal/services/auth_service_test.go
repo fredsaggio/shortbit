@@ -122,7 +122,7 @@ func TestAuthServiceLogin(t *testing.T) {
 
 	service := services.NewAuthService(userRepository, sessionRepository, comparator, generateToken, sessionTTL)
 	beforeLogin := time.Now().UTC()
-	result, err := service.Login(ctx, inputEmail, inputPassword)
+	result, err := service.LoginWithPassword(ctx, inputEmail, inputPassword)
 	afterLogin := time.Now().UTC()
 
 	if err != nil {
@@ -163,7 +163,7 @@ func TestAuthServiceLoginRejectsEmptyCredentials(t *testing.T) {
 			}
 
 			service := services.NewAuthService(userRepository, unexpectedSessionRepository(t), unexpectedComparator(t), unexpectedTokenGenerator(t), time.Hour)
-			_, err := service.Login(context.Background(), tt.email, tt.password)
+			_, err := service.LoginWithPassword(context.Background(), tt.email, tt.password)
 
 			if !errors.Is(err, services.ErrIncorrectEmailOrPassword) {
 				t.Fatalf("Login() error = %v, want %v", err, services.ErrIncorrectEmailOrPassword)
@@ -180,7 +180,7 @@ func TestAuthServiceLoginTranslatesMissingCredential(t *testing.T) {
 	}
 
 	service := services.NewAuthService(userRepository, unexpectedSessionRepository(t), unexpectedComparator(t), unexpectedTokenGenerator(t), time.Hour)
-	_, err := service.Login(context.Background(), "user@example.com", "senha-segura")
+	_, err := service.LoginWithPassword(context.Background(), "user@example.com", "senha-segura")
 
 	if !errors.Is(err, services.ErrIncorrectEmailOrPassword) {
 		t.Fatalf("Login() error = %v, want %v", err, services.ErrIncorrectEmailOrPassword)
@@ -196,7 +196,7 @@ func TestAuthServiceLoginPropagatesCredentialRepositoryError(t *testing.T) {
 	}
 
 	service := services.NewAuthService(userRepository, unexpectedSessionRepository(t), unexpectedComparator(t), unexpectedTokenGenerator(t), time.Hour)
-	_, err := service.Login(context.Background(), "user@example.com", "senha-segura")
+	_, err := service.LoginWithPassword(context.Background(), "user@example.com", "senha-segura")
 
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("Login() error = %v, want wrapped %v", err, wantErr)
@@ -213,7 +213,7 @@ func TestAuthServiceLoginPropagatesComparatorError(t *testing.T) {
 	}
 
 	service := services.NewAuthService(userRepository, unexpectedSessionRepository(t), comparator, unexpectedTokenGenerator(t), time.Hour)
-	_, err := service.Login(context.Background(), "user@example.com", "senha-segura")
+	_, err := service.LoginWithPassword(context.Background(), "user@example.com", "senha-segura")
 
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("Login() error = %v, want wrapped %v", err, wantErr)
@@ -228,7 +228,7 @@ func TestAuthServiceLoginRejectsIncorrectPassword(t *testing.T) {
 	}
 
 	service := services.NewAuthService(validPasswordCredentialRepository(), unexpectedSessionRepository(t), comparator, unexpectedTokenGenerator(t), time.Hour)
-	_, err := service.Login(context.Background(), "user@example.com", "senha-incorreta")
+	_, err := service.LoginWithPassword(context.Background(), "user@example.com", "senha-incorreta")
 
 	if !errors.Is(err, services.ErrIncorrectEmailOrPassword) {
 		t.Fatalf("Login() error = %v, want %v", err, services.ErrIncorrectEmailOrPassword)
@@ -242,7 +242,7 @@ func TestAuthServiceLoginPropagatesTokenGeneratorError(t *testing.T) {
 	}
 
 	service := services.NewAuthService(validPasswordCredentialRepository(), unexpectedSessionRepository(t), matchingPasswordComparator(), generateToken, time.Hour)
-	_, err := service.Login(context.Background(), "user@example.com", "senha-segura")
+	_, err := service.LoginWithPassword(context.Background(), "user@example.com", "senha-segura")
 
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("Login() error = %v, want wrapped %v", err, wantErr)
@@ -262,7 +262,7 @@ func TestAuthServiceLoginPropagatesSessionRepositoryError(t *testing.T) {
 	}
 
 	service := services.NewAuthService(validPasswordCredentialRepository(), sessionRepository, matchingPasswordComparator(), generateToken, time.Hour)
-	_, err := service.Login(context.Background(), "user@example.com", "senha-segura")
+	_, err := service.LoginWithPassword(context.Background(), "user@example.com", "senha-segura")
 
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("Login() error = %v, want wrapped %v", err, wantErr)
