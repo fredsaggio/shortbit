@@ -5,13 +5,14 @@ package repositories_test
 import (
 	"errors"
 	"testing"
+	"time"
 	"uuid"
 
 	"github.com/fredsaggio/url-shortener/internal/db/dbtest"
 	"github.com/fredsaggio/url-shortener/internal/repositories"
 )
 
-func TestUserRepositoryCreateWithPasswordIntegration(t *testing.T) {
+func TestUserRepositoryIntegration(t *testing.T) {
 	pool := dbtest.Open(t)
 	repository := repositories.NewUserRepository(pool)
 
@@ -275,6 +276,159 @@ func TestUserRepositoryCreateWithPasswordIntegration(t *testing.T) {
 
 		if usersWithEmail != 0 {
 			t.Errorf("users left after credential failure = %d, want 0", usersWithEmail)
+		}
+	})
+
+	t.Run("creates user and auth identity", func(t *testing.T) {
+		const (
+			email          = "identity@example.com"
+			provider       = "google"
+			providerUserID = "google-subject-123"
+		)
+
+		user, err := repository.CreateWithIdentity(t.Context(), email, provider, providerUserID)
+		if err != nil {
+			t.Fatalf("CreateWithIdentity() error = %v", err)
+		}
+
+		if user.ID == uuid.Nil() {
+			t.Error("CreateWithIdentity() returned a nil user ID")
+		}
+
+		if version := user.ID[6] >> 4; version != 7 {
+			t.Errorf("CreateWithIdentity() UUID version = %d, want 7", version)
+		}
+
+		if user.Email != email {
+			t.Errorf("CreateWithIdentity() email = %q, want %q", user.Email, email)
+		}
+
+		if user.CreatedAt.IsZero() || user.UpdatedAt.IsZero() {
+			t.Error("CreateWithIdentity() returned zero timestamps")
+		}
+
+		var (
+			storedUserID         uuid.UUID
+			storedProvider       string
+			storedProviderUserID string
+			identityCreatedAt    time.Time
+		)
+
+		err = pool.QueryRow(
+			t.Context(),
+			`
+				SELECT user_id, provider, provider_user_id, created_at
+				FROM auth_identities
+				WHERE provider = $1 AND provider_user_id = $2
+			`,
+			provider,
+			providerUserID,
+		).Scan(&storedUserID, &storedProvider, &storedProviderUserID, &identityCreatedAt)
+		if err != nil {
+			t.Fatalf("query created auth identity: %v", err)
+		}
+
+		if storedUserID != user.ID {
+			t.Errorf("identity user ID = %s, want %s", storedUserID, user.ID)
+		}
+
+		if storedProvider != provider {
+			t.Errorf("identity provider = %q, want %q", storedProvider, provider)
+		}
+
+		if storedProviderUserID != providerUserID {
+			t.Errorf("identity provider user ID = %q, want %q", storedProviderUserID, providerUserID)
+		}
+
+		if identityCreatedAt.IsZero() {
+			t.Error("identity has a zero CreatedAt")
+		}
+
+		var hasPasswordCredential bool
+		if err := pool.QueryRow(t.Context(), "SELECT EXISTS(SELECT 1 FROM password_credentials WHERE user_id = $1)", user.ID).Scan(&hasPasswordCredential); err != nil {
+			t.Fatalf("check password credential: %v", err)
+		}
+
+		if hasPasswordCredential {
+			t.Error("CreateWithIdentity() created an unexpected password credential")
+		}
+	})
+
+	t.Run("finds user by provider identity", func(t *testing.T) {
+		const (
+			email          = "find-identity@example.com"
+			provider       = "google"
+			providerUserID = "google-subject-to-find"
+		)
+
+		createdUser, err := repository.CreateWithIdentity(t.Context(), email, provider, providerUserID)
+		if err != nil {
+			t.Fatalf("CreateWithIdentity() error = %v", err)
+		}
+
+		user, err := repository.FindUserByProviderIdentity(t.Context(), provider, providerUserID)
+		if err != nil {
+			t.Fatalf("FindUserByProviderIdentity() error = %v", err)
+		}
+
+		if user != createdUser {
+			t.Errorf("FindUserByProviderIdentity() user = %+v, want %+v", user, createdUser)
+		}
+	})
+
+	t.Run("returns not found for unknown provider identity", func(t *testing.T) {
+		_, err := repository.FindUserByProviderIdentity(t.Context(), "google", "unknown-google-subject")
+		if !errors.Is(err, repositories.ErrAuthIdentityNotFound) {
+			t.Fatalf("FindUserByProviderIdentity() error = %v, want %v", err, repositories.ErrAuthIdentityNotFound)
+		}
+	})
+
+	t.Run("recognizes duplicate email when creating identity", func(t *testing.T) {
+		const (
+			email          = "identity-duplicate@example.com"
+			provider       = "google"
+			providerUserID = "duplicate-email-google-subject"
+		)
+
+		if _, err := repository.CreateWithPassword(t.Context(), email, "$argon2id$existing-account-hash"); err != nil {
+			t.Fatalf("CreateWithPassword() error = %v", err)
+		}
+
+		_, err := repository.CreateWithIdentity(t.Context(), email, provider, providerUserID)
+		if !errors.Is(err, repositories.ErrEmailAlreadyExists) {
+			t.Fatalf("CreateWithIdentity() error = %v, want %v", err, repositories.ErrEmailAlreadyExists)
+		}
+
+		var identityExists bool
+		if err := pool.QueryRow(
+			t.Context(),
+			"SELECT EXISTS(SELECT 1 FROM auth_identities WHERE provider = $1 AND provider_user_id = $2)",
+			provider,
+			providerUserID,
+		).Scan(&identityExists); err != nil {
+			t.Fatalf("check auth identity after duplicate email: %v", err)
+		}
+
+		if identityExists {
+			t.Error("auth identity was created for an existing email")
+		}
+	})
+
+	t.Run("rolls back user when identity insert fails", func(t *testing.T) {
+		const email = "identity-rollback@example.com"
+
+		_, err := repository.CreateWithIdentity(t.Context(), email, "", "google-subject-with-invalid-provider")
+		if err == nil {
+			t.Fatal("CreateWithIdentity() error = nil, want identity constraint error")
+		}
+
+		var usersWithEmail int
+		if err := pool.QueryRow(t.Context(), "SELECT COUNT(*) FROM users WHERE email = $1", email).Scan(&usersWithEmail); err != nil {
+			t.Fatalf("count users after identity failure: %v", err)
+		}
+
+		if usersWithEmail != 0 {
+			t.Errorf("users left after identity failure = %d, want 0", usersWithEmail)
 		}
 	})
 }

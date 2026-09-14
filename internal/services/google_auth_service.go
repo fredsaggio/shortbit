@@ -19,11 +19,10 @@ type GoogleAuthService struct {
 }
 
 func NewGoogleAuthService(userRepo GoogleUserRepository) *GoogleAuthService {
-  	return &GoogleAuthService{
+	return &GoogleAuthService{
 		googleRepo: userRepo,
 	}
 }
-
 
 func (s *GoogleAuthService) RegisterWithProvider(ctx context.Context, email, provider, providerUserID string) (models.User, error) {
 	normalizedEmail := normalizeEmail(email)
