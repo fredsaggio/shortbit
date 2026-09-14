@@ -17,13 +17,21 @@ type authServiceStub struct {
 	loginFunc func(ctx context.Context, email, password string) (services.LoginResult, error)
 }
 
+type loginRateLimiterStub struct {
+	allowFunc func(key string) (bool, int)
+}
+
+func (s loginRateLimiterStub) Allow(key string) (bool, int) {
+	return s.allowFunc(key)
+}
+
 func (s authServiceStub) Login(ctx context.Context, email, password string) (services.LoginResult, error) {
 	return s.loginFunc(ctx, email, password)
 }
 
 func TestSessionHandlerLogin(t *testing.T) {
 	const (
-		email        = "USER@example.com"
+		email        = "user@example.com"
 		password     = "senha-segura"
 		token        = "raw-session-token"
 		contextValue = "request-context"
@@ -51,7 +59,7 @@ func TestSessionHandlerLogin(t *testing.T) {
 		},
 	}
 
-	handler := handlers.NewSessionHandler(service, true)
+	handler := handlers.NewSessionHandler(service, allowAllLoginRateLimiter(), true)
 	request := httptest.NewRequest(http.MethodPost, "/sessions", strings.NewReader(`{"email":"USER@example.com","password":"senha-segura"}`)).WithContext(ctx)
 	response := httptest.NewRecorder()
 
@@ -108,7 +116,7 @@ func TestSessionHandlerLoginUsesCookieSecureConfiguration(t *testing.T) {
 		},
 	}
 
-	handler := handlers.NewSessionHandler(service, false)
+	handler := handlers.NewSessionHandler(service, allowAllLoginRateLimiter(), false)
 	request := httptest.NewRequest(http.MethodPost, "/sessions", strings.NewReader(`{"email":"user@example.com","password":"senha-segura"}`))
 	response := httptest.NewRecorder()
 
@@ -140,7 +148,7 @@ func TestSessionHandlerLoginRejectsInvalidJSON(t *testing.T) {
 				},
 			}
 
-			handler := handlers.NewSessionHandler(service, false)
+			handler := handlers.NewSessionHandler(service, unexpectedLoginRateLimiter(t), false)
 			request := httptest.NewRequest(http.MethodPost, "/sessions", strings.NewReader(tt.body))
 			response := httptest.NewRecorder()
 
@@ -188,7 +196,7 @@ func TestSessionHandlerLoginMapsServiceErrors(t *testing.T) {
 				},
 			}
 
-			handler := handlers.NewSessionHandler(service, false)
+			handler := handlers.NewSessionHandler(service, allowAllLoginRateLimiter(), false)
 			request := httptest.NewRequest(http.MethodPost, "/sessions", strings.NewReader(`{"email":"user@example.com","password":"senha-segura"}`))
 			response := httptest.NewRecorder()
 
@@ -210,6 +218,63 @@ func TestSessionHandlerLoginMapsServiceErrors(t *testing.T) {
 				t.Error("response body exposes an internal error")
 			}
 		})
+	}
+}
+
+func TestSessionHandlerLoginRateLimitsNormalizedEmail(t *testing.T) {
+	const inputEmail = "  USER@Example.COM  "
+	wantEmail := "user@example.com"
+
+	service := authServiceStub{
+		loginFunc: func(context.Context, string, string) (services.LoginResult, error) {
+			t.Fatal("Login() should not be called after the email rate limit is reached")
+			return services.LoginResult{}, nil
+		},
+	}
+
+	limiter := loginRateLimiterStub{
+		allowFunc: func(key string) (bool, int) {
+			if key != wantEmail {
+				t.Errorf("Allow() key = %q, want %q", key, wantEmail)
+			}
+			return false, 30
+		},
+	}
+
+	handler := handlers.NewSessionHandler(service, limiter, false)
+	request := httptest.NewRequest(http.MethodPost, "/sessions", strings.NewReader(`{"email":"  USER@Example.COM  ","password":"senha-segura"}`))
+	response := httptest.NewRecorder()
+	handler.Login(response, request)
+
+	if response.Code != http.StatusTooManyRequests {
+		t.Errorf("status code = %d, want %d", response.Code, http.StatusTooManyRequests)
+	}
+
+	if got := response.Header().Get("Retry-After"); got != "30" {
+		t.Errorf("Retry-After = %q, want %q", got, "30")
+	}
+
+	if got := response.Body.String(); got != "muitas tentativas de login, tente novamente mais tarde\n" {
+		t.Errorf("response body = %q, want rate limit message", got)
+	}
+}
+
+func allowAllLoginRateLimiter() loginRateLimiterStub {
+	return loginRateLimiterStub{
+		allowFunc: func(string) (bool, int) {
+			return true, 0
+		},
+	}
+}
+
+func unexpectedLoginRateLimiter(t *testing.T) loginRateLimiterStub {
+	t.Helper()
+
+	return loginRateLimiterStub{
+		allowFunc: func(string) (bool, int) {
+			t.Fatal("Allow() should not be called for invalid JSON")
+			return false, 0
+		},
 	}
 }
 

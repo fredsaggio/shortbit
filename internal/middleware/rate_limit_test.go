@@ -10,17 +10,17 @@ import (
 	"time"
 )
 
-func TestIPRateLimiterAllowsBurstAndRefillsTokens(t *testing.T) {
-	limiter, now := newTestIPRateLimiter(2, 2, 10, time.Minute)
+func TestRateLimiterAllowsBurstAndRefillsTokens(t *testing.T) {
+	limiter, now := newTestRateLimiter(2, 2, 10, time.Minute)
 
 	for requestNumber := 1; requestNumber <= 2; requestNumber++ {
-		allowed, retryAfter := limiter.allow("192.0.2.1")
+		allowed, retryAfter := limiter.Allow("192.0.2.1")
 		if !allowed {
 			t.Fatalf("request %d allowed = false, want true; Retry-After = %d", requestNumber, retryAfter)
 		}
 	}
 
-	allowed, retryAfter := limiter.allow("192.0.2.1")
+	allowed, retryAfter := limiter.Allow("192.0.2.1")
 	if allowed {
 		t.Fatal("request after burst allowed = true, want false")
 	}
@@ -30,14 +30,14 @@ func TestIPRateLimiterAllowsBurstAndRefillsTokens(t *testing.T) {
 	}
 
 	*now = now.Add(500 * time.Millisecond)
-	allowed, retryAfter = limiter.allow("192.0.2.1")
+	allowed, retryAfter = limiter.Allow("192.0.2.1")
 	if !allowed {
 		t.Fatalf("request after token refill allowed = false, want true; Retry-After = %d", retryAfter)
 	}
 }
 
-func TestIPRateLimiterMiddlewareReturnsTooManyRequests(t *testing.T) {
-	limiter, now := newTestIPRateLimiter(0.5, 1, 10, time.Minute)
+func TestRateLimiterMiddlewareByIPReturnsTooManyRequests(t *testing.T) {
+	limiter, now := newTestRateLimiter(0.5, 1, 10, time.Minute)
 	nextCalls := 0
 
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -45,7 +45,7 @@ func TestIPRateLimiterMiddlewareReturnsTooManyRequests(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	handler := limiter.Middleware(next)
+	handler := limiter.MiddlewareByIP(next)
 
 	firstRequest := httptest.NewRequest(http.MethodGet, "/", nil)
 	firstRequest.RemoteAddr = "192.0.2.1:1234"
@@ -92,73 +92,73 @@ func TestIPRateLimiterMiddlewareReturnsTooManyRequests(t *testing.T) {
 	}
 }
 
-func TestIPRateLimiterKeepsIndependentBucketsPerIP(t *testing.T) {
-	limiter, _ := newTestIPRateLimiter(1, 1, 10, time.Minute)
+func TestRateLimiterKeepsIndependentBucketsPerKey(t *testing.T) {
+	limiter, _ := newTestRateLimiter(1, 1, 10, time.Minute)
 
-	if allowed, _ := limiter.allow("192.0.2.1"); !allowed {
-		t.Fatal("first IP initial request was rejected")
+	if allowed, _ := limiter.Allow("first-key"); !allowed {
+		t.Fatal("first key initial request was rejected")
 	}
 
-	if allowed, _ := limiter.allow("192.0.2.1"); allowed {
-		t.Fatal("first IP request after burst was allowed")
+	if allowed, _ := limiter.Allow("first-key"); allowed {
+		t.Fatal("first key request after burst was allowed")
 	}
 
-	if allowed, _ := limiter.allow("192.0.2.2"); !allowed {
-		t.Fatal("second IP initial request was rejected")
+	if allowed, _ := limiter.Allow("second-key"); !allowed {
+		t.Fatal("second key initial request was rejected")
 	}
 }
 
-func TestIPRateLimiterRemovesStaleClients(t *testing.T) {
-	limiter, now := newTestIPRateLimiter(1, 1, 10, 2*time.Minute)
-	limiter.allow("192.0.2.1")
+func TestRateLimiterRemovesStaleEntries(t *testing.T) {
+	limiter, now := newTestRateLimiter(1, 1, 10, 2*time.Minute)
+	limiter.Allow("first-key")
 
 	*now = now.Add(2 * time.Minute)
-	limiter.allow("192.0.2.2")
+	limiter.Allow("second-key")
 
-	if _, exists := limiter.clients["192.0.2.1"]; exists {
-		t.Error("stale client was not removed")
+	if _, exists := limiter.entries["first-key"]; exists {
+		t.Error("stale entry was not removed")
 	}
 
-	if _, exists := limiter.clients["192.0.2.2"]; !exists {
-		t.Error("current client was not stored")
+	if _, exists := limiter.entries["second-key"]; !exists {
+		t.Error("current entry was not stored")
 	}
 
-	if len(limiter.clients) != 1 {
-		t.Errorf("tracked clients = %d, want 1", len(limiter.clients))
-	}
-}
-
-func TestIPRateLimiterRemovesOldestClientAtCapacity(t *testing.T) {
-	limiter, now := newTestIPRateLimiter(1, 1, 2, time.Hour)
-	limiter.allow("192.0.2.1")
-
-	*now = now.Add(time.Second)
-	limiter.allow("192.0.2.2")
-
-	*now = now.Add(time.Second)
-	limiter.allow("192.0.2.3")
-
-	if _, exists := limiter.clients["192.0.2.1"]; exists {
-		t.Error("oldest client was not removed")
-	}
-
-	if _, exists := limiter.clients["192.0.2.2"]; !exists {
-		t.Error("second client was unexpectedly removed")
-	}
-
-	if _, exists := limiter.clients["192.0.2.3"]; !exists {
-		t.Error("new client was not stored")
-	}
-
-	if len(limiter.clients) != 2 {
-		t.Errorf("tracked clients = %d, want 2", len(limiter.clients))
+	if len(limiter.entries) != 1 {
+		t.Errorf("tracked entries = %d, want 1", len(limiter.entries))
 	}
 }
 
-func TestIPRateLimiterHandlesConcurrentRequests(t *testing.T) {
+func TestRateLimiterRemovesOldestEntryAtCapacity(t *testing.T) {
+	limiter, now := newTestRateLimiter(1, 1, 2, time.Hour)
+	limiter.Allow("first-key")
+
+	*now = now.Add(time.Second)
+	limiter.Allow("second-key")
+
+	*now = now.Add(time.Second)
+	limiter.Allow("third-key")
+
+	if _, exists := limiter.entries["first-key"]; exists {
+		t.Error("oldest entry was not removed")
+	}
+
+	if _, exists := limiter.entries["second-key"]; !exists {
+		t.Error("second entry was unexpectedly removed")
+	}
+
+	if _, exists := limiter.entries["third-key"]; !exists {
+		t.Error("new entry was not stored")
+	}
+
+	if len(limiter.entries) != 2 {
+		t.Errorf("tracked entries = %d, want 2", len(limiter.entries))
+	}
+}
+
+func TestRateLimiterHandlesConcurrentRequests(t *testing.T) {
 	const burst = 10
 
-	limiter, _ := newTestIPRateLimiter(1, burst, 10, time.Minute)
+	limiter, _ := newTestRateLimiter(1, burst, 10, time.Minute)
 	var allowedRequests atomic.Int64
 	var waitGroup sync.WaitGroup
 
@@ -168,7 +168,7 @@ func TestIPRateLimiterHandlesConcurrentRequests(t *testing.T) {
 		go func() {
 			defer waitGroup.Done()
 
-			if allowed, _ := limiter.allow("192.0.2.1"); allowed {
+			if allowed, _ := limiter.Allow("same-key"); allowed {
 				allowedRequests.Add(1)
 			}
 		}()
@@ -205,8 +205,8 @@ func TestClientIP(t *testing.T) {
 	}
 }
 
-func newTestIPRateLimiter(requestsPerSecond float64, burst, maxClients int, staleAfter time.Duration) (*IPRateLimiter, *time.Time) {
-	limiter := NewIPRateLimiter(requestsPerSecond, burst, maxClients, staleAfter)
+func newTestRateLimiter(requestsPerSecond float64, burst, maxEntries int, staleAfter time.Duration) (*RateLimiter, *time.Time) {
+	limiter := NewRateLimiter(requestsPerSecond, burst, maxEntries, staleAfter)
 	now := limiter.lastCleanup
 	limiter.now = func() time.Time { return now }
 

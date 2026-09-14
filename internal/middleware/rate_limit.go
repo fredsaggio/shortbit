@@ -9,25 +9,25 @@ import (
 	"time"
 )
 
-type clientBucket struct {
+type rateLimitBucket struct {
 	tokens     float64
 	lastRefill time.Time
 	lastSeen   time.Time
 }
 
-type IPRateLimiter struct {
+type RateLimiter struct {
 	mu              sync.Mutex
-	clients         map[string]*clientBucket
+	entries         map[string]*rateLimitBucket
 	rate            float64
 	burst           float64
-	maxClients      int
+	maxEntries      int
 	staleAfter      time.Duration
 	lastCleanup     time.Time
 	cleanupInterval time.Duration
 	now             func() time.Time
 }
 
-func NewIPRateLimiter(requestsPerSecond float64, burst, maxClients int, staleAfter time.Duration) *IPRateLimiter {
+func NewRateLimiter(requestsPerSecond float64, burst, maxEntries int, staleAfter time.Duration) *RateLimiter {
 	if requestsPerSecond <= 0 {
 		panic("requests per second must be greater than zero")
 	}
@@ -36,8 +36,8 @@ func NewIPRateLimiter(requestsPerSecond float64, burst, maxClients int, staleAft
 		panic("burst must be greater than zero")
 	}
 
-	if maxClients <= 0 {
-		panic("max clients must be greater than zero")
+	if maxEntries <= 0 {
+		panic("max entries must be greater than zero")
 	}
 
 	if staleAfter <= 0 {
@@ -46,11 +46,11 @@ func NewIPRateLimiter(requestsPerSecond float64, burst, maxClients int, staleAft
 
 	now := time.Now()
 
-	return &IPRateLimiter{
-		clients:         make(map[string]*clientBucket),
+	return &RateLimiter{
+		entries:         make(map[string]*rateLimitBucket),
 		rate:            requestsPerSecond,
 		burst:           float64(burst),
-		maxClients:      maxClients,
+		maxEntries:      maxEntries,
 		staleAfter:      staleAfter,
 		lastCleanup:     now,
 		cleanupInterval: time.Minute,
@@ -58,11 +58,9 @@ func NewIPRateLimiter(requestsPerSecond float64, burst, maxClients int, staleAft
 	}
 }
 
-func (l *IPRateLimiter) Middleware(next http.Handler) http.Handler {
+func (l *RateLimiter) MiddlewareByIP(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := clientIP(r)
-
-		allowed, retryAfter := l.allow(ip)
+		allowed, retryAfter := l.Allow(clientIP(r))
 		if !allowed {
 			w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
 			http.Error(w, "muitas requisições, tente novamente mais tarde", http.StatusTooManyRequests)
@@ -73,7 +71,7 @@ func (l *IPRateLimiter) Middleware(next http.Handler) http.Handler {
 	})
 }
 
-func (l *IPRateLimiter) allow(ip string) (bool, int) {
+func (l *RateLimiter) Allow(key string) (bool, int) {
 	now := l.now()
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -82,13 +80,13 @@ func (l *IPRateLimiter) allow(ip string) (bool, int) {
 		l.cleanup(now)
 	}
 
-	bucket, exists := l.clients[ip]
+	bucket, exists := l.entries[key]
 	if !exists {
-		if len(l.clients) >= l.maxClients {
-			l.removeOldestClient()
+		if len(l.entries) >= l.maxEntries {
+			l.removeOldestEntry()
 		}
 
-		l.clients[ip] = &clientBucket{
+		l.entries[key] = &rateLimitBucket{
 			tokens:     l.burst - 1,
 			lastRefill: now,
 			lastSeen:   now,
@@ -118,29 +116,31 @@ func (l *IPRateLimiter) allow(ip string) (bool, int) {
 	return false, retryAfter
 }
 
-func (l *IPRateLimiter) cleanup(now time.Time) {
-	for ip, bucket := range l.clients {
+func (l *RateLimiter) cleanup(now time.Time) {
+	for key, bucket := range l.entries {
 		if now.Sub(bucket.lastSeen) >= l.staleAfter {
-			delete(l.clients, ip)
+			delete(l.entries, key)
 		}
 	}
 
 	l.lastCleanup = now
 }
 
-func (l *IPRateLimiter) removeOldestClient() {
-	var oldestIP string
+func (l *RateLimiter) removeOldestEntry() {
+	var oldestKey string
 	var oldestTime time.Time
+	found := false
 
-	for ip, bucket := range l.clients {
-		if oldestIP == "" || bucket.lastSeen.Before(oldestTime) {
-			oldestIP = ip
+	for key, bucket := range l.entries {
+		if !found || bucket.lastSeen.Before(oldestTime) {
+			oldestKey = key
 			oldestTime = bucket.lastSeen
+			found = true
 		}
 	}
 
-	if oldestIP != "" {
-		delete(l.clients, oldestIP)
+	if found {
+		delete(l.entries, oldestKey)
 	}
 }
 

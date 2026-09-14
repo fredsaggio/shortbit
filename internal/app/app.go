@@ -2,6 +2,7 @@ package app
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/fredsaggio/url-shortener/internal/argon2"
 	"github.com/fredsaggio/url-shortener/internal/config"
@@ -14,6 +15,13 @@ import (
 	"github.com/fredsaggio/url-shortener/internal/sessiontoken"
 )
 
+const (
+	loginEmailRateLimitRequestsPerSecond = 10.0 / 60.0
+	loginEmailRateLimitBurst             = 5
+	loginEmailRateLimitMaxEntries        = 10_000
+	loginEmailRateLimitStaleAfter        = 10 * time.Minute
+)
+
 func CompositionRoot(pool db.DB, sessionConfig config.SessionConfig) *server.Handlers {
 	passwordHasher := argon2.Argon2id{}
 
@@ -23,7 +31,8 @@ func CompositionRoot(pool db.DB, sessionConfig config.SessionConfig) *server.Han
 
 	userSessionRepository := repositories.NewUserSessionRepository(pool)
 	authService := services.NewAuthService(userRepository, userSessionRepository, passwordHasher, sessiontoken.Generate, sessionConfig.TTL)
-	sessionHandler := handlers.NewSessionHandler(authService, sessionConfig.CookieSecure)
+	loginEmailRateLimiter := middleware.NewRateLimiter(loginEmailRateLimitRequestsPerSecond, loginEmailRateLimitBurst, loginEmailRateLimitMaxEntries, loginEmailRateLimitStaleAfter)
+	sessionHandler := handlers.NewSessionHandler(authService, loginEmailRateLimiter, sessionConfig.CookieSecure)
 
 	meHandler := middleware.Authenticator(authService)(http.HandlerFunc(userHandler.GetUserInfo))
 

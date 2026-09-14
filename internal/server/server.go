@@ -35,16 +35,16 @@ type Handlers struct {
 type Server struct {
 	h                *Handlers
 	database         DatabasePinger
-	rateLimiter      *middleware.IPRateLimiter
-	loginRateLimiter *middleware.IPRateLimiter
+	rateLimiter      *middleware.RateLimiter
+	loginRateLimiter *middleware.RateLimiter
 }
 
 func NewServer(h *Handlers, database DatabasePinger) *Server {
 	return &Server{
 		h:                h,
 		database:         database,
-		rateLimiter:      middleware.NewIPRateLimiter(globalRateLimitRequestsPerSecond, globalRateLimitBurst, globalRateLimitMaxClients, globalRateLimitStaleAfter),
-		loginRateLimiter: middleware.NewIPRateLimiter(loginRateLimitRequestsPerSecond, loginRateLimitBurst, loginRateLimitMaxClients, loginRateLimitStaleAfter),
+		rateLimiter:      middleware.NewRateLimiter(globalRateLimitRequestsPerSecond, globalRateLimitBurst, globalRateLimitMaxClients, globalRateLimitStaleAfter),
+		loginRateLimiter: middleware.NewRateLimiter(loginRateLimitRequestsPerSecond, loginRateLimitBurst, loginRateLimitMaxClients, loginRateLimitStaleAfter),
 	}
 }
 
@@ -72,7 +72,7 @@ func (srv *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /users", srv.h.UserHandler.RegisterWithPassword)
 	mux.Handle("GET /me", srv.h.MeHandler)
 
-	loginHandler := srv.loginRateLimiter.Middleware(http.HandlerFunc(srv.h.SessionHandler.Login))
+	loginHandler := srv.loginRateLimiter.MiddlewareByIP(http.HandlerFunc(srv.h.SessionHandler.Login))
 	mux.Handle("POST /sessions", loginHandler)
 
 }
@@ -85,7 +85,7 @@ func (srv *Server) NewRouterHTTP() http.Handler {
 	handler := http.Handler(mux)
 
 	handler = middleware.LimitRequestBody(handler)
-	handler = srv.rateLimiter.Middleware(handler)
+	handler = srv.rateLimiter.MiddlewareByIP(handler)
 	handler = middleware.Recovery(handler)
 	handler = middleware.AccessLog(handler)
 	handler = middleware.RequestID(handler)

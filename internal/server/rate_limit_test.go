@@ -22,6 +22,12 @@ func (s *loginAuthServiceStub) Login(context.Context, string, string) (services.
 	return services.LoginResult{}, services.ErrIncorrectEmailOrPassword
 }
 
+type allowAllLoginRateLimiterStub struct{}
+
+func (allowAllLoginRateLimiterStub) Allow(string) (bool, int) {
+	return true, 0
+}
+
 func TestNewRouterHTTPAppliesGlobalRateLimit(t *testing.T) {
 	ctx := t.Context()
 	applicationHandlers := &Handlers{
@@ -31,7 +37,7 @@ func TestNewRouterHTTPAppliesGlobalRateLimit(t *testing.T) {
 	}
 
 	srv := NewServer(applicationHandlers, nil)
-	srv.rateLimiter = middleware.NewIPRateLimiter(0.001, 2, 10, time.Minute)
+	srv.rateLimiter = middleware.NewRateLimiter(0.001, 2, 10, time.Minute)
 	router := srv.NewRouterHTTP()
 
 	for requestNumber := 1; requestNumber <= 2; requestNumber++ {
@@ -60,13 +66,13 @@ func TestNewRouterHTTPAppliesLoginRateLimitOnlyToSessions(t *testing.T) {
 	authService := &loginAuthServiceStub{}
 	applicationHandlers := &Handlers{
 		UserHandler:    &handlers.UserHandler{},
-		SessionHandler: handlers.NewSessionHandler(authService, false),
+		SessionHandler: handlers.NewSessionHandler(authService, allowAllLoginRateLimiterStub{}, false),
 		MeHandler:      http.NotFoundHandler(),
 	}
 
 	srv := NewServer(applicationHandlers, nil)
-	srv.rateLimiter = middleware.NewIPRateLimiter(1_000, 100, 10, time.Minute)
-	srv.loginRateLimiter = middleware.NewIPRateLimiter(0.001, 5, 10, time.Minute)
+	srv.rateLimiter = middleware.NewRateLimiter(1_000, 100, 10, time.Minute)
+	srv.loginRateLimiter = middleware.NewRateLimiter(0.001, 5, 10, time.Minute)
 	router := srv.NewRouterHTTP()
 
 	for requestNumber := 1; requestNumber <= 5; requestNumber++ {
