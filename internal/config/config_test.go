@@ -18,10 +18,13 @@ func TestLoad(t *testing.T) {
 		{
 			name: "loads provided configuration",
 			env: map[string]string{
-				"DATABASE_URL":     "postgres://user:password@localhost:5432/app",
-				"HTTP_ADDR":        ":9090",
-				"USER_SESSION_TTL": "12h",
-				"COOKIE_SECURE":    "false",
+				"DATABASE_URL":         "postgres://user:password@localhost:5432/app",
+				"HTTP_ADDR":            ":9090",
+				"USER_SESSION_TTL":     "12h",
+				"COOKIE_SECURE":        "false",
+				"GOOGLE_CLIENT_ID":     "test-client-id",
+				"GOOGLE_CLIENT_SECRET": "test-client-secret",
+				"GOOGLE_REDIRECT_URL":  "http://localhost:8080/auth/google/callback",
 			},
 			want: config.Config{
 				DatabaseURL: "postgres://user:password@localhost:5432/app",
@@ -37,12 +40,20 @@ func TestLoad(t *testing.T) {
 					TTL:          12 * time.Hour,
 					CookieSecure: false,
 				},
+				Google: config.GoogleConfig{
+					ClientID:     "test-client-id",
+					ClientSecret: "test-client-secret",
+					RedirectURL:  "http://localhost:8080/auth/google/callback",
+				},
 			},
 		},
 		{
 			name: "uses default values",
 			env: map[string]string{
-				"DATABASE_URL": "postgres://localhost/app",
+				"DATABASE_URL":         "postgres://localhost/app",
+				"GOOGLE_CLIENT_ID":     "test-client-id",
+				"GOOGLE_CLIENT_SECRET": "test-client-secret",
+				"GOOGLE_REDIRECT_URL":  "http://localhost:8080/auth/google/callback",
 			},
 			want: config.Config{
 				DatabaseURL: "postgres://localhost/app",
@@ -57,6 +68,11 @@ func TestLoad(t *testing.T) {
 				Session: config.SessionConfig{
 					TTL:          72 * time.Hour,
 					CookieSecure: true,
+				},
+				Google: config.GoogleConfig{
+					ClientID:     "test-client-id",
+					ClientSecret: "test-client-secret",
+					RedirectURL:  "http://localhost:8080/auth/google/callback",
 				},
 			},
 		},
@@ -91,6 +107,33 @@ func TestLoad(t *testing.T) {
 				"COOKIE_SECURE": "sometimes",
 			},
 			wantErrContains: "COOKIE_SECURE must be a valid boolean",
+		},
+		{
+			name: "rejects missing Google client ID",
+			env: map[string]string{
+				"DATABASE_URL":         "postgres://localhost/app",
+				"GOOGLE_CLIENT_SECRET": "test-client-secret",
+				"GOOGLE_REDIRECT_URL":  "http://localhost:8080/auth/google/callback",
+			},
+			wantErrContains: "GOOGLE_CLIENT_ID is required",
+		},
+		{
+			name: "rejects missing Google client secret",
+			env: map[string]string{
+				"DATABASE_URL":        "postgres://localhost/app",
+				"GOOGLE_CLIENT_ID":    "test-client-id",
+				"GOOGLE_REDIRECT_URL": "http://localhost:8080/auth/google/callback",
+			},
+			wantErrContains: "GOOGLE_CLIENT_SECRET is required",
+		},
+		{
+			name: "rejects missing Google redirect URL",
+			env: map[string]string{
+				"DATABASE_URL":         "postgres://localhost/app",
+				"GOOGLE_CLIENT_ID":     "test-client-id",
+				"GOOGLE_CLIENT_SECRET": "test-client-secret",
+			},
+			wantErrContains: "GOOGLE_REDIRECT_URL is required",
 		},
 		{
 			name:            "rejects missing database URL",

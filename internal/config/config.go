@@ -22,11 +22,18 @@ type Config struct {
 	DatabaseURL string
 	HTTP        HTTPConfig
 	Session     SessionConfig
+	Google      GoogleConfig
 }
 
 type SessionConfig struct {
 	TTL          time.Duration
 	CookieSecure bool
+}
+
+type GoogleConfig struct {
+	ClientID     string
+	ClientSecret string
+	RedirectURL  string
 }
 
 type HTTPConfig struct {
@@ -67,10 +74,27 @@ func Load(getEnv func(string) string) (Config, error) {
 			TTL:          sessionTTL,
 			CookieSecure: cookieSecure,
 		},
+		Google: GoogleConfig{
+			ClientID:     getEnv("GOOGLE_CLIENT_ID"),
+			ClientSecret: getEnv("GOOGLE_CLIENT_SECRET"),
+			RedirectURL:  getEnv("GOOGLE_REDIRECT_URL"),
+		},
 	}
 
 	if cfg.DatabaseURL == "" {
 		return Config{}, errors.New("DATABASE_URL is required")
+	}
+
+	if cfg.Google.ClientID == "" {
+		return Config{}, errors.New("GOOGLE_CLIENT_ID is required")
+	}
+
+	if cfg.Google.ClientSecret == "" {
+		return Config{}, errors.New("GOOGLE_CLIENT_SECRET is required")
+	}
+
+	if cfg.Google.RedirectURL == "" {
+		return Config{}, errors.New("GOOGLE_REDIRECT_URL is required")
 	}
 
 	return cfg, nil
