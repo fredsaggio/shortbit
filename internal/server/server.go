@@ -15,6 +15,11 @@ const (
 	globalRateLimitBurst             = 20
 	globalRateLimitMaxClients        = 10_000
 	globalRateLimitStaleAfter        = 10 * time.Minute
+
+	loginRateLimitRequestsPerSecond = 20.0 / 60.0
+	loginRateLimitBurst             = 5
+	loginRateLimitMaxClients        = 10_000
+	loginRateLimitStaleAfter        = 10 * time.Minute
 )
 
 type DatabasePinger interface {
@@ -28,16 +33,18 @@ type Handlers struct {
 }
 
 type Server struct {
-	h           *Handlers
-	database    DatabasePinger
-	rateLimiter *middleware.IPRateLimiter
+	h                *Handlers
+	database         DatabasePinger
+	rateLimiter      *middleware.IPRateLimiter
+	loginRateLimiter *middleware.IPRateLimiter
 }
 
 func NewServer(h *Handlers, database DatabasePinger) *Server {
 	return &Server{
-		h:           h,
-		database:    database,
-		rateLimiter: middleware.NewIPRateLimiter(globalRateLimitRequestsPerSecond, globalRateLimitBurst, globalRateLimitMaxClients, globalRateLimitStaleAfter),
+		h:                h,
+		database:         database,
+		rateLimiter:      middleware.NewIPRateLimiter(globalRateLimitRequestsPerSecond, globalRateLimitBurst, globalRateLimitMaxClients, globalRateLimitStaleAfter),
+		loginRateLimiter: middleware.NewIPRateLimiter(loginRateLimitRequestsPerSecond, loginRateLimitBurst, loginRateLimitMaxClients, loginRateLimitStaleAfter),
 	}
 }
 
@@ -65,7 +72,8 @@ func (srv *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /users", srv.h.UserHandler.RegisterWithPassword)
 	mux.Handle("GET /me", srv.h.MeHandler)
 
-	mux.HandleFunc("POST /sessions", srv.h.SessionHandler.Login)
+	loginHandler := srv.loginRateLimiter.Middleware(http.HandlerFunc(srv.h.SessionHandler.Login))
+	mux.Handle("POST /sessions", loginHandler)
 
 }
 
