@@ -22,6 +22,10 @@ func (s *loginAuthServiceStub) Login(context.Context, string, string) (services.
 	return services.LoginResult{}, services.ErrIncorrectEmailOrPassword
 }
 
+func (s *loginAuthServiceStub) Logout(context.Context, string) error {
+	return nil
+}
+
 type allowAllLoginRateLimiterStub struct{}
 
 func (allowAllLoginRateLimiterStub) Allow(string) (bool, int) {

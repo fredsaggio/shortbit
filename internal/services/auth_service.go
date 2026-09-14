@@ -20,6 +20,7 @@ var (
 type UserSessionRepository interface {
 	Create(ctx context.Context, userID uuid.UUID, tokenHash []byte, expiresAt time.Time) error
 	FindSessionByTokenHash(ctx context.Context, tokenHash []byte) (models.UserSession, error)
+	DeleteSessionByTokenHash(ctx context.Context, tokenHash []byte) error
 }
 
 type PasswordCredentialRepository interface {
@@ -118,4 +119,17 @@ func (s *AuthService) Authenticate(ctx context.Context, token string) (uuid.UUID
 	}
 
 	return session.UserID, nil
+}
+
+func (s *AuthService) Logout(ctx context.Context, token string) error {
+	if token == "" {
+		return nil
+	}
+	tokenHash := sessiontoken.Hash(token)
+
+	if err := s.userSessionRepo.DeleteSessionByTokenHash(ctx, tokenHash); err != nil {
+		return fmt.Errorf("delete session by token hash: %w", err)
+	}
+
+	return nil
 }

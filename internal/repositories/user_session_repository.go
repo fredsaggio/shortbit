@@ -73,3 +73,20 @@ func (r *UserSessionRepository) FindSessionByTokenHash(ctx context.Context, toke
 
 	return userSession, nil
 }
+
+func (r *UserSessionRepository) DeleteSessionByTokenHash(ctx context.Context, tokenHash []byte) error {
+	const q = `
+		DELETE FROM user_sessions
+		WHERE token_hash = @tokenHash
+	`
+
+	args := pgx.StrictNamedArgs{
+		"tokenHash": tokenHash,
+	}
+
+	if _, err := r.db.Exec(ctx, q, args); err != nil {
+		return fmt.Errorf("delete user session with token: %w", err)
+	}
+
+	return nil
+}

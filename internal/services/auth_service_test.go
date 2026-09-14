@@ -23,8 +23,9 @@ func (s passwordCredentialRepositoryStub) FindPasswordCredentialsByEmail(ctx con
 }
 
 type userSessionRepositoryStub struct {
-	createFunc                 func(ctx context.Context, userID uuid.UUID, tokenHash []byte, expiresAt time.Time) error
-	findSessionByTokenHashFunc func(ctx context.Context, tokenHash []byte) (models.UserSession, error)
+	createFunc                   func(ctx context.Context, userID uuid.UUID, tokenHash []byte, expiresAt time.Time) error
+	findSessionByTokenHashFunc   func(ctx context.Context, tokenHash []byte) (models.UserSession, error)
+	deleteSessionByTokenHashFunc func(ctx context.Context, tokenHash []byte) error
 }
 
 func (s userSessionRepositoryStub) Create(ctx context.Context, userID uuid.UUID, tokenHash []byte, expiresAt time.Time) error {
@@ -33,6 +34,10 @@ func (s userSessionRepositoryStub) Create(ctx context.Context, userID uuid.UUID,
 
 func (s userSessionRepositoryStub) FindSessionByTokenHash(ctx context.Context, tokenHash []byte) (models.UserSession, error) {
 	return s.findSessionByTokenHashFunc(ctx, tokenHash)
+}
+
+func (s userSessionRepositoryStub) DeleteSessionByTokenHash(ctx context.Context, tokenHash []byte) error {
+	return s.deleteSessionByTokenHashFunc(ctx, tokenHash)
 }
 
 type passwordComparatorStub struct {
@@ -372,6 +377,75 @@ func TestAuthServiceAuthenticatePropagatesRepositoryError(t *testing.T) {
 	}
 }
 
+func TestAuthServiceLogout(t *testing.T) {
+	const (
+		rawToken     = "raw-session-token"
+		contextValue = "request-context"
+	)
+
+	wantTokenHash := sessiontoken.Hash(rawToken)
+	type contextKey struct{}
+	ctx := context.WithValue(context.Background(), contextKey{}, contextValue)
+
+	sessionRepository := userSessionRepositoryStub{
+		deleteSessionByTokenHashFunc: func(gotCtx context.Context, gotTokenHash []byte) error {
+			if got := gotCtx.Value(contextKey{}); got != contextValue {
+				t.Errorf("DeleteSessionByTokenHash() context value = %v, want %q", got, contextValue)
+			}
+
+			if !bytes.Equal(gotTokenHash, wantTokenHash) {
+				t.Errorf("DeleteSessionByTokenHash() token hash = %x, want %x", gotTokenHash, wantTokenHash)
+			}
+
+			if bytes.Equal(gotTokenHash, []byte(rawToken)) {
+				t.Error("DeleteSessionByTokenHash() received the raw token")
+			}
+
+			return nil
+		},
+	}
+
+	service := services.NewAuthService(unexpectedPasswordCredentialRepository(t), sessionRepository, unexpectedComparator(t), unexpectedTokenGenerator(t), time.Hour)
+	if err := service.Logout(ctx, rawToken); err != nil {
+		t.Fatalf("Logout() error = %v", err)
+	}
+}
+
+func TestAuthServiceLogoutAllowsEmptyToken(t *testing.T) {
+	repositoryCalled := false
+	sessionRepository := userSessionRepositoryStub{
+		deleteSessionByTokenHashFunc: func(context.Context, []byte) error {
+			repositoryCalled = true
+			return nil
+		},
+	}
+
+	service := services.NewAuthService(unexpectedPasswordCredentialRepository(t), sessionRepository, unexpectedComparator(t), unexpectedTokenGenerator(t), time.Hour)
+	if err := service.Logout(context.Background(), ""); err != nil {
+		t.Fatalf("Logout() error = %v, want nil", err)
+	}
+
+	if repositoryCalled {
+		t.Error("DeleteSessionByTokenHash() was called for an empty token")
+	}
+}
+
+func TestAuthServiceLogoutPropagatesRepositoryError(t *testing.T) {
+	wantErr := errors.New("database unavailable")
+	sessionRepository := userSessionRepositoryStub{
+		deleteSessionByTokenHashFunc: func(context.Context, []byte) error {
+			return wantErr
+		},
+	}
+
+	service := services.NewAuthService(unexpectedPasswordCredentialRepository(t), sessionRepository, unexpectedComparator(t), unexpectedTokenGenerator(t), time.Hour)
+	err := service.Logout(context.Background(), "raw-session-token")
+
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("Logout() error = %v, want wrapped %v", err, wantErr)
+	}
+}
+
 func validPasswordCredentialRepository() passwordCredentialRepositoryStub {
 	userID := uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c317")
 
@@ -412,6 +486,10 @@ func unexpectedSessionRepository(t *testing.T) userSessionRepositoryStub {
 		findSessionByTokenHashFunc: func(context.Context, []byte) (models.UserSession, error) {
 			t.Fatal("FindSessionByTokenHash() should not be called")
 			return models.UserSession{}, nil
+		},
+		deleteSessionByTokenHashFunc: func(context.Context, []byte) error {
+			t.Fatal("DeleteSessionByTokenHash() should not be called")
+			return nil
 		},
 	}
 }

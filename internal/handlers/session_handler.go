@@ -15,6 +15,7 @@ import (
 
 type AuthService interface {
 	Login(ctx context.Context, email, password string) (services.LoginResult, error)
+	Logout(ctx context.Context, token string) error
 }
 
 type LoginRateLimiter interface {
@@ -80,5 +81,31 @@ func (h *SessionHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	setUserSessionCookie(w, login.Token, login.ExpiresAt, h.cookieSecure)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *SessionHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	token := ""
+
+	cookie, err := r.Cookie(userSessionCookieName)
+
+	if err == nil {
+		token = cookie.Value
+
+	} else if !errors.Is(err, http.ErrNoCookie) {
+		http.Error(w, "cookie de sessão inválido", http.StatusBadRequest)
+		return
+	}
+
+	err = h.authServ.Logout(ctx, token)
+
+	if err != nil {
+		slog.Error("logout failed", "error", err)
+		http.Error(w, "erro interno do servidor", http.StatusInternalServerError)
+		return
+	}
+
+	clearUserSessionCookie(w, h.cookieSecure)
 	w.WriteHeader(http.StatusNoContent)
 }

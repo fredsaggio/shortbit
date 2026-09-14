@@ -22,3 +22,16 @@ func setUserSessionCookie(w http.ResponseWriter, token string, expiresAt time.Ti
 		SameSite: http.SameSiteLaxMode,
 	})
 }
+
+func clearUserSessionCookie(w http.ResponseWriter, secure bool) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     userSessionCookieName,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		Expires:  time.Unix(0, 0).UTC(),
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+	})
+}

@@ -13,7 +13,7 @@ import (
 	"github.com/fredsaggio/url-shortener/internal/repositories"
 )
 
-func TestUserSessionRepositoryFindSessionByTokenHashIntegration(t *testing.T) {
+func TestUserSessionRepositoryIntegration(t *testing.T) {
 	pool := dbtest.Open(t)
 	userRepository := repositories.NewUserRepository(pool)
 	sessionRepository := repositories.NewUserSessionRepository(pool)
@@ -82,6 +82,28 @@ func TestUserSessionRepositoryFindSessionByTokenHashIntegration(t *testing.T) {
 		_, err = sessionRepository.FindSessionByTokenHash(t.Context(), expiredTokenHash[:])
 		if !errors.Is(err, repositories.ErrUserSessionNotFound) {
 			t.Fatalf("FindSessionByTokenHash() error = %v, want %v", err, repositories.ErrUserSessionNotFound)
+		}
+	})
+
+	t.Run("deletes a session by token hash idempotently", func(t *testing.T) {
+		tokenHash := sha256.Sum256([]byte("session-token-to-delete"))
+		expiresAt := time.Now().UTC().Add(time.Hour)
+
+		if err := sessionRepository.Create(t.Context(), user.ID, tokenHash[:], expiresAt); err != nil {
+			t.Fatalf("Create() error = %v", err)
+		}
+
+		if err := sessionRepository.DeleteSessionByTokenHash(t.Context(), tokenHash[:]); err != nil {
+			t.Fatalf("DeleteSessionByTokenHash() error = %v", err)
+		}
+
+		_, err := sessionRepository.FindSessionByTokenHash(t.Context(), tokenHash[:])
+		if !errors.Is(err, repositories.ErrUserSessionNotFound) {
+			t.Fatalf("FindSessionByTokenHash() error = %v, want %v", err, repositories.ErrUserSessionNotFound)
+		}
+
+		if err := sessionRepository.DeleteSessionByTokenHash(t.Context(), tokenHash[:]); err != nil {
+			t.Fatalf("second DeleteSessionByTokenHash() error = %v, want nil", err)
 		}
 	})
 }

@@ -14,7 +14,8 @@ import (
 )
 
 type authServiceStub struct {
-	loginFunc func(ctx context.Context, email, password string) (services.LoginResult, error)
+	loginFunc  func(ctx context.Context, email, password string) (services.LoginResult, error)
+	logoutFunc func(ctx context.Context, token string) error
 }
 
 type loginRateLimiterStub struct {
@@ -27,6 +28,10 @@ func (s loginRateLimiterStub) Allow(key string) (bool, int) {
 
 func (s authServiceStub) Login(ctx context.Context, email, password string) (services.LoginResult, error) {
 	return s.loginFunc(ctx, email, password)
+}
+
+func (s authServiceStub) Logout(ctx context.Context, token string) error {
+	return s.logoutFunc(ctx, token)
 }
 
 func TestSessionHandlerLogin(t *testing.T) {
@@ -259,6 +264,102 @@ func TestSessionHandlerLoginRateLimitsNormalizedEmail(t *testing.T) {
 	}
 }
 
+func TestSessionHandlerLogout(t *testing.T) {
+	const (
+		token        = "raw-session-token"
+		contextValue = "request-context"
+	)
+
+	type contextKey struct{}
+	ctx := context.WithValue(context.Background(), contextKey{}, contextValue)
+	service := authServiceStub{
+		logoutFunc: func(gotCtx context.Context, gotToken string) error {
+			if got := gotCtx.Value(contextKey{}); got != contextValue {
+				t.Errorf("Logout() context value = %v, want %q", got, contextValue)
+			}
+
+			if gotToken != token {
+				t.Errorf("Logout() token = %q, want %q", gotToken, token)
+			}
+
+			return nil
+		},
+	}
+
+	handler := handlers.NewSessionHandler(service, allowAllLoginRateLimiter(), true)
+	request := httptest.NewRequest(http.MethodDelete, "/sessions/current", nil).WithContext(ctx)
+	request.AddCookie(&http.Cookie{Name: "user_session", Value: token})
+	response := httptest.NewRecorder()
+
+	handler.Logout(response, request)
+
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("status code = %d, want %d", response.Code, http.StatusNoContent)
+	}
+
+	if response.Body.Len() != 0 {
+		t.Errorf("response body = %q, want empty body", response.Body.String())
+	}
+
+	assertRemovedSessionCookie(t, response.Result().Cookies(), true)
+}
+
+func TestSessionHandlerLogoutWithoutCookie(t *testing.T) {
+	service := authServiceStub{
+		logoutFunc: func(_ context.Context, token string) error {
+			if token != "" {
+				t.Errorf("Logout() token = %q, want empty", token)
+			}
+
+			return nil
+		},
+	}
+
+	handler := handlers.NewSessionHandler(service, allowAllLoginRateLimiter(), false)
+	request := httptest.NewRequest(http.MethodDelete, "/sessions/current", nil)
+	response := httptest.NewRecorder()
+
+	handler.Logout(response, request)
+
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("status code = %d, want %d", response.Code, http.StatusNoContent)
+	}
+
+	assertRemovedSessionCookie(t, response.Result().Cookies(), false)
+}
+
+func TestSessionHandlerLogoutMapsServiceError(t *testing.T) {
+	wantErr := errors.New("database unavailable")
+	service := authServiceStub{
+		logoutFunc: func(context.Context, string) error {
+			return wantErr
+		},
+	}
+
+	handler := handlers.NewSessionHandler(service, allowAllLoginRateLimiter(), false)
+	request := httptest.NewRequest(http.MethodDelete, "/sessions/current", nil)
+	request.AddCookie(&http.Cookie{Name: "user_session", Value: "raw-session-token"})
+	response := httptest.NewRecorder()
+
+	handler.Logout(response, request)
+
+	if response.Code != http.StatusInternalServerError {
+		t.Errorf("status code = %d, want %d", response.Code, http.StatusInternalServerError)
+	}
+
+	if got := response.Body.String(); got != "erro interno do servidor\n" {
+		t.Errorf("response body = %q, want generic internal error", got)
+	}
+
+	if strings.Contains(response.Body.String(), wantErr.Error()) {
+		t.Error("response body exposes an internal error")
+	}
+
+	if len(response.Result().Cookies()) != 0 {
+		t.Error("response removes the cookie even though session revocation failed")
+	}
+}
+
 func allowAllLoginRateLimiter() loginRateLimiterStub {
 	return loginRateLimiterStub{
 		allowFunc: func(string) (bool, int) {
@@ -289,4 +390,38 @@ func findCookie(t *testing.T, cookies []*http.Cookie, name string) *http.Cookie 
 
 	t.Fatalf("cookie %q was not found", name)
 	return nil
+}
+
+func assertRemovedSessionCookie(t *testing.T, cookies []*http.Cookie, wantSecure bool) {
+	t.Helper()
+
+	cookie := findCookie(t, cookies, "user_session")
+
+	if cookie.Value != "" {
+		t.Errorf("cookie value = %q, want empty", cookie.Value)
+	}
+
+	if cookie.Path != "/" {
+		t.Errorf("cookie path = %q, want %q", cookie.Path, "/")
+	}
+
+	if cookie.MaxAge != -1 {
+		t.Errorf("cookie MaxAge = %d, want -1", cookie.MaxAge)
+	}
+
+	if !cookie.Expires.Before(time.Now()) {
+		t.Errorf("cookie expiration = %v, want a time in the past", cookie.Expires)
+	}
+
+	if !cookie.HttpOnly {
+		t.Error("cookie HttpOnly = false, want true")
+	}
+
+	if cookie.Secure != wantSecure {
+		t.Errorf("cookie Secure = %t, want %t", cookie.Secure, wantSecure)
+	}
+
+	if cookie.SameSite != http.SameSiteLaxMode {
+		t.Errorf("cookie SameSite = %v, want %v", cookie.SameSite, http.SameSiteLaxMode)
+	}
 }
