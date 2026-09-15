@@ -12,6 +12,16 @@ import (
 
 const googleProvider = "google"
 
+type GoogleIdentity struct {
+	Email          string
+	ProviderUserID string
+}
+
+type GoogleOIDCClient interface {
+	AuthorizationURL(state, nonce, codeVerifier string) string
+	ExchangeAndVerify(ctx context.Context, code, expectedNonce, codeVerifier string) (GoogleIdentity, error)
+}
+
 type GoogleUserRepository interface {
 	CreateWithIdentity(ctx context.Context, email, provider, providerUserID string) (models.User, error)
 	FindUserByProviderIdentity(ctx context.Context, provider, providerUserID string) (models.User, error)
@@ -22,15 +32,31 @@ type UserSessionCreator interface {
 }
 
 type GoogleAuthService struct {
+	oidcClient     GoogleOIDCClient
 	googleRepo     GoogleUserRepository
 	sessionCreator UserSessionCreator
 }
 
-func NewGoogleAuthService(userRepo GoogleUserRepository, sessionCreator UserSessionCreator) *GoogleAuthService {
+func NewGoogleAuthService(userRepo GoogleUserRepository, sessionCreator UserSessionCreator, oidcClient GoogleOIDCClient) *GoogleAuthService {
 	return &GoogleAuthService{
 		googleRepo:     userRepo,
 		sessionCreator: sessionCreator,
+		oidcClient:     oidcClient,
 	}
+}
+
+func (s *GoogleAuthService) AuthorizationURL(state, nonce, codeVerifier string) string {
+	return s.oidcClient.AuthorizationURL(state, nonce, codeVerifier)
+}
+
+func (s *GoogleAuthService) CompleteLogin(ctx context.Context, code, expectedNonce, codeVerifier string) (LoginResult, error) {
+	identity, err := s.oidcClient.ExchangeAndVerify(ctx, code, expectedNonce, codeVerifier)
+
+	if err != nil {
+		return LoginResult{}, fmt.Errorf("verify Google identity: %w", err)
+	}
+
+	return s.LoginWithProvider(ctx, identity.Email, identity.ProviderUserID)
 }
 
 func (s *GoogleAuthService) LoginWithProvider(ctx context.Context, email, providerUserID string) (LoginResult, error) {
