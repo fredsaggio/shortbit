@@ -33,10 +33,56 @@ func (s userSessionCreatorStub) CreateSession(ctx context.Context, userID uuid.U
 	return s.createSessionFunc(ctx, userID)
 }
 
-func TestGoogleAuthServiceLoginWithProviderExistingIdentity(t *testing.T) {
+type googleOIDCClientStub struct {
+	authorizationURLFunc  func(state, nonce, codeVerifier string) string
+	exchangeAndVerifyFunc func(ctx context.Context, code, expectedNonce, codeVerifier string) (services.GoogleIdentity, error)
+}
+
+func (s googleOIDCClientStub) AuthorizationURL(state, nonce, codeVerifier string) string {
+	return s.authorizationURLFunc(state, nonce, codeVerifier)
+}
+
+func (s googleOIDCClientStub) ExchangeAndVerify(ctx context.Context, code, expectedNonce, codeVerifier string) (services.GoogleIdentity, error) {
+	return s.exchangeAndVerifyFunc(ctx, code, expectedNonce, codeVerifier)
+}
+
+func TestGoogleAuthServiceAuthorizationURL(t *testing.T) {
+	const (
+		state        = "random-state"
+		nonce        = "random-nonce"
+		codeVerifier = "random-code-verifier"
+		wantURL      = "https://accounts.google.com/o/oauth2/v2/auth"
+	)
+
+	oidcClient := googleOIDCClientStub{
+		authorizationURLFunc: func(gotState, gotNonce, gotCodeVerifier string) string {
+			if gotState != state {
+				t.Errorf("AuthorizationURL() state = %q, want %q", gotState, state)
+			}
+			if gotNonce != nonce {
+				t.Errorf("AuthorizationURL() nonce = %q, want %q", gotNonce, nonce)
+			}
+			if gotCodeVerifier != codeVerifier {
+				t.Errorf("AuthorizationURL() code verifier = %q, want %q", gotCodeVerifier, codeVerifier)
+			}
+
+			return wantURL
+		},
+	}
+
+	service := services.NewGoogleAuthService(nil, nil, oidcClient)
+	if got := service.AuthorizationURL(state, nonce, codeVerifier); got != wantURL {
+		t.Errorf("AuthorizationURL() = %q, want %q", got, wantURL)
+	}
+}
+
+func TestGoogleAuthServiceCompleteLoginExistingIdentity(t *testing.T) {
 	const (
 		providerUserID = "google-subject-123"
 		contextValue   = "request-context"
+		code           = "authorization-code"
+		expectedNonce  = "expected-nonce"
+		codeVerifier   = "code-verifier"
 	)
 
 	type contextKey struct{}
@@ -77,18 +123,37 @@ func TestGoogleAuthServiceLoginWithProviderExistingIdentity(t *testing.T) {
 		},
 	}
 
-	service := services.NewGoogleAuthService(repository, sessionCreator)
-	login, err := service.LoginWithProvider(ctx, "user@example.com", providerUserID)
+	oidcClient := googleOIDCClientStub{
+		exchangeAndVerifyFunc: func(gotCtx context.Context, gotCode, gotExpectedNonce, gotCodeVerifier string) (services.GoogleIdentity, error) {
+			if got := gotCtx.Value(contextKey{}); got != contextValue {
+				t.Errorf("ExchangeAndVerify() context value = %v, want %q", got, contextValue)
+			}
+			if gotCode != code {
+				t.Errorf("ExchangeAndVerify() code = %q, want %q", gotCode, code)
+			}
+			if gotExpectedNonce != expectedNonce {
+				t.Errorf("ExchangeAndVerify() expected nonce = %q, want %q", gotExpectedNonce, expectedNonce)
+			}
+			if gotCodeVerifier != codeVerifier {
+				t.Errorf("ExchangeAndVerify() code verifier = %q, want %q", gotCodeVerifier, codeVerifier)
+			}
+
+			return services.GoogleIdentity{Email: wantUser.Email, ProviderUserID: providerUserID}, nil
+		},
+	}
+
+	service := services.NewGoogleAuthService(repository, sessionCreator, oidcClient)
+	login, err := service.CompleteLogin(ctx, code, expectedNonce, codeVerifier)
 	if err != nil {
-		t.Fatalf("LoginWithProvider() error = %v", err)
+		t.Fatalf("CompleteLogin() error = %v", err)
 	}
 
 	if login != wantLogin {
-		t.Errorf("LoginWithProvider() result = %+v, want %+v", login, wantLogin)
+		t.Errorf("CompleteLogin() result = %+v, want %+v", login, wantLogin)
 	}
 }
 
-func TestGoogleAuthServiceLoginWithProviderCreatesMissingIdentity(t *testing.T) {
+func TestGoogleAuthServiceCompleteLoginCreatesMissingIdentity(t *testing.T) {
 	const (
 		inputEmail      = "  USER@Example.COM  "
 		normalizedEmail = "user@example.com"
@@ -127,18 +192,18 @@ func TestGoogleAuthServiceLoginWithProviderCreatesMissingIdentity(t *testing.T) 
 		},
 	}
 
-	service := services.NewGoogleAuthService(repository, sessionCreator)
-	login, err := service.LoginWithProvider(context.Background(), inputEmail, providerUserID)
+	service := services.NewGoogleAuthService(repository, sessionCreator, verifiedGoogleOIDCClient(inputEmail, providerUserID))
+	login, err := service.CompleteLogin(context.Background(), "authorization-code", "expected-nonce", "code-verifier")
 	if err != nil {
-		t.Fatalf("LoginWithProvider() error = %v", err)
+		t.Fatalf("CompleteLogin() error = %v", err)
 	}
 
 	if login != wantLogin {
-		t.Errorf("LoginWithProvider() result = %+v, want %+v", login, wantLogin)
+		t.Errorf("CompleteLogin() result = %+v, want %+v", login, wantLogin)
 	}
 }
 
-func TestGoogleAuthServiceLoginWithProviderRejectsInvalidEmailForMissingIdentity(t *testing.T) {
+func TestGoogleAuthServiceCompleteLoginRejectsInvalidEmailForMissingIdentity(t *testing.T) {
 	repository := googleUserRepositoryStub{
 		findUserByProviderIdentityFunc: func(context.Context, string, string) (models.User, error) {
 			return models.User{}, repositories.ErrAuthIdentityNotFound
@@ -149,15 +214,15 @@ func TestGoogleAuthServiceLoginWithProviderRejectsInvalidEmailForMissingIdentity
 		},
 	}
 
-	service := services.NewGoogleAuthService(repository, unexpectedUserSessionCreator(t))
-	_, err := service.LoginWithProvider(context.Background(), "invalid-email", "new-google-subject")
+	service := services.NewGoogleAuthService(repository, unexpectedUserSessionCreator(t), verifiedGoogleOIDCClient("invalid-email", "new-google-subject"))
+	_, err := service.CompleteLogin(context.Background(), "authorization-code", "expected-nonce", "code-verifier")
 
 	if !errors.Is(err, services.ErrInvalidEmail) {
-		t.Fatalf("LoginWithProvider() error = %v, want %v", err, services.ErrInvalidEmail)
+		t.Fatalf("CompleteLogin() error = %v, want %v", err, services.ErrInvalidEmail)
 	}
 }
 
-func TestGoogleAuthServiceLoginWithProviderRejectsExistingEmail(t *testing.T) {
+func TestGoogleAuthServiceCompleteLoginRejectsExistingEmail(t *testing.T) {
 	repository := googleUserRepositoryStub{
 		findUserByProviderIdentityFunc: func(context.Context, string, string) (models.User, error) {
 			return models.User{}, repositories.ErrAuthIdentityNotFound
@@ -167,15 +232,15 @@ func TestGoogleAuthServiceLoginWithProviderRejectsExistingEmail(t *testing.T) {
 		},
 	}
 
-	service := services.NewGoogleAuthService(repository, unexpectedUserSessionCreator(t))
-	_, err := service.LoginWithProvider(context.Background(), "user@example.com", "new-google-subject")
+	service := services.NewGoogleAuthService(repository, unexpectedUserSessionCreator(t), verifiedGoogleOIDCClient("user@example.com", "new-google-subject"))
+	_, err := service.CompleteLogin(context.Background(), "authorization-code", "expected-nonce", "code-verifier")
 
 	if !errors.Is(err, services.ErrEmailAlreadyExists) {
-		t.Fatalf("LoginWithProvider() error = %v, want %v", err, services.ErrEmailAlreadyExists)
+		t.Fatalf("CompleteLogin() error = %v, want %v", err, services.ErrEmailAlreadyExists)
 	}
 }
 
-func TestGoogleAuthServiceLoginWithProviderPropagatesIdentityLookupError(t *testing.T) {
+func TestGoogleAuthServiceCompleteLoginPropagatesIdentityLookupError(t *testing.T) {
 	wantErr := errors.New("database unavailable")
 	repository := googleUserRepositoryStub{
 		findUserByProviderIdentityFunc: func(context.Context, string, string) (models.User, error) {
@@ -187,15 +252,15 @@ func TestGoogleAuthServiceLoginWithProviderPropagatesIdentityLookupError(t *test
 		},
 	}
 
-	service := services.NewGoogleAuthService(repository, unexpectedUserSessionCreator(t))
-	_, err := service.LoginWithProvider(context.Background(), "user@example.com", "google-subject")
+	service := services.NewGoogleAuthService(repository, unexpectedUserSessionCreator(t), verifiedGoogleOIDCClient("user@example.com", "google-subject"))
+	_, err := service.CompleteLogin(context.Background(), "authorization-code", "expected-nonce", "code-verifier")
 
 	if !errors.Is(err, wantErr) {
-		t.Fatalf("LoginWithProvider() error = %v, want wrapped %v", err, wantErr)
+		t.Fatalf("CompleteLogin() error = %v, want wrapped %v", err, wantErr)
 	}
 }
 
-func TestGoogleAuthServiceLoginWithProviderPropagatesIdentityCreationError(t *testing.T) {
+func TestGoogleAuthServiceCompleteLoginPropagatesIdentityCreationError(t *testing.T) {
 	wantErr := errors.New("database unavailable")
 	repository := googleUserRepositoryStub{
 		findUserByProviderIdentityFunc: func(context.Context, string, string) (models.User, error) {
@@ -206,15 +271,15 @@ func TestGoogleAuthServiceLoginWithProviderPropagatesIdentityCreationError(t *te
 		},
 	}
 
-	service := services.NewGoogleAuthService(repository, unexpectedUserSessionCreator(t))
-	_, err := service.LoginWithProvider(context.Background(), "user@example.com", "google-subject")
+	service := services.NewGoogleAuthService(repository, unexpectedUserSessionCreator(t), verifiedGoogleOIDCClient("user@example.com", "google-subject"))
+	_, err := service.CompleteLogin(context.Background(), "authorization-code", "expected-nonce", "code-verifier")
 
 	if !errors.Is(err, wantErr) {
-		t.Fatalf("LoginWithProvider() error = %v, want wrapped %v", err, wantErr)
+		t.Fatalf("CompleteLogin() error = %v, want wrapped %v", err, wantErr)
 	}
 }
 
-func TestGoogleAuthServiceLoginWithProviderPropagatesSessionCreationError(t *testing.T) {
+func TestGoogleAuthServiceCompleteLoginPropagatesSessionCreationError(t *testing.T) {
 	wantErr := errors.New("session storage unavailable")
 	wantUser := models.User{ID: uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c319"), Email: "user@example.com"}
 	repository := googleUserRepositoryStub{
@@ -233,11 +298,35 @@ func TestGoogleAuthServiceLoginWithProviderPropagatesSessionCreationError(t *tes
 		},
 	}
 
-	service := services.NewGoogleAuthService(repository, sessionCreator)
-	_, err := service.LoginWithProvider(context.Background(), "user@example.com", "google-subject")
+	service := services.NewGoogleAuthService(repository, sessionCreator, verifiedGoogleOIDCClient("user@example.com", "google-subject"))
+	_, err := service.CompleteLogin(context.Background(), "authorization-code", "expected-nonce", "code-verifier")
 
 	if !errors.Is(err, wantErr) {
-		t.Fatalf("LoginWithProvider() error = %v, want %v", err, wantErr)
+		t.Fatalf("CompleteLogin() error = %v, want %v", err, wantErr)
+	}
+}
+
+func TestGoogleAuthServiceCompleteLoginPropagatesOIDCError(t *testing.T) {
+	wantErr := errors.New("invalid ID token")
+	oidcClient := googleOIDCClientStub{
+		exchangeAndVerifyFunc: func(context.Context, string, string, string) (services.GoogleIdentity, error) {
+			return services.GoogleIdentity{}, wantErr
+		},
+	}
+
+	service := services.NewGoogleAuthService(nil, nil, oidcClient)
+	_, err := service.CompleteLogin(context.Background(), "authorization-code", "expected-nonce", "code-verifier")
+
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("CompleteLogin() error = %v, want wrapped %v", err, wantErr)
+	}
+}
+
+func verifiedGoogleOIDCClient(email, providerUserID string) googleOIDCClientStub {
+	return googleOIDCClientStub{
+		exchangeAndVerifyFunc: func(context.Context, string, string, string) (services.GoogleIdentity, error) {
+			return services.GoogleIdentity{Email: email, ProviderUserID: providerUserID}, nil
+		},
 	}
 }
 

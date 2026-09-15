@@ -56,10 +56,10 @@ func (s *GoogleAuthService) CompleteLogin(ctx context.Context, code, expectedNon
 		return LoginResult{}, fmt.Errorf("verify Google identity: %w", err)
 	}
 
-	return s.LoginWithProvider(ctx, identity.Email, identity.ProviderUserID)
+	return s.loginWithProvider(ctx, identity.Email, identity.ProviderUserID)
 }
 
-func (s *GoogleAuthService) LoginWithProvider(ctx context.Context, email, providerUserID string) (LoginResult, error) {
+func (s *GoogleAuthService) loginWithProvider(ctx context.Context, email, providerUserID string) (LoginResult, error) {
 	user, err := s.googleRepo.FindUserByProviderIdentity(ctx, googleProvider, providerUserID)
 
 	switch {
