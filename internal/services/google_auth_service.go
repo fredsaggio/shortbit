@@ -12,6 +12,8 @@ import (
 
 const googleProvider = "google"
 
+var ErrGoogleAuthenticationFailed = errors.New("error in google authentication")
+
 type GoogleIdentity struct {
 	// Email é o endereço confirmado pelo provedor de identidade.
 	Email string

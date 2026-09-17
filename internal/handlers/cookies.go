@@ -1,18 +1,21 @@
 package handlers
 
 import (
+	"fmt"
 	"math"
 	"net/http"
 	"time"
 )
 
 const (
-	userSessionCookieName            = "user_session"
+	userSessionCookieName = "user_session"
+
 	googleAuthStateCookieName        = "google_auth_state"
 	googleAuthNonceCookieName        = "google_auth_nonce"
 	googleAuthCodeVerifierCookieName = "google_auth_code_verifier"
-	googleAuthCallbackPath           = "/auth/google/callback"
-	googleAuthorizationCookieTTL     = 5 * time.Minute
+
+	googleAuthCallbackPath       = "/auth/google/callback"
+	googleAuthorizationCookieTTL = 5 * time.Minute
 )
 
 func setUserSessionCookie(w http.ResponseWriter, token string, expiresAt time.Time, secure bool) {
@@ -43,13 +46,28 @@ func clearUserSessionCookie(w http.ResponseWriter, secure bool) {
 	})
 }
 
+type googleAuthorizationCookies struct {
+	State        string
+	Nonce        string
+	CodeVerifier string
+}
+
 func setGoogleAuthorizationCookies(w http.ResponseWriter, state, nonce, codeVerifier string, secure bool) {
 	expiresAt := time.Now().Add(googleAuthorizationCookieTTL).UTC()
 
 	cookies := []http.Cookie{
-		{Name: googleAuthStateCookieName, Value: state},
-		{Name: googleAuthNonceCookieName, Value: nonce},
-		{Name: googleAuthCodeVerifierCookieName, Value: codeVerifier},
+		{
+			Name:  googleAuthStateCookieName,
+			Value: state,
+		},
+		{
+			Name:  googleAuthNonceCookieName,
+			Value: nonce,
+		},
+		{
+			Name:  googleAuthCodeVerifierCookieName,
+			Value: codeVerifier,
+		},
 	}
 
 	for _, cookie := range cookies {
@@ -62,4 +80,64 @@ func setGoogleAuthorizationCookies(w http.ResponseWriter, state, nonce, codeVeri
 
 		http.SetCookie(w, &cookie)
 	}
+}
+
+func readGoogleAuthorizationCookies(r *http.Request) (googleAuthorizationCookies, error) {
+	state, err := requiredCookieValue(r, googleAuthStateCookieName)
+
+	if err != nil {
+		return googleAuthorizationCookies{}, fmt.Errorf("read Google OAuth state cookie: %w", err)
+	}
+
+	nonce, err := requiredCookieValue(r, googleAuthNonceCookieName)
+
+	if err != nil {
+		return googleAuthorizationCookies{}, fmt.Errorf("read Google OIDC nonce cookie: %w", err)
+	}
+
+	codeVerifier, err := requiredCookieValue(r, googleAuthCodeVerifierCookieName)
+
+	if err != nil {
+		return googleAuthorizationCookies{}, fmt.Errorf("read Google PKCE code verifier cookie: %w", err)
+	}
+
+	return googleAuthorizationCookies{
+		State:        state,
+		Nonce:        nonce,
+		CodeVerifier: codeVerifier,
+	}, nil
+}
+
+func clearGoogleAuthorizationCookies(w http.ResponseWriter, secure bool) {
+	cookieNames := []string{
+		googleAuthStateCookieName,
+		googleAuthNonceCookieName,
+		googleAuthCodeVerifierCookieName,
+	}
+
+	for _, name := range cookieNames {
+		http.SetCookie(w, &http.Cookie{
+			Name:     name,
+			Value:    "",
+			Path:     googleAuthCallbackPath,
+			MaxAge:   -1,
+			Expires:  time.Unix(0, 0).UTC(),
+			HttpOnly: true,
+			Secure:   secure,
+			SameSite: http.SameSiteLaxMode,
+		})
+	}
+}
+
+func requiredCookieValue(r *http.Request, name string) (string, error) {
+	cookie, err := r.Cookie(name)
+	if err != nil {
+		return "", err
+	}
+
+	if cookie.Value == "" {
+		return "", fmt.Errorf("cookie %q is empty", name)
+	}
+
+	return cookie.Value, nil
 }
