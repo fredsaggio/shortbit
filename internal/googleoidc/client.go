@@ -180,7 +180,7 @@ func identityFromIDToken(idToken *oidc.IDToken) (services.GoogleIdentity, error)
 	if err := idToken.Claims(&claims); err != nil {
 		return services.GoogleIdentity{}, fmt.Errorf("decode Google ID token claims: %w", err)
 	}
-	
+
 	if !claims.EmailVerified {
 		return services.GoogleIdentity{}, ErrEmailNotVerified
 	}
