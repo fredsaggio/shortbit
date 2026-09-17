@@ -13,15 +13,27 @@ import (
 const googleProvider = "google"
 
 type GoogleIdentity struct {
-	Email          string
-	ProviderUserID string
+	// Email é o endereço confirmado pelo provedor de identidade.
+	Email string
+	// Subject é o claim "sub" do ID Token. Ele identifica o usuário de forma
+	// estável dentro do Google, mesmo que o endereço de e-mail seja alterado.
+	Subject string
 }
 
+// GoogleOIDCClient define a parte do protocolo OpenID Connect que o service
+// precisa. A implementação concreta conversa com o Google; os testes usam um stub.
 type GoogleOIDCClient interface {
+	// AuthorizationURL monta a URL que inicia o login no Google. state liga o
+	// callback ao navegador, nonce liga o futuro ID Token a esta tentativa e
+	// codeVerifier é o segredo temporário usado pelo PKCE.
 	AuthorizationURL(state, nonce, codeVerifier string) string
+	// ExchangeAndVerify troca o authorization code por tokens, valida o ID Token
+	// e devolve apenas a identidade já verificada.
 	ExchangeAndVerify(ctx context.Context, code, expectedNonce, codeVerifier string) (GoogleIdentity, error)
 }
 
+// GoogleUserRepository descreve somente as operações de usuário necessárias
+// ao login com Google. A implementação concreta continua sendo UserRepository.
 type GoogleUserRepository interface {
 	CreateWithIdentity(ctx context.Context, email, provider, providerUserID string) (models.User, error)
 	FindUserByProviderIdentity(ctx context.Context, provider, providerUserID string) (models.User, error)
@@ -56,7 +68,9 @@ func (s *GoogleAuthService) CompleteLogin(ctx context.Context, code, expectedNon
 		return LoginResult{}, fmt.Errorf("verify Google identity: %w", err)
 	}
 
-	return s.loginWithProvider(ctx, identity.Email, identity.ProviderUserID)
+	// A fronteira OIDC chama o identificador de Subject. Daqui em diante usamos
+	// providerUserID, o nome genérico aceito pelo domínio e pelo repository.
+	return s.loginWithProvider(ctx, identity.Email, identity.Subject)
 }
 
 func (s *GoogleAuthService) loginWithProvider(ctx context.Context, email, providerUserID string) (LoginResult, error) {

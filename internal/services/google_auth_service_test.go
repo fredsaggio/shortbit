@@ -138,7 +138,7 @@ func TestGoogleAuthServiceCompleteLoginExistingIdentity(t *testing.T) {
 				t.Errorf("ExchangeAndVerify() code verifier = %q, want %q", gotCodeVerifier, codeVerifier)
 			}
 
-			return services.GoogleIdentity{Email: wantUser.Email, ProviderUserID: providerUserID}, nil
+			return services.GoogleIdentity{Email: wantUser.Email, Subject: providerUserID}, nil
 		},
 	}
 
@@ -325,7 +325,7 @@ func TestGoogleAuthServiceCompleteLoginPropagatesOIDCError(t *testing.T) {
 func verifiedGoogleOIDCClient(email, providerUserID string) googleOIDCClientStub {
 	return googleOIDCClientStub{
 		exchangeAndVerifyFunc: func(context.Context, string, string, string) (services.GoogleIdentity, error) {
-			return services.GoogleIdentity{Email: email, ProviderUserID: providerUserID}, nil
+			return services.GoogleIdentity{Email: email, Subject: providerUserID}, nil
 		},
 	}
 }
