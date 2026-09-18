@@ -6,10 +6,25 @@ import (
 )
 
 type User struct {
-	ID        uuid.UUID
-	Email     string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID              uuid.UUID
+	Email           string
+	EmailVerifiedAt time.Time
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+type PasswordRegistrationAttempt struct {
+	TokenHash             []byte
+	Email                 string
+	PasswordHash          string
+	VerificationProofHash []byte
+	FailedAttempts        int16
+	LockedUntil           *time.Time // Ponteiro porque pode ser nullable.
+	LastCodeSentAt        time.Time
+	CodeExpiresAt         time.Time
+	AttemptExpiresAt      time.Time
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
 }
 
 type PasswordCredential struct {
