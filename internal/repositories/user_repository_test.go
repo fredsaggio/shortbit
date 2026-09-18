@@ -3,18 +3,132 @@
 package repositories_test
 
 import (
+	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
 	"errors"
 	"testing"
 	"time"
 	"uuid"
 
 	"github.com/fredsaggio/url-shortener/internal/db/dbtest"
+	"github.com/fredsaggio/url-shortener/internal/models"
 	"github.com/fredsaggio/url-shortener/internal/repositories"
 )
 
 func TestUserRepositoryIntegration(t *testing.T) {
 	pool := dbtest.Open(t)
 	repository := repositories.NewUserRepository(pool)
+
+	t.Run("creates password registration attempt", func(t *testing.T) {
+		const (
+			rawToken     = "password-registration-token"
+			code         = "123456"
+			email        = "pending-registration@example.com"
+			passwordHash = "$argon2id$pending-registration-hash"
+		)
+
+		tokenHashArray := sha256.Sum256([]byte(rawToken))
+		verificationProof := hmac.New(sha256.New, []byte(rawToken))
+		_, _ = verificationProof.Write([]byte(code))
+
+		now := time.Now().UTC().Truncate(time.Microsecond)
+		attempt := models.PasswordRegistrationAttempt{
+			TokenHash:             tokenHashArray[:],
+			Email:                 email,
+			PasswordHash:          passwordHash,
+			VerificationProofHash: verificationProof.Sum(nil),
+			LastCodeSentAt:        now,
+			CodeExpiresAt:         now.Add(10 * time.Minute),
+			AttemptExpiresAt:      now.Add(30 * time.Minute),
+		}
+
+		if err := repository.CreatePasswordRegistrationAttempt(t.Context(), attempt); err != nil {
+			t.Fatalf("CreatePasswordRegistrationAttempt() error = %v", err)
+		}
+
+		var stored models.PasswordRegistrationAttempt
+		err := pool.QueryRow(
+			t.Context(),
+			`
+				SELECT
+					token_hash,
+					email,
+					password_hash,
+					verification_proof_hash,
+					failed_attempts,
+					locked_until,
+					last_code_sent_at,
+					code_expires_at,
+					attempt_expires_at,
+					created_at,
+					updated_at
+				FROM password_registration_attempts
+				WHERE token_hash = $1
+			`,
+			attempt.TokenHash,
+		).Scan(
+			&stored.TokenHash,
+			&stored.Email,
+			&stored.PasswordHash,
+			&stored.VerificationProofHash,
+			&stored.FailedAttempts,
+			&stored.LockedUntil,
+			&stored.LastCodeSentAt,
+			&stored.CodeExpiresAt,
+			&stored.AttemptExpiresAt,
+			&stored.CreatedAt,
+			&stored.UpdatedAt,
+		)
+		if err != nil {
+			t.Fatalf("query created password registration attempt: %v", err)
+		}
+
+		if !bytes.Equal(stored.TokenHash, attempt.TokenHash) {
+			t.Errorf("stored token hash = %x, want %x", stored.TokenHash, attempt.TokenHash)
+		}
+		if stored.Email != attempt.Email {
+			t.Errorf("stored email = %q, want %q", stored.Email, attempt.Email)
+		}
+		if stored.PasswordHash != attempt.PasswordHash {
+			t.Errorf("stored password hash = %q, want %q", stored.PasswordHash, attempt.PasswordHash)
+		}
+		if !bytes.Equal(stored.VerificationProofHash, attempt.VerificationProofHash) {
+			t.Errorf("stored verification proof hash = %x, want %x", stored.VerificationProofHash, attempt.VerificationProofHash)
+		}
+		if stored.FailedAttempts != 0 {
+			t.Errorf("stored failed attempts = %d, want 0", stored.FailedAttempts)
+		}
+		if stored.LockedUntil != nil {
+			t.Errorf("stored locked until = %v, want nil", stored.LockedUntil)
+		}
+		if !stored.LastCodeSentAt.Equal(attempt.LastCodeSentAt) {
+			t.Errorf("stored last code sent at = %v, want %v", stored.LastCodeSentAt, attempt.LastCodeSentAt)
+		}
+		if !stored.CodeExpiresAt.Equal(attempt.CodeExpiresAt) {
+			t.Errorf("stored code expires at = %v, want %v", stored.CodeExpiresAt, attempt.CodeExpiresAt)
+		}
+		if !stored.AttemptExpiresAt.Equal(attempt.AttemptExpiresAt) {
+			t.Errorf("stored attempt expires at = %v, want %v", stored.AttemptExpiresAt, attempt.AttemptExpiresAt)
+		}
+		if stored.CreatedAt.IsZero() || stored.UpdatedAt.IsZero() {
+			t.Error("stored registration attempt has zero database timestamps")
+		}
+		if bytes.Equal(stored.TokenHash, []byte(rawToken)) {
+			t.Error("stored the raw registration token")
+		}
+		if bytes.Equal(stored.VerificationProofHash, []byte(code)) {
+			t.Error("stored the raw verification code")
+		}
+
+		var userExists bool
+		if err := pool.QueryRow(t.Context(), "SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)", email).Scan(&userExists); err != nil {
+			t.Fatalf("check user after creating registration attempt: %v", err)
+		}
+		if userExists {
+			t.Error("CreatePasswordRegistrationAttempt() created a user before email confirmation")
+		}
+	})
 
 	t.Run("creates user and password credential", func(t *testing.T) {
 		const (

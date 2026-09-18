@@ -29,6 +29,47 @@ func NewUserRepository(db db.DB) *UserRepository {
 	}
 }
 
+func (r *UserRepository) CreatePasswordRegistrationAttempt(ctx context.Context, attempt models.PasswordRegistrationAttempt) error {
+	const q = `
+		INSERT INTO password_registration_attempts (
+			token_hash,
+			email,
+			password_hash,
+			verification_proof_hash,
+			last_code_sent_at,
+			code_expires_at,
+			attempt_expires_at
+		)
+		VALUES (
+			@tokenHash,
+			@email,
+			@passwordHash,
+			@verificationProofHash,
+			@lastCodeSentAt,
+			@codeExpiresAt,
+			@attemptExpiresAt
+		)
+	`
+
+	args := pgx.StrictNamedArgs{
+		"tokenHash":             attempt.TokenHash,
+		"email":                 attempt.Email,
+		"passwordHash":          attempt.PasswordHash,
+		"verificationProofHash": attempt.VerificationProofHash,
+		"lastCodeSentAt":        attempt.LastCodeSentAt,
+		"codeExpiresAt":         attempt.CodeExpiresAt,
+		"attemptExpiresAt":      attempt.AttemptExpiresAt,
+	}
+
+	if _, err := r.db.Exec(ctx, q, args); err != nil {
+		return fmt.Errorf("create password registration attempt: %w", err)
+	}
+
+	return nil
+}
+
+
+
 func (r *UserRepository) CreateWithPassword(ctx context.Context, email, passwordHash string) (models.User, error) {
 	tx, err := r.db.Begin(ctx)
 
