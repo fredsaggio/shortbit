@@ -68,6 +68,28 @@ func (r *UserRepository) CreatePasswordRegistrationAttempt(ctx context.Context, 
 	return nil
 }
 
+func (r *UserRepository) UserExistsByEmail(ctx context.Context, email string) (bool, error) {
+	const q = `
+		SELECT EXISTS (
+			SELECT 1
+			FROM USERS
+			WHERE email = @email
+		)
+	`
+
+	args := pgx.StrictNamedArgs{
+		"email": email,
+	}
+
+	var exists bool
+
+	if err := r.db.QueryRow(ctx, q, args).Scan(&exists); err != nil {
+		return false, fmt.Errorf("check user existence with email: %w", err)
+	}
+
+	return exists, nil
+}
+
 
 
 func (r *UserRepository) CreateWithPassword(ctx context.Context, email, passwordHash string) (models.User, error) {

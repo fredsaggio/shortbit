@@ -130,6 +130,39 @@ func TestUserRepositoryIntegration(t *testing.T) {
 		}
 	})
 
+	t.Run("returns false when user email does not exist", func(t *testing.T) {
+		exists, err := repository.UserExistsByEmail(t.Context(), "available@example.com")
+		if err != nil {
+			t.Fatalf("UserExistsByEmail() error = %v", err)
+		}
+
+		if exists {
+			t.Error("UserExistsByEmail() = true, want false")
+		}
+	})
+
+	t.Run("returns true when user email exists", func(t *testing.T) {
+		const email = "registered@example.com"
+
+		if _, err := pool.Exec(
+			t.Context(),
+			"INSERT INTO users(email, email_verified_at) VALUES ($1, $2)",
+			email,
+			time.Now().UTC(),
+		); err != nil {
+			t.Fatalf("insert existing user: %v", err)
+		}
+
+		exists, err := repository.UserExistsByEmail(t.Context(), email)
+		if err != nil {
+			t.Fatalf("UserExistsByEmail() error = %v", err)
+		}
+
+		if !exists {
+			t.Error("UserExistsByEmail() = false, want true")
+		}
+	})
+
 	t.Run("creates user and password credential", func(t *testing.T) {
 		const (
 			email        = "user@example.com"
