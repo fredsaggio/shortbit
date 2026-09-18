@@ -69,7 +69,7 @@ func (srv *Server) registerRoutes(mux *http.ServeMux) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	mux.HandleFunc("POST /users", srv.h.UserHandler.RegisterWithPassword)
+	mux.HandleFunc("POST /registrations/password", srv.h.UserHandler.StartPasswordRegistration)
 	mux.Handle("GET /me", srv.h.MeHandler)
 
 	loginHandler := srv.loginRateLimiter.MiddlewareByIP(http.HandlerFunc(srv.h.SessionHandler.LoginWithPassword))
