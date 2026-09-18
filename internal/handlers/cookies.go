@@ -16,7 +16,25 @@ const (
 
 	googleAuthCallbackPath       = "/auth/google/callback"
 	googleAuthorizationCookieTTL = 5 * time.Minute
+
+	passwordRegistrationCookieName = "password_registration"
+	passwordRegistrationCookiePath = "/registrations/password"
 )
+
+func setPasswordRegistrationCookie(w http.ResponseWriter, token string, expiresAt time.Time, secure bool) {
+	maxAge := int(math.Ceil(time.Until(expiresAt).Seconds()))
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     passwordRegistrationCookieName,
+		Value:    token,
+		Path:     passwordRegistrationCookiePath,
+		MaxAge:   maxAge,
+		Expires:  expiresAt.UTC(),
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteStrictMode,
+	})
+}
 
 func setUserSessionCookie(w http.ResponseWriter, token string, expiresAt time.Time, secure bool) {
 	maxAge := int(math.Ceil(time.Until(expiresAt).Seconds()))
