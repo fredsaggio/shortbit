@@ -1,6 +1,7 @@
 package services_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"strings"
@@ -9,25 +10,27 @@ import (
 	"uuid"
 
 	"github.com/fredsaggio/url-shortener/internal/models"
-	"github.com/fredsaggio/url-shortener/internal/repositories"
 	"github.com/fredsaggio/url-shortener/internal/services"
+	"github.com/fredsaggio/url-shortener/internal/verificationcode"
+)
+
+const (
+	testCodeTTL    = 10 * time.Minute
+	testAttemptTTL = 30 * time.Minute
 )
 
 type userRepositoryStub struct {
-	createWithPasswordFunc func(
-		ctx context.Context,
-		email string,
-		passwordHash string,
-	) (models.User, error)
-	findByIDFunc func(ctx context.Context, userID uuid.UUID) (models.User, error)
+	userExistsByEmailFunc                 func(context.Context, string) (bool, error)
+	createPasswordRegistrationAttemptFunc func(context.Context, models.PasswordRegistrationAttempt) error
+	findByIDFunc                          func(context.Context, uuid.UUID) (models.User, error)
 }
 
-func (s userRepositoryStub) CreateWithPassword(
-	ctx context.Context,
-	email string,
-	passwordHash string,
-) (models.User, error) {
-	return s.createWithPasswordFunc(ctx, email, passwordHash)
+func (s userRepositoryStub) UserExistsByEmail(ctx context.Context, email string) (bool, error) {
+	return s.userExistsByEmailFunc(ctx, email)
+}
+
+func (s userRepositoryStub) CreatePasswordRegistrationAttempt(ctx context.Context, attempt models.PasswordRegistrationAttempt) error {
+	return s.createPasswordRegistrationAttemptFunc(ctx, attempt)
 }
 
 func (s userRepositoryStub) FindByID(ctx context.Context, userID uuid.UUID) (models.User, error) {
@@ -35,240 +38,226 @@ func (s userRepositoryStub) FindByID(ctx context.Context, userID uuid.UUID) (mod
 }
 
 type passwordHasherStub struct {
-	hashFunc func(password string) (string, error)
+	hashFunc func(string) (string, error)
 }
 
 func (s passwordHasherStub) Hash(password string) (string, error) {
 	return s.hashFunc(password)
 }
 
-func TestUserServiceRegisterWithPassword(t *testing.T) {
+type passwordRegistrationCodeSenderStub struct {
+	sendFunc func(context.Context, string, string) error
+}
+
+func (s passwordRegistrationCodeSenderStub) SendPasswordRegistrationCode(ctx context.Context, email, code string) error {
+	return s.sendFunc(ctx, email, code)
+}
+
+func TestUserServiceStartPasswordRegistration(t *testing.T) {
 	const (
 		inputEmail      = "  USER@Example.COM  "
 		normalizedEmail = "user@example.com"
 		password        = "senha-segura"
-		encodedPassword = "$argon2id$test-hash"
+		passwordHash    = "$argon2id$test-hash"
+		rawToken        = "registration-token"
+		code            = "123456"
 		contextValue    = "request-context"
 	)
+	tokenHash := bytes.Repeat([]byte{0x42}, 32)
 
 	type contextKey struct{}
 	ctx := context.WithValue(context.Background(), contextKey{}, contextValue)
 
-	wantUser := models.User{
-		ID:        uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c317"),
-		Email:     normalizedEmail,
-		CreatedAt: time.Date(2026, time.September, 12, 10, 0, 0, 0, time.UTC),
-		UpdatedAt: time.Date(2026, time.September, 12, 10, 0, 0, 0, time.UTC),
-	}
-
-	hasher := passwordHasherStub{
-		hashFunc: func(gotPassword string) (string, error) {
-			if gotPassword != password {
-				t.Fatalf("Hash() password = %q, want %q", gotPassword, password)
-			}
-
-			return encodedPassword, nil
-		},
-	}
-
+	var storedAttempt models.PasswordRegistrationAttempt
 	repository := userRepositoryStub{
-		createWithPasswordFunc: func(
-			gotCtx context.Context,
-			gotEmail string,
-			gotPasswordHash string,
-		) (models.User, error) {
+		userExistsByEmailFunc: func(gotCtx context.Context, gotEmail string) (bool, error) {
 			if got := gotCtx.Value(contextKey{}); got != contextValue {
-				t.Fatalf("CreateWithPassword() context value = %v, want %q", got, contextValue)
+				t.Errorf("UserExistsByEmail() context value = %v, want %q", got, contextValue)
 			}
-
 			if gotEmail != normalizedEmail {
-				t.Errorf("CreateWithPassword() email = %q, want %q", gotEmail, normalizedEmail)
+				t.Errorf("UserExistsByEmail() email = %q, want %q", gotEmail, normalizedEmail)
 			}
-
-			if gotPasswordHash != encodedPassword {
-				t.Errorf(
-					"CreateWithPassword() password hash = %q, want %q",
-					gotPasswordHash,
-					encodedPassword,
-				)
+			return false, nil
+		},
+		createPasswordRegistrationAttemptFunc: func(gotCtx context.Context, attempt models.PasswordRegistrationAttempt) error {
+			if got := gotCtx.Value(contextKey{}); got != contextValue {
+				t.Errorf("CreatePasswordRegistrationAttempt() context value = %v, want %q", got, contextValue)
 			}
-
-			if gotPasswordHash == password {
-				t.Error("CreateWithPassword() received the plain-text password")
-			}
-
-			return wantUser, nil
+			storedAttempt = attempt
+			return nil
 		},
 	}
+	hasher := passwordHasherStub{hashFunc: func(gotPassword string) (string, error) {
+		if gotPassword != password {
+			t.Errorf("Hash() password = %q, want %q", gotPassword, password)
+		}
+		return passwordHash, nil
+	}}
+	generateToken := func() (string, []byte, error) { return rawToken, tokenHash, nil }
+	generateCode := func() (string, error) { return code, nil }
+	codeSender := passwordRegistrationCodeSenderStub{sendFunc: func(gotCtx context.Context, gotEmail, gotCode string) error {
+		if got := gotCtx.Value(contextKey{}); got != contextValue {
+			t.Errorf("SendPasswordRegistrationCode() context value = %v, want %q", got, contextValue)
+		}
+		if gotEmail != normalizedEmail {
+			t.Errorf("SendPasswordRegistrationCode() email = %q, want %q", gotEmail, normalizedEmail)
+		}
+		if gotCode != code {
+			t.Errorf("SendPasswordRegistrationCode() code = %q, want %q", gotCode, code)
+		}
+		return nil
+	}}
 
-	service := services.NewUserService(repository, hasher)
-
-	gotUser, err := service.RegisterWithPassword(ctx, inputEmail, password)
+	service := newUserService(repository, hasher, generateToken, generateCode, codeSender)
+	beforeStart := time.Now().UTC()
+	result, err := service.StartPasswordRegistration(ctx, inputEmail, password)
+	afterStart := time.Now().UTC()
 	if err != nil {
-		t.Fatalf("RegisterWithPassword() error = %v", err)
+		t.Fatalf("StartPasswordRegistration() error = %v", err)
 	}
 
-	if gotUser != wantUser {
-		t.Errorf("RegisterWithPassword() user = %+v, want %+v", gotUser, wantUser)
+	if result.Token != rawToken {
+		t.Errorf("StartPasswordRegistration() token = %q, want %q", result.Token, rawToken)
+	}
+	if !result.ExpiresAt.Equal(storedAttempt.AttemptExpiresAt) {
+		t.Errorf("StartPasswordRegistration() expiration = %v, want %v", result.ExpiresAt, storedAttempt.AttemptExpiresAt)
+	}
+	if !bytes.Equal(storedAttempt.TokenHash, tokenHash) {
+		t.Errorf("stored token hash = %x, want %x", storedAttempt.TokenHash, tokenHash)
+	}
+	if storedAttempt.Email != normalizedEmail {
+		t.Errorf("stored email = %q, want %q", storedAttempt.Email, normalizedEmail)
+	}
+	if storedAttempt.PasswordHash != passwordHash {
+		t.Errorf("stored password hash = %q, want %q", storedAttempt.PasswordHash, passwordHash)
+	}
+	if storedAttempt.PasswordHash == password {
+		t.Error("stored the plain-text password")
+	}
+	if !verificationcode.Matches(rawToken, code, storedAttempt.VerificationProofHash) {
+		t.Error("stored verification proof does not match the generated token and code")
+	}
+	if storedAttempt.LastCodeSentAt.Before(beforeStart) || storedAttempt.LastCodeSentAt.After(afterStart) {
+		t.Errorf("LastCodeSentAt = %v, want between %v and %v", storedAttempt.LastCodeSentAt, beforeStart, afterStart)
+	}
+	if !storedAttempt.CodeExpiresAt.Equal(storedAttempt.LastCodeSentAt.Add(testCodeTTL)) {
+		t.Errorf("CodeExpiresAt = %v, want %v", storedAttempt.CodeExpiresAt, storedAttempt.LastCodeSentAt.Add(testCodeTTL))
+	}
+	if !storedAttempt.AttemptExpiresAt.Equal(storedAttempt.LastCodeSentAt.Add(testAttemptTTL)) {
+		t.Errorf("AttemptExpiresAt = %v, want %v", storedAttempt.AttemptExpiresAt, storedAttempt.LastCodeSentAt.Add(testAttemptTTL))
 	}
 }
 
-func TestUserServiceRegisterWithPasswordRejectsInvalidEmail(t *testing.T) {
-	repository := userRepositoryStub{
-		createWithPasswordFunc: func(context.Context, string, string) (models.User, error) {
-			t.Fatal("CreateWithPassword() should not be called")
-			return models.User{}, nil
-		},
-	}
-
-	hasher := passwordHasherStub{
-		hashFunc: func(string) (string, error) {
-			t.Fatal("Hash() should not be called")
-			return "", nil
-		},
-	}
-
-	service := services.NewUserService(repository, hasher)
-
-	_, err := service.RegisterWithPassword(
-		context.Background(),
-		"invalid-email",
-		"senha-segura",
-	)
-	if !errors.Is(err, services.ErrInvalidEmail) {
-		t.Fatalf("RegisterWithPassword() error = %v, want %v", err, services.ErrInvalidEmail)
-	}
-}
-
-func TestUserServiceRegisterWithPasswordRejectsInvalidPassword(t *testing.T) {
+func TestUserServiceStartPasswordRegistrationRejectsInvalidInput(t *testing.T) {
 	tests := []struct {
 		name     string
+		email    string
 		password string
 		wantErr  error
 	}{
-		{
-			name:     "too short",
-			password: "1234567",
-			wantErr:  services.ErrPasswordTooShort,
-		},
-		{
-			name:     "too long",
-			password: strings.Repeat("a", 1025),
-			wantErr:  services.ErrPasswordTooLong,
-		},
+		{name: "invalid email", email: "invalid-email", password: "senha-segura", wantErr: services.ErrInvalidEmail},
+		{name: "short password", email: "user@example.com", password: "1234567", wantErr: services.ErrPasswordTooShort},
+		{name: "long password", email: "user@example.com", password: strings.Repeat("a", 1025), wantErr: services.ErrPasswordTooLong},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repository := userRepositoryStub{
-				createWithPasswordFunc: func(context.Context, string, string) (models.User, error) {
-					t.Fatal("CreateWithPassword() should not be called")
-					return models.User{}, nil
-				},
-			}
-
-			hasher := passwordHasherStub{
-				hashFunc: func(string) (string, error) {
-					t.Fatal("Hash() should not be called")
-					return "", nil
-				},
-			}
-
-			service := services.NewUserService(repository, hasher)
-
-			_, err := service.RegisterWithPassword(
-				context.Background(),
-				"user@example.com",
-				tt.password,
-			)
+			service := newUserService(unexpectedUserRepository(t), unexpectedPasswordHasher(t), unexpectedRegistrationTokenGenerator(t), unexpectedVerificationCodeGenerator(t), unexpectedCodeSender(t))
+			_, err := service.StartPasswordRegistration(context.Background(), tt.email, tt.password)
 			if !errors.Is(err, tt.wantErr) {
-				t.Fatalf("RegisterWithPassword() error = %v, want %v", err, tt.wantErr)
+				t.Fatalf("StartPasswordRegistration() error = %v, want %v", err, tt.wantErr)
 			}
 		})
 	}
 }
 
-func TestUserServiceRegisterWithPasswordPropagatesHasherError(t *testing.T) {
-	wantErr := errors.New("hasher unavailable")
+func TestUserServiceStartPasswordRegistrationRejectsExistingEmail(t *testing.T) {
+	repository := userRepositoryStub{userExistsByEmailFunc: func(context.Context, string) (bool, error) { return true, nil }}
+	service := newUserService(repository, unexpectedPasswordHasher(t), unexpectedRegistrationTokenGenerator(t), unexpectedVerificationCodeGenerator(t), unexpectedCodeSender(t))
 
-	repository := userRepositoryStub{
-		createWithPasswordFunc: func(context.Context, string, string) (models.User, error) {
-			t.Fatal("CreateWithPassword() should not be called")
-			return models.User{}, nil
-		},
-	}
-
-	hasher := passwordHasherStub{
-		hashFunc: func(string) (string, error) {
-			return "", wantErr
-		},
-	}
-
-	service := services.NewUserService(repository, hasher)
-
-	_, err := service.RegisterWithPassword(
-		context.Background(),
-		"user@example.com",
-		"senha-segura",
-	)
-	if !errors.Is(err, wantErr) {
-		t.Fatalf("RegisterWithPassword() error = %v, want wrapped %v", err, wantErr)
-	}
-}
-
-func TestUserServiceRegisterWithPasswordTranslatesDuplicateEmail(t *testing.T) {
-	repository := userRepositoryStub{
-		createWithPasswordFunc: func(context.Context, string, string) (models.User, error) {
-			return models.User{}, repositories.ErrEmailAlreadyExists
-		},
-	}
-
-	hasher := passwordHasherStub{
-		hashFunc: func(string) (string, error) {
-			return "$argon2id$test-hash", nil
-		},
-	}
-
-	service := services.NewUserService(repository, hasher)
-
-	_, err := service.RegisterWithPassword(
-		context.Background(),
-		"user@example.com",
-		"senha-segura",
-	)
+	_, err := service.StartPasswordRegistration(context.Background(), "user@example.com", "senha-segura")
 	if !errors.Is(err, services.ErrEmailAlreadyExists) {
-		t.Fatalf(
-			"RegisterWithPassword() error = %v, want %v",
-			err,
-			services.ErrEmailAlreadyExists,
-		)
+		t.Fatalf("StartPasswordRegistration() error = %v, want %v", err, services.ErrEmailAlreadyExists)
 	}
 }
 
-func TestUserServiceRegisterWithPasswordPropagatesRepositoryError(t *testing.T) {
+func TestUserServiceStartPasswordRegistrationPropagatesUserLookupError(t *testing.T) {
 	wantErr := errors.New("database unavailable")
+	repository := userRepositoryStub{userExistsByEmailFunc: func(context.Context, string) (bool, error) { return false, wantErr }}
+	service := newUserService(repository, unexpectedPasswordHasher(t), unexpectedRegistrationTokenGenerator(t), unexpectedVerificationCodeGenerator(t), unexpectedCodeSender(t))
 
-	repository := userRepositoryStub{
-		createWithPasswordFunc: func(context.Context, string, string) (models.User, error) {
-			return models.User{}, wantErr
-		},
-	}
-
-	hasher := passwordHasherStub{
-		hashFunc: func(string) (string, error) {
-			return "$argon2id$test-hash", nil
-		},
-	}
-
-	service := services.NewUserService(repository, hasher)
-
-	_, err := service.RegisterWithPassword(
-		context.Background(),
-		"user@example.com",
-		"senha-segura",
-	)
+	_, err := service.StartPasswordRegistration(context.Background(), "user@example.com", "senha-segura")
 	if !errors.Is(err, wantErr) {
-		t.Fatalf("RegisterWithPassword() error = %v, want wrapped %v", err, wantErr)
+		t.Fatalf("StartPasswordRegistration() error = %v, want wrapped %v", err, wantErr)
+	}
+}
+
+func TestUserServiceStartPasswordRegistrationPropagatesHasherError(t *testing.T) {
+	wantErr := errors.New("hasher unavailable")
+	hasher := passwordHasherStub{hashFunc: func(string) (string, error) { return "", wantErr }}
+	service := newUserService(availableEmailRepository(), hasher, unexpectedRegistrationTokenGenerator(t), unexpectedVerificationCodeGenerator(t), unexpectedCodeSender(t))
+
+	_, err := service.StartPasswordRegistration(context.Background(), "user@example.com", "senha-segura")
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("StartPasswordRegistration() error = %v, want wrapped %v", err, wantErr)
+	}
+}
+
+func TestUserServiceStartPasswordRegistrationPropagatesTokenGeneratorError(t *testing.T) {
+	wantErr := errors.New("random source unavailable")
+	generateToken := func() (string, []byte, error) { return "", nil, wantErr }
+	service := newUserService(availableEmailRepository(), successfulPasswordHasher(), generateToken, unexpectedVerificationCodeGenerator(t), unexpectedCodeSender(t))
+
+	_, err := service.StartPasswordRegistration(context.Background(), "user@example.com", "senha-segura")
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("StartPasswordRegistration() error = %v, want wrapped %v", err, wantErr)
+	}
+}
+
+func TestUserServiceStartPasswordRegistrationPropagatesCodeGeneratorError(t *testing.T) {
+	wantErr := errors.New("code generator unavailable")
+	generateCode := func() (string, error) { return "", wantErr }
+	service := newUserService(availableEmailRepository(), successfulPasswordHasher(), successfulTokenGenerator(), generateCode, unexpectedCodeSender(t))
+
+	_, err := service.StartPasswordRegistration(context.Background(), "user@example.com", "senha-segura")
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("StartPasswordRegistration() error = %v, want wrapped %v", err, wantErr)
+	}
+}
+
+func TestUserServiceStartPasswordRegistrationPropagatesCreateAttemptError(t *testing.T) {
+	wantErr := errors.New("database unavailable")
+	repository := userRepositoryStub{
+		userExistsByEmailFunc:                 func(context.Context, string) (bool, error) { return false, nil },
+		createPasswordRegistrationAttemptFunc: func(context.Context, models.PasswordRegistrationAttempt) error { return wantErr },
+	}
+	service := newUserService(repository, successfulPasswordHasher(), successfulTokenGenerator(), successfulVerificationCodeGenerator(), unexpectedCodeSender(t))
+
+	_, err := service.StartPasswordRegistration(context.Background(), "user@example.com", "senha-segura")
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("StartPasswordRegistration() error = %v, want wrapped %v", err, wantErr)
+	}
+}
+
+func TestUserServiceStartPasswordRegistrationPropagatesCodeSenderError(t *testing.T) {
+	wantErr := errors.New("email provider unavailable")
+	attemptCreated := false
+	repository := userRepositoryStub{
+		userExistsByEmailFunc: func(context.Context, string) (bool, error) { return false, nil },
+		createPasswordRegistrationAttemptFunc: func(context.Context, models.PasswordRegistrationAttempt) error {
+			attemptCreated = true
+			return nil
+		},
+	}
+	codeSender := passwordRegistrationCodeSenderStub{sendFunc: func(context.Context, string, string) error { return wantErr }}
+	service := newUserService(repository, successfulPasswordHasher(), successfulTokenGenerator(), successfulVerificationCodeGenerator(), codeSender)
+
+	_, err := service.StartPasswordRegistration(context.Background(), "user@example.com", "senha-segura")
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("StartPasswordRegistration() error = %v, want wrapped %v", err, wantErr)
+	}
+	if !attemptCreated {
+		t.Error("registration attempt was not created before sending the code")
 	}
 }
 
@@ -283,24 +272,21 @@ func TestUserServiceGetByID(t *testing.T) {
 
 	type contextKey struct{}
 	ctx := context.WithValue(context.Background(), contextKey{}, "request-context")
-	repository := userRepositoryStub{
-		findByIDFunc: func(gotCtx context.Context, gotUserID uuid.UUID) (models.User, error) {
-			if got := gotCtx.Value(contextKey{}); got != "request-context" {
-				t.Errorf("FindByID() context value = %v, want %q", got, "request-context")
-			}
-			if gotUserID != wantUserID {
-				t.Errorf("FindByID() user ID = %s, want %s", gotUserID, wantUserID)
-			}
-			return wantUser, nil
-		},
-	}
+	repository := userRepositoryStub{findByIDFunc: func(gotCtx context.Context, gotUserID uuid.UUID) (models.User, error) {
+		if got := gotCtx.Value(contextKey{}); got != "request-context" {
+			t.Errorf("FindByID() context value = %v, want %q", got, "request-context")
+		}
+		if gotUserID != wantUserID {
+			t.Errorf("FindByID() user ID = %s, want %s", gotUserID, wantUserID)
+		}
+		return wantUser, nil
+	}}
 
-	service := services.NewUserService(repository, unexpectedPasswordHasher(t))
+	service := newUserService(repository, unexpectedPasswordHasher(t), nil, nil, nil)
 	user, err := service.GetByID(ctx, wantUserID)
 	if err != nil {
 		t.Fatalf("GetByID() error = %v", err)
 	}
-
 	if user != wantUser {
 		t.Errorf("GetByID() user = %+v, want %+v", user, wantUser)
 	}
@@ -308,26 +294,82 @@ func TestUserServiceGetByID(t *testing.T) {
 
 func TestUserServiceGetByIDPropagatesRepositoryError(t *testing.T) {
 	wantErr := errors.New("database unavailable")
-	repository := userRepositoryStub{
-		findByIDFunc: func(context.Context, uuid.UUID) (models.User, error) {
-			return models.User{}, wantErr
-		},
-	}
+	repository := userRepositoryStub{findByIDFunc: func(context.Context, uuid.UUID) (models.User, error) { return models.User{}, wantErr }}
+	service := newUserService(repository, unexpectedPasswordHasher(t), nil, nil, nil)
 
-	service := services.NewUserService(repository, unexpectedPasswordHasher(t))
 	_, err := service.GetByID(context.Background(), uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c317"))
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("GetByID() error = %v, want wrapped %v", err, wantErr)
 	}
 }
 
-func unexpectedPasswordHasher(t *testing.T) passwordHasherStub {
-	t.Helper()
+func newUserService(repository userRepositoryStub, hasher passwordHasherStub, generateToken services.TokenGenerator, generateCode services.VerificationCodeGenerator, codeSender services.PasswordRegistrationCodeSender) *services.UserService {
+	return services.NewUserService(repository, hasher, generateToken, generateCode, codeSender, services.PasswordRegistrationConfig{
+		CodeTTL: testCodeTTL, AttemptTTL: testAttemptTTL,
+	})
+}
 
-	return passwordHasherStub{
-		hashFunc: func(string) (string, error) {
-			t.Fatal("Hash() should not be called")
-			return "", nil
+func availableEmailRepository() userRepositoryStub {
+	return userRepositoryStub{
+		userExistsByEmailFunc:                 func(context.Context, string) (bool, error) { return false, nil },
+		createPasswordRegistrationAttemptFunc: func(context.Context, models.PasswordRegistrationAttempt) error { return nil },
+	}
+}
+
+func successfulPasswordHasher() passwordHasherStub {
+	return passwordHasherStub{hashFunc: func(string) (string, error) { return "$argon2id$test-hash", nil }}
+}
+
+func successfulTokenGenerator() services.TokenGenerator {
+	return func() (string, []byte, error) { return "registration-token", bytes.Repeat([]byte{0x42}, 32), nil }
+}
+
+func successfulVerificationCodeGenerator() services.VerificationCodeGenerator {
+	return func() (string, error) { return "123456", nil }
+}
+
+func unexpectedUserRepository(t *testing.T) userRepositoryStub {
+	t.Helper()
+	return userRepositoryStub{
+		userExistsByEmailFunc: func(context.Context, string) (bool, error) {
+			t.Fatal("UserExistsByEmail() should not be called")
+			return false, nil
+		},
+		createPasswordRegistrationAttemptFunc: func(context.Context, models.PasswordRegistrationAttempt) error {
+			t.Fatal("CreatePasswordRegistrationAttempt() should not be called")
+			return nil
 		},
 	}
+}
+
+func unexpectedPasswordHasher(t *testing.T) passwordHasherStub {
+	t.Helper()
+	return passwordHasherStub{hashFunc: func(string) (string, error) {
+		t.Fatal("Hash() should not be called")
+		return "", nil
+	}}
+}
+
+func unexpectedRegistrationTokenGenerator(t *testing.T) services.TokenGenerator {
+	t.Helper()
+	return func() (string, []byte, error) {
+		t.Fatal("token generator should not be called")
+		return "", nil, nil
+	}
+}
+
+func unexpectedVerificationCodeGenerator(t *testing.T) services.VerificationCodeGenerator {
+	t.Helper()
+	return func() (string, error) {
+		t.Fatal("verification code generator should not be called")
+		return "", nil
+	}
+}
+
+func unexpectedCodeSender(t *testing.T) passwordRegistrationCodeSenderStub {
+	t.Helper()
+	return passwordRegistrationCodeSenderStub{sendFunc: func(context.Context, string, string) error {
+		t.Fatal("SendPasswordRegistrationCode() should not be called")
+		return nil
+	}}
 }
