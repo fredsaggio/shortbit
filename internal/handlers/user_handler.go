@@ -15,15 +15,11 @@ import (
 )
 
 type UserService interface {
-	RegisterWithPassword(ctx context.Context, email string, password string) (models.User, error)
+	StartPasswordRegistration(ctx context.Context, email, password string) (services.PasswordRegistrationResult, error)
 	GetByID(ctx context.Context, userID uuid.UUID) (models.User, error)
 }
 
-type UserHandler struct {
-	userServ UserService
-}
-
-type createUserWithPasswordRequest struct {
+type startPasswordRegistrationRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
@@ -33,15 +29,21 @@ type userResponse struct {
 	Email string `json:"email"`
 }
 
-func NewUserHandler(userServ UserService) *UserHandler {
+type UserHandler struct {
+	userServ     UserService
+	cookieSecure bool
+}
+
+func NewUserHandler(userServ UserService, cookieSecure bool) *UserHandler {
 	return &UserHandler{
-		userServ: userServ,
+		userServ:     userServ,
+		cookieSecure: cookieSecure,
 	}
 }
 
-func (h *UserHandler) RegisterWithPassword(w http.ResponseWriter, r *http.Request) {
+func (h *UserHandler) StartPasswordRegistration(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	var req createUserWithPasswordRequest
+	var req startPasswordRegistrationRequest
 
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
@@ -56,58 +58,31 @@ func (h *UserHandler) RegisterWithPassword(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	user, err := h.userServ.RegisterWithPassword(ctx, req.Email, req.Password)
+	result, err := h.userServ.StartPasswordRegistration(ctx, req.Email, req.Password)
 
 	if err != nil {
 		switch {
 		case errors.Is(err, services.ErrInvalidEmail):
-			http.Error(
-				w,
-				"email inválido",
-				http.StatusBadRequest,
-			)
+			http.Error(w, "email inválido", http.StatusBadRequest)
 
 		case errors.Is(err, services.ErrPasswordTooShort):
-			http.Error(
-				w,
-				"senha muito curta",
-				http.StatusBadRequest,
-			)
+			http.Error(w, "senha muito curta", http.StatusBadRequest)
 
 		case errors.Is(err, services.ErrPasswordTooLong):
-			http.Error(
-				w,
-				"senha muito longa",
-				http.StatusBadRequest,
-			)
+			http.Error(w, "senha muito longa", http.StatusBadRequest)
 
 		case errors.Is(err, services.ErrEmailAlreadyExists):
-			http.Error(
-				w,
-				"email já está em uso",
-				http.StatusConflict,
-			)
+			http.Error(w, "email já está em uso", http.StatusConflict)
 
 		default:
-			http.Error(
-				w,
-				"erro interno do servidor",
-				http.StatusInternalServerError,
-			)
+			slog.ErrorContext(ctx, "start password registration failed", "error", err)
+			http.Error(w, "erro interno do servidor", http.StatusInternalServerError)
 		}
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-
-	if err := json.NewEncoder(w).Encode(userResponse{
-		ID:    user.ID.String(),
-		Email: user.Email,
-	}); err != nil {
-		slog.Error("error to encode response")
-		return
-	}
+	setPasswordRegistrationCookie(w, result.Token, result.ExpiresAt, h.cookieSecure)
+	w.WriteHeader(http.StatusAccepted)
 }
 
 func (h *UserHandler) GetUserInfo(w http.ResponseWriter, r *http.Request) {
