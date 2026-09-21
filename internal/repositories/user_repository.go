@@ -13,10 +13,11 @@ import (
 )
 
 var (
-	ErrEmailAlreadyExists         = errors.New("email already exists")
-	ErrPasswordCredentialNotFound = errors.New("password credential not found")
-	ErrUserNotFound               = errors.New("user not found")
-	ErrAuthIdentityNotFound       = errors.New("auth identity not found")
+	ErrEmailAlreadyExists          = errors.New("email already exists")
+	ErrPasswordCredentialNotFound  = errors.New("password credential not found")
+	ErrUserNotFound                = errors.New("user not found")
+	ErrAuthIdentityNotFound        = errors.New("auth identity not found")
+	ErrRegistrationAttemptNotFound = errors.New("registration attempt not found")
 )
 
 type UserRepository struct {
@@ -89,8 +90,6 @@ func (r *UserRepository) UserExistsByEmail(ctx context.Context, email string) (b
 
 	return exists, nil
 }
-
-
 
 func (r *UserRepository) CreateWithPassword(ctx context.Context, email, passwordHash string) (models.User, error) {
 	tx, err := r.db.Begin(ctx)
@@ -306,6 +305,53 @@ func (r *UserRepository) FindUserByProviderIdentity(ctx context.Context, provide
 	}
 
 	return user, nil
+}
+
+func (r *UserRepository) FindPasswordRegistrationAttemptByTokenHash(ctx context.Context, tokenHash []byte) (models.PasswordRegistrationAttempt, error) {
+	const q = `
+		SELECT
+		token_hash,
+		email,
+		password_hash,
+		verification_proof_hash,
+		failed_attempts,
+		locked_until,
+		last_code_sent_at,
+		code_expires_at,
+		attempt_expires_at,
+		created_at,
+		updated_at
+	FROM password_registration_attempts
+	WHERE token_hash = @tokenHash
+	`
+
+	args := pgx.StrictNamedArgs{
+		"tokenHash": tokenHash,
+	}
+
+	var attempt models.PasswordRegistrationAttempt
+
+	err := r.db.QueryRow(ctx, q, args).Scan(&attempt.TokenHash,
+		&attempt.Email,
+		&attempt.PasswordHash,
+		&attempt.VerificationProofHash,
+		&attempt.FailedAttempts,
+		&attempt.LockedUntil,
+		&attempt.LastCodeSentAt,
+		&attempt.CodeExpiresAt,
+		&attempt.AttemptExpiresAt,
+		&attempt.CreatedAt,
+		&attempt.UpdatedAt,
+	)
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.PasswordRegistrationAttempt{}, ErrRegistrationAttemptNotFound
+		}
+		return models.PasswordRegistrationAttempt{}, fmt.Errorf("find password registration attempt by token hash: %w", err)
+	}
+
+	return attempt, nil
 }
 
 func isEmailConflict(err error) bool {

@@ -130,6 +130,75 @@ func TestUserRepositoryIntegration(t *testing.T) {
 		}
 	})
 
+	t.Run("finds password registration attempt by token hash", func(t *testing.T) {
+		tokenHash := sha256.Sum256([]byte("registration-token-to-find"))
+		proofHash := sha256.Sum256([]byte("registration-proof-to-find"))
+		now := time.Now().UTC().Truncate(time.Microsecond)
+
+		want := models.PasswordRegistrationAttempt{
+			TokenHash:             tokenHash[:],
+			Email:                 "find-registration-attempt@example.com",
+			PasswordHash:          "$argon2id$find-registration-attempt-hash",
+			VerificationProofHash: proofHash[:],
+			LastCodeSentAt:        now,
+			CodeExpiresAt:         now.Add(10 * time.Minute),
+			AttemptExpiresAt:      now.Add(30 * time.Minute),
+		}
+
+		if err := repository.CreatePasswordRegistrationAttempt(t.Context(), want); err != nil {
+			t.Fatalf("CreatePasswordRegistrationAttempt() error = %v", err)
+		}
+
+		got, err := repository.FindPasswordRegistrationAttemptByTokenHash(t.Context(), tokenHash[:])
+		if err != nil {
+			t.Fatalf("FindPasswordRegistrationAttemptByTokenHash() error = %v", err)
+		}
+
+		if !bytes.Equal(got.TokenHash, want.TokenHash) {
+			t.Errorf("token hash = %x, want %x", got.TokenHash, want.TokenHash)
+		}
+		if got.Email != want.Email {
+			t.Errorf("email = %q, want %q", got.Email, want.Email)
+		}
+		if got.PasswordHash != want.PasswordHash {
+			t.Errorf("password hash = %q, want %q", got.PasswordHash, want.PasswordHash)
+		}
+		if !bytes.Equal(got.VerificationProofHash, want.VerificationProofHash) {
+			t.Errorf("verification proof hash = %x, want %x", got.VerificationProofHash, want.VerificationProofHash)
+		}
+		if got.FailedAttempts != 0 {
+			t.Errorf("failed attempts = %d, want 0", got.FailedAttempts)
+		}
+		if got.LockedUntil != nil {
+			t.Errorf("locked until = %v, want nil", got.LockedUntil)
+		}
+		if !got.LastCodeSentAt.Equal(want.LastCodeSentAt) {
+			t.Errorf("last code sent at = %v, want %v", got.LastCodeSentAt, want.LastCodeSentAt)
+		}
+		if !got.CodeExpiresAt.Equal(want.CodeExpiresAt) {
+			t.Errorf("code expires at = %v, want %v", got.CodeExpiresAt, want.CodeExpiresAt)
+		}
+		if !got.AttemptExpiresAt.Equal(want.AttemptExpiresAt) {
+			t.Errorf("attempt expires at = %v, want %v", got.AttemptExpiresAt, want.AttemptExpiresAt)
+		}
+		if got.CreatedAt.IsZero() || got.UpdatedAt.IsZero() {
+			t.Error("found registration attempt has zero database timestamps")
+		}
+	})
+
+	t.Run("returns not found for unknown registration token hash", func(t *testing.T) {
+		unknownTokenHash := sha256.Sum256([]byte("unknown-registration-token"))
+
+		_, err := repository.FindPasswordRegistrationAttemptByTokenHash(t.Context(), unknownTokenHash[:])
+		if !errors.Is(err, repositories.ErrRegistrationAttemptNotFound) {
+			t.Fatalf(
+				"FindPasswordRegistrationAttemptByTokenHash() error = %v, want %v",
+				err,
+				repositories.ErrRegistrationAttemptNotFound,
+			)
+		}
+	})
+
 	t.Run("returns false when user email does not exist", func(t *testing.T) {
 		exists, err := repository.UserExistsByEmail(t.Context(), "available@example.com")
 		if err != nil {
