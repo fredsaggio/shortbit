@@ -14,20 +14,40 @@ const (
 	defaultWriteTimeout      = 15 * time.Second
 	defaultIdleTimeout       = 60 * time.Second
 	defaultShutdownTimeout   = 10 * time.Second
-	defaultUserSessionTTL    = 72 * time.Hour
-	defaultCookieSecure      = true
+
+	defaultUserSessionTTL = 72 * time.Hour
+	defaultCookieSecure   = true
+
+	defaultPasswordRegistrationCodeTTL    = 10 * time.Minute
+	defaultPasswordRegistrationAttemptTTL = 30 * time.Minute
 )
 
 type Config struct {
-	DatabaseURL string
-	HTTP        HTTPConfig
-	Session     SessionConfig
-	Google      GoogleConfig
+	DatabaseURL          string
+	HTTP                 HTTPConfig
+	Session              SessionConfig
+	Google               GoogleConfig
+	Email                EmailConfig
+	Resend               ResendConfig
+	PasswordRegistration PasswordRegistrationConfig
 }
 
 type SessionConfig struct {
 	TTL          time.Duration
 	CookieSecure bool
+}
+
+type EmailConfig struct {
+	From string
+}
+
+type ResendConfig struct {
+	APIKey string
+}
+
+type PasswordRegistrationConfig struct {
+	CodeTTL    time.Duration
+	AttemptTTL time.Duration
 }
 
 type GoogleConfig struct {
@@ -60,6 +80,28 @@ func Load(getEnv func(string) string) (Config, error) {
 		return Config{}, err
 	}
 
+	codeTTL, err := durationEnvOrDefault(getEnv, "PASSWORD_REGISTRATION_CODE_TTL", defaultPasswordRegistrationCodeTTL)
+	if err != nil {
+		return Config{}, err
+	}
+
+	if codeTTL <= 0 {
+		return Config{}, errors.New("PASSWORD_REGISTRATION_CODE_TTL must be greater than zero")
+	}
+
+	attemptTTL, err := durationEnvOrDefault(getEnv, "PASSWORD_REGISTRATION_ATTEMPT_TTL", defaultPasswordRegistrationAttemptTTL)
+	if err != nil {
+		return Config{}, err
+	}
+
+	if attemptTTL <= 0 {
+		return Config{}, errors.New("PASSWORD_REGISTRATION_ATTEMPT_TTL must be greater than zero")
+	}
+
+	if codeTTL > attemptTTL {
+		return Config{}, errors.New("PASSWORD_REGISTRATION_CODE_TTL must not be greater than PASSWORD_REGISTRATION_ATTEMPT_TTL")
+	}
+
 	cfg := Config{
 		DatabaseURL: getEnv("DATABASE_URL"),
 		HTTP: HTTPConfig{
@@ -79,6 +121,16 @@ func Load(getEnv func(string) string) (Config, error) {
 			ClientSecret: getEnv("GOOGLE_CLIENT_SECRET"),
 			RedirectURL:  getEnv("GOOGLE_REDIRECT_URL"),
 		},
+		Email: EmailConfig{
+			From: getEnv("EMAIL_FROM"),
+		},
+		Resend: ResendConfig{
+			APIKey: getEnv("RESEND_API_KEY"),
+		},
+		PasswordRegistration: PasswordRegistrationConfig{
+			CodeTTL:    codeTTL,
+			AttemptTTL: attemptTTL,
+		},
 	}
 
 	if cfg.DatabaseURL == "" {
@@ -95,6 +147,14 @@ func Load(getEnv func(string) string) (Config, error) {
 
 	if cfg.Google.RedirectURL == "" {
 		return Config{}, errors.New("GOOGLE_REDIRECT_URL is required")
+	}
+
+	if cfg.Email.From == "" {
+		return Config{}, errors.New("EMAIL_FROM is required")
+	}
+
+	if cfg.Resend.APIKey == "" {
+		return Config{}, errors.New("RESEND_API_KEY is required")
 	}
 
 	return cfg, nil

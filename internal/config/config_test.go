@@ -18,13 +18,17 @@ func TestLoad(t *testing.T) {
 		{
 			name: "loads provided configuration",
 			env: map[string]string{
-				"DATABASE_URL":         "postgres://user:password@localhost:5432/app",
-				"HTTP_ADDR":            ":9090",
-				"USER_SESSION_TTL":     "12h",
-				"COOKIE_SECURE":        "false",
-				"GOOGLE_CLIENT_ID":     "test-client-id",
-				"GOOGLE_CLIENT_SECRET": "test-client-secret",
-				"GOOGLE_REDIRECT_URL":  "http://localhost:8080/auth/google/callback",
+				"DATABASE_URL":                      "postgres://user:password@localhost:5432/app",
+				"HTTP_ADDR":                         ":9090",
+				"USER_SESSION_TTL":                  "12h",
+				"COOKIE_SECURE":                     "false",
+				"GOOGLE_CLIENT_ID":                  "test-client-id",
+				"GOOGLE_CLIENT_SECRET":              "test-client-secret",
+				"GOOGLE_REDIRECT_URL":               "http://localhost:8080/auth/google/callback",
+				"EMAIL_FROM":                        "URL Shortener <noreply@example.com>",
+				"RESEND_API_KEY":                    "re_test_api_key",
+				"PASSWORD_REGISTRATION_CODE_TTL":    "5m",
+				"PASSWORD_REGISTRATION_ATTEMPT_TTL": "20m",
 			},
 			want: config.Config{
 				DatabaseURL: "postgres://user:password@localhost:5432/app",
@@ -45,6 +49,16 @@ func TestLoad(t *testing.T) {
 					ClientSecret: "test-client-secret",
 					RedirectURL:  "http://localhost:8080/auth/google/callback",
 				},
+				Email: config.EmailConfig{
+					From: "URL Shortener <noreply@example.com>",
+				},
+				Resend: config.ResendConfig{
+					APIKey: "re_test_api_key",
+				},
+				PasswordRegistration: config.PasswordRegistrationConfig{
+					CodeTTL:    5 * time.Minute,
+					AttemptTTL: 20 * time.Minute,
+				},
 			},
 		},
 		{
@@ -54,6 +68,8 @@ func TestLoad(t *testing.T) {
 				"GOOGLE_CLIENT_ID":     "test-client-id",
 				"GOOGLE_CLIENT_SECRET": "test-client-secret",
 				"GOOGLE_REDIRECT_URL":  "http://localhost:8080/auth/google/callback",
+				"EMAIL_FROM":           "noreply@example.com",
+				"RESEND_API_KEY":       "re_test_api_key",
 			},
 			want: config.Config{
 				DatabaseURL: "postgres://localhost/app",
@@ -73,6 +89,16 @@ func TestLoad(t *testing.T) {
 					ClientID:     "test-client-id",
 					ClientSecret: "test-client-secret",
 					RedirectURL:  "http://localhost:8080/auth/google/callback",
+				},
+				Email: config.EmailConfig{
+					From: "noreply@example.com",
+				},
+				Resend: config.ResendConfig{
+					APIKey: "re_test_api_key",
+				},
+				PasswordRegistration: config.PasswordRegistrationConfig{
+					CodeTTL:    10 * time.Minute,
+					AttemptTTL: 30 * time.Minute,
 				},
 			},
 		},
@@ -109,6 +135,42 @@ func TestLoad(t *testing.T) {
 			wantErrContains: "COOKIE_SECURE must be a valid boolean",
 		},
 		{
+			name: "rejects invalid password registration code TTL",
+			env: map[string]string{
+				"PASSWORD_REGISTRATION_CODE_TTL": "ten minutes",
+			},
+			wantErrContains: "PASSWORD_REGISTRATION_CODE_TTL must be a valid duration",
+		},
+		{
+			name: "rejects non-positive password registration code TTL",
+			env: map[string]string{
+				"PASSWORD_REGISTRATION_CODE_TTL": "0s",
+			},
+			wantErrContains: "PASSWORD_REGISTRATION_CODE_TTL must be greater than zero",
+		},
+		{
+			name: "rejects invalid password registration attempt TTL",
+			env: map[string]string{
+				"PASSWORD_REGISTRATION_ATTEMPT_TTL": "thirty minutes",
+			},
+			wantErrContains: "PASSWORD_REGISTRATION_ATTEMPT_TTL must be a valid duration",
+		},
+		{
+			name: "rejects non-positive password registration attempt TTL",
+			env: map[string]string{
+				"PASSWORD_REGISTRATION_ATTEMPT_TTL": "-1m",
+			},
+			wantErrContains: "PASSWORD_REGISTRATION_ATTEMPT_TTL must be greater than zero",
+		},
+		{
+			name: "rejects code TTL greater than attempt TTL",
+			env: map[string]string{
+				"PASSWORD_REGISTRATION_CODE_TTL":    "20m",
+				"PASSWORD_REGISTRATION_ATTEMPT_TTL": "10m",
+			},
+			wantErrContains: "PASSWORD_REGISTRATION_CODE_TTL must not be greater than PASSWORD_REGISTRATION_ATTEMPT_TTL",
+		},
+		{
 			name: "rejects missing Google client ID",
 			env: map[string]string{
 				"DATABASE_URL":         "postgres://localhost/app",
@@ -134,6 +196,28 @@ func TestLoad(t *testing.T) {
 				"GOOGLE_CLIENT_SECRET": "test-client-secret",
 			},
 			wantErrContains: "GOOGLE_REDIRECT_URL is required",
+		},
+		{
+			name: "rejects missing email sender",
+			env: map[string]string{
+				"DATABASE_URL":         "postgres://localhost/app",
+				"GOOGLE_CLIENT_ID":     "test-client-id",
+				"GOOGLE_CLIENT_SECRET": "test-client-secret",
+				"GOOGLE_REDIRECT_URL":  "http://localhost:8080/auth/google/callback",
+				"RESEND_API_KEY":       "re_test_api_key",
+			},
+			wantErrContains: "EMAIL_FROM is required",
+		},
+		{
+			name: "rejects missing Resend API key",
+			env: map[string]string{
+				"DATABASE_URL":         "postgres://localhost/app",
+				"GOOGLE_CLIENT_ID":     "test-client-id",
+				"GOOGLE_CLIENT_SECRET": "test-client-secret",
+				"GOOGLE_REDIRECT_URL":  "http://localhost:8080/auth/google/callback",
+				"EMAIL_FROM":           "noreply@example.com",
+			},
+			wantErrContains: "RESEND_API_KEY is required",
 		},
 		{
 			name:            "rejects missing database URL",
