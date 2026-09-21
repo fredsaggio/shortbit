@@ -7,13 +7,16 @@ import (
 	"github.com/fredsaggio/url-shortener/internal/argon2"
 	"github.com/fredsaggio/url-shortener/internal/config"
 	"github.com/fredsaggio/url-shortener/internal/db"
+	"github.com/fredsaggio/url-shortener/internal/email"
 	"github.com/fredsaggio/url-shortener/internal/handlers"
 	"github.com/fredsaggio/url-shortener/internal/middleware"
 	"github.com/fredsaggio/url-shortener/internal/repositories"
 	"github.com/fredsaggio/url-shortener/internal/server"
 	"github.com/fredsaggio/url-shortener/internal/services"
 	"github.com/fredsaggio/url-shortener/internal/sessiontoken"
+	"github.com/fredsaggio/url-shortener/internal/verificationcode"
 )
+
 // Tenho que atualizar aqui esse composition root, é o próximo passo caso você tenha esquecido.
 const (
 	loginEmailRateLimitRequestsPerSecond = 10.0 / 60.0
@@ -22,17 +25,27 @@ const (
 	loginEmailRateLimitStaleAfter        = 10 * time.Minute
 )
 
-func CompositionRoot(pool db.DB, sessionConfig config.SessionConfig) *server.Handlers {
+func CompositionRoot(pool db.DB, cfg config.Config) *server.Handlers {
 	passwordHasher := argon2.Argon2id{}
-
 	userRepository := repositories.NewUserRepository(pool)
-	userService := services.NewUserService(userRepository, passwordHasher)
-	userHandler := handlers.NewUserHandler(userService)
+
+	codeSender := email.NewResendSender(cfg.Resend.APIKey, cfg.Email.From)
+
+	userService := services.NewUserService(userRepository,
+		passwordHasher,
+		sessiontoken.Generate,
+		verificationcode.Generate,
+		codeSender,
+		services.PasswordRegistrationConfig{CodeTTL: cfg.PasswordRegistration.CodeTTL, AttemptTTL: cfg.PasswordRegistration.AttemptTTL},
+	)
+	userHandler := handlers.NewUserHandler(userService, cfg.Session.CookieSecure)
 
 	userSessionRepository := repositories.NewUserSessionRepository(pool)
-	authService := services.NewAuthService(userRepository, userSessionRepository, passwordHasher, sessiontoken.Generate, sessionConfig.TTL)
+
+	authService := services.NewAuthService(userRepository, userSessionRepository, passwordHasher, sessiontoken.Generate, cfg.Session.TTL)
+
 	loginEmailRateLimiter := middleware.NewRateLimiter(loginEmailRateLimitRequestsPerSecond, loginEmailRateLimitBurst, loginEmailRateLimitMaxEntries, loginEmailRateLimitStaleAfter)
-	sessionHandler := handlers.NewSessionHandler(authService, loginEmailRateLimiter, sessionConfig.CookieSecure)
+	sessionHandler := handlers.NewSessionHandler(authService, loginEmailRateLimiter, cfg.Session.CookieSecure)
 
 	meHandler := middleware.Authenticator(authService)(http.HandlerFunc(userHandler.GetUserInfo))
 

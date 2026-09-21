@@ -39,7 +39,7 @@ func Run(ctx context.Context, getEnv func(string) string) error {
 	}
 	defer pool.Close()
 
-	handlers := app.CompositionRoot(pool, cfg.Session)
+	handlers := app.CompositionRoot(pool, cfg)
 	srv := server.NewServer(handlers, pool)
 
 	handler := srv.NewRouterHTTP()
