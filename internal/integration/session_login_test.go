@@ -12,11 +12,13 @@ import (
 	"time"
 
 	"github.com/fredsaggio/url-shortener/internal/app"
+	"github.com/fredsaggio/url-shortener/internal/argon2"
 	"github.com/fredsaggio/url-shortener/internal/config"
 	"github.com/fredsaggio/url-shortener/internal/db/dbtest"
 	"github.com/fredsaggio/url-shortener/internal/server"
 	"github.com/fredsaggio/url-shortener/internal/sessiontoken"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"uuid"
 )
 
 func TestPasswordLoginIntegration(t *testing.T) {
@@ -27,15 +29,10 @@ func TestPasswordLoginIntegration(t *testing.T) {
 	)
 
 	pool := dbtest.Open(t)
-	applicationHandlers := app.CompositionRoot(pool, config.SessionConfig{TTL: sessionTTL, CookieSecure: false})
+	applicationHandlers := app.CompositionRoot(pool, testConfig(sessionTTL))
 	router := server.NewServer(applicationHandlers, pool).NewRouterHTTP()
 
-	registerResponse := performJSONRequest(t, router, http.MethodPost, "/users", `{"email":"login-integration@example.com","password":"senha12345"}`)
-	defer registerResponse.Body.Close()
-
-	if registerResponse.StatusCode != http.StatusCreated {
-		t.Fatalf("register status code = %d, want %d; body = %q", registerResponse.StatusCode, http.StatusCreated, readResponseBody(t, registerResponse))
-	}
+	createConfirmedPasswordUser(t, pool, email, password)
 
 	t.Run("incorrect password does not create session", func(t *testing.T) {
 		response := performJSONRequest(t, router, http.MethodPost, "/sessions", `{"email":"login-integration@example.com","password":"senha-incorreta"}`)
@@ -161,6 +158,48 @@ func TestPasswordLoginIntegration(t *testing.T) {
 			t.Error("second session hash was not found in the database")
 		}
 	})
+}
+
+func testConfig(sessionTTL time.Duration) config.Config {
+	return config.Config{
+		Session: config.SessionConfig{TTL: sessionTTL, CookieSecure: false},
+		Email:   config.EmailConfig{From: "noreply@example.com"},
+		Resend:  config.ResendConfig{APIKey: "re_test_api_key"},
+		PasswordRegistration: config.PasswordRegistrationConfig{
+			CodeTTL:    10 * time.Minute,
+			AttemptTTL: 30 * time.Minute,
+		},
+	}
+}
+
+func createConfirmedPasswordUser(t *testing.T, pool *pgxpool.Pool, email, password string) uuid.UUID {
+	t.Helper()
+
+	passwordHash, err := (argon2.Argon2id{}).Hash(password)
+	if err != nil {
+		t.Fatalf("hash test user password: %v", err)
+	}
+
+	var userID uuid.UUID
+	err = pool.QueryRow(
+		t.Context(),
+		`INSERT INTO users (email, email_verified_at) VALUES ($1, NOW()) RETURNING id`,
+		email,
+	).Scan(&userID)
+	if err != nil {
+		t.Fatalf("insert confirmed test user: %v", err)
+	}
+
+	if _, err := pool.Exec(
+		t.Context(),
+		`INSERT INTO password_credentials (user_id, password_hash) VALUES ($1, $2)`,
+		userID,
+		passwordHash,
+	); err != nil {
+		t.Fatalf("insert test user password credential: %v", err)
+	}
+
+	return userID
 }
 
 func performJSONRequest(t *testing.T, handler http.Handler, method, target, body string) *http.Response {

@@ -11,7 +11,6 @@ import (
 	"uuid"
 
 	"github.com/fredsaggio/url-shortener/internal/app"
-	"github.com/fredsaggio/url-shortener/internal/config"
 	"github.com/fredsaggio/url-shortener/internal/db/dbtest"
 	"github.com/fredsaggio/url-shortener/internal/server"
 	"github.com/fredsaggio/url-shortener/internal/sessiontoken"
@@ -25,7 +24,7 @@ func TestMeIntegration(t *testing.T) {
 	)
 
 	pool := dbtest.Open(t)
-	applicationHandlers := app.CompositionRoot(pool, config.SessionConfig{TTL: sessionTTL, CookieSecure: false})
+	applicationHandlers := app.CompositionRoot(pool, testConfig(sessionTTL))
 	router := server.NewServer(applicationHandlers, pool).NewRouterHTTP()
 
 	t.Run("rejects request without a session cookie", func(t *testing.T) {
@@ -47,20 +46,11 @@ func TestMeIntegration(t *testing.T) {
 		}
 	})
 
-	registerResponse := performJSONRequest(t, router, http.MethodPost, "/users", `{"email":"me-integration@example.com","password":"senha12345"}`)
-	defer registerResponse.Body.Close()
-
-	if registerResponse.StatusCode != http.StatusCreated {
-		t.Fatalf("register status code = %d, want %d; body = %q", registerResponse.StatusCode, http.StatusCreated, readResponseBody(t, registerResponse))
-	}
-
-	var registeredUser struct {
+	registeredUserID := createConfirmedPasswordUser(t, pool, email, password)
+	registeredUser := struct {
 		ID    string `json:"id"`
 		Email string `json:"email"`
-	}
-	if err := json.NewDecoder(registerResponse.Body).Decode(&registeredUser); err != nil {
-		t.Fatalf("decode register response: %v", err)
-	}
+	}{ID: registeredUserID.String(), Email: email}
 
 	t.Run("rejects an expired session", func(t *testing.T) {
 		const expiredToken = "expired-session-token"

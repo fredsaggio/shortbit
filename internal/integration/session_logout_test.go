@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/fredsaggio/url-shortener/internal/app"
-	"github.com/fredsaggio/url-shortener/internal/config"
 	"github.com/fredsaggio/url-shortener/internal/db/dbtest"
 	"github.com/fredsaggio/url-shortener/internal/server"
 	"github.com/fredsaggio/url-shortener/internal/sessiontoken"
@@ -18,15 +17,10 @@ func TestLogoutIntegration(t *testing.T) {
 	const sessionTTL = 24 * time.Hour
 
 	pool := dbtest.Open(t)
-	applicationHandlers := app.CompositionRoot(pool, config.SessionConfig{TTL: sessionTTL, CookieSecure: false})
+	applicationHandlers := app.CompositionRoot(pool, testConfig(sessionTTL))
 	router := server.NewServer(applicationHandlers, pool).NewRouterHTTP()
 
-	registerResponse := performJSONRequest(t, router, http.MethodPost, "/users", `{"email":"logout-integration@example.com","password":"senha12345"}`)
-	defer registerResponse.Body.Close()
-
-	if registerResponse.StatusCode != http.StatusCreated {
-		t.Fatalf("register status code = %d, want %d; body = %q", registerResponse.StatusCode, http.StatusCreated, readResponseBody(t, registerResponse))
-	}
+	createConfirmedPasswordUser(t, pool, "logout-integration@example.com", "senha12345")
 
 	loginResponse := performJSONRequest(t, router, http.MethodPost, "/sessions", `{"email":"logout-integration@example.com","password":"senha12345"}`)
 	defer loginResponse.Body.Close()
