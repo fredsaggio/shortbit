@@ -104,9 +104,9 @@ func (r *UserRepository) CreateWithPassword(ctx context.Context, email, password
 	}()
 
 	const q = `
-			   INSERT INTO users(email)
-			   VALUES (@email)
-			   RETURNING id, email, created_at, updated_at
+			   INSERT INTO users(email, email_verified_at)
+			   VALUES (@email, NOW())
+			   RETURNING id, email, email_verified_at, created_at, updated_at
 			   `
 
 	args := pgx.StrictNamedArgs{
@@ -115,7 +115,7 @@ func (r *UserRepository) CreateWithPassword(ctx context.Context, email, password
 
 	var user models.User
 
-	err = tx.QueryRow(ctx, q, args).Scan(&user.ID, &user.Email, &user.CreatedAt, &user.UpdatedAt)
+	err = tx.QueryRow(ctx, q, args).Scan(&user.ID, &user.Email, &user.EmailVerifiedAt, &user.CreatedAt, &user.UpdatedAt)
 
 	if err != nil {
 		if isEmailConflict(err) {
@@ -154,6 +154,7 @@ func (r *UserRepository) FindPasswordCredentialsByEmail(
 		SELECT
 			u.id,
 			u.email,
+			u.email_verified_at,
 			u.created_at,
 			u.updated_at,
 			pc.user_id,
@@ -178,6 +179,7 @@ func (r *UserRepository) FindPasswordCredentialsByEmail(
 	err := r.db.QueryRow(ctx, q, args).Scan(
 		&user.ID,
 		&user.Email,
+		&user.EmailVerifiedAt,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 		&credential.UserID,
@@ -201,7 +203,7 @@ func (r *UserRepository) FindPasswordCredentialsByEmail(
 
 func (r *UserRepository) FindByID(ctx context.Context, userID uuid.UUID) (models.User, error) {
 	const q = `
-		SELECT id, email, created_at, updated_at
+		SELECT id, email, email_verified_at, created_at, updated_at
 		FROM users
 		WHERE id = @userID
 	`
@@ -212,7 +214,7 @@ func (r *UserRepository) FindByID(ctx context.Context, userID uuid.UUID) (models
 
 	var user models.User
 
-	if err := r.db.QueryRow(ctx, q, args).Scan(&user.ID, &user.Email, &user.CreatedAt, &user.UpdatedAt); err != nil {
+	if err := r.db.QueryRow(ctx, q, args).Scan(&user.ID, &user.Email, &user.EmailVerifiedAt, &user.CreatedAt, &user.UpdatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.User{}, ErrUserNotFound
 		}
@@ -235,9 +237,9 @@ func (r *UserRepository) CreateWithIdentity(ctx context.Context, email, provider
 	}()
 
 	const q = `
-		INSERT INTO users(email)
-		VALUES(@email)
-		RETURNING id, email, created_at, updated_at
+		INSERT INTO users(email, email_verified_at)
+		VALUES(@email, NOW())
+		RETURNING id, email, email_verified_at, created_at, updated_at
 	`
 
 	args := pgx.StrictNamedArgs{
@@ -246,7 +248,7 @@ func (r *UserRepository) CreateWithIdentity(ctx context.Context, email, provider
 
 	var user models.User
 
-	if err := tx.QueryRow(ctx, q, args).Scan(&user.ID, &user.Email, &user.CreatedAt, &user.UpdatedAt); err != nil {
+	if err := tx.QueryRow(ctx, q, args).Scan(&user.ID, &user.Email, &user.EmailVerifiedAt, &user.CreatedAt, &user.UpdatedAt); err != nil {
 		if isEmailConflict(err) {
 			return models.User{}, ErrEmailAlreadyExists
 		}
@@ -280,6 +282,7 @@ func (r *UserRepository) FindUserByProviderIdentity(ctx context.Context, provide
 		SELECT
 			u.id,
 			u.email,
+			u.email_verified_at,
 			u.created_at,
 			u.updated_at
 		FROM auth_identities AS ai
@@ -295,7 +298,7 @@ func (r *UserRepository) FindUserByProviderIdentity(ctx context.Context, provide
 
 	var user models.User
 
-	if err := r.db.QueryRow(ctx, q, args).Scan(&user.ID, &user.Email, &user.CreatedAt, &user.UpdatedAt); err != nil {
+	if err := r.db.QueryRow(ctx, q, args).Scan(&user.ID, &user.Email, &user.EmailVerifiedAt, &user.CreatedAt, &user.UpdatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.User{}, ErrAuthIdentityNotFound
 		}

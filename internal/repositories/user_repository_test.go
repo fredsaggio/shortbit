@@ -343,7 +343,7 @@ func TestUserRepositoryIntegration(t *testing.T) {
 
 		if _, err := pool.Exec(
 			t.Context(),
-			"INSERT INTO users(email) VALUES ($1)",
+			"INSERT INTO users(email, email_verified_at) VALUES ($1, NOW())",
 			email,
 		); err != nil {
 			t.Fatalf("insert user without password: %v", err)
