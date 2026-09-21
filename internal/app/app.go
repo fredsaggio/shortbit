@@ -14,7 +14,7 @@ import (
 	"github.com/fredsaggio/url-shortener/internal/services"
 	"github.com/fredsaggio/url-shortener/internal/sessiontoken"
 )
-
+// Tenho que atualizar aqui esse composition root, é o próximo passo caso você tenha esquecido.
 const (
 	loginEmailRateLimitRequestsPerSecond = 10.0 / 60.0
 	loginEmailRateLimitBurst             = 5
