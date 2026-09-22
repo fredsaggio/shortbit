@@ -199,6 +199,132 @@ func TestUserRepositoryIntegration(t *testing.T) {
 		}
 	})
 
+	t.Run("records password registration failures and applies cooldowns", func(t *testing.T) {
+		const maxAttempts int16 = 5
+
+		tokenHash := sha256.Sum256([]byte("registration-token-with-failures"))
+		proofHash := sha256.Sum256([]byte("registration-proof-with-failures"))
+		baseTime := time.Now().UTC().Truncate(time.Microsecond)
+
+		attempt := models.PasswordRegistrationAttempt{
+			TokenHash:             tokenHash[:],
+			Email:                 "registration-failures@example.com",
+			PasswordHash:          "$argon2id$registration-failures-hash",
+			VerificationProofHash: proofHash[:],
+			LastCodeSentAt:        baseTime,
+			CodeExpiresAt:         baseTime.Add(10 * time.Minute),
+			AttemptExpiresAt:      baseTime.Add(time.Hour),
+		}
+
+		if err := repository.CreatePasswordRegistrationAttempt(t.Context(), attempt); err != nil {
+			t.Fatalf("CreatePasswordRegistrationAttempt() error = %v", err)
+		}
+
+		recordFailure := func(now time.Time) (int16, *time.Time) {
+			t.Helper()
+
+			failedAttempts, lockedUntil, err := repository.RecordPasswordRegistrationFailure(
+				t.Context(),
+				tokenHash[:],
+				now,
+				now.Add(30*time.Second),
+				now.Add(5*time.Minute),
+				maxAttempts,
+			)
+			if err != nil {
+				t.Fatalf("RecordPasswordRegistrationFailure() error = %v", err)
+			}
+
+			return failedAttempts, lockedUntil
+		}
+
+		assertState := func(wantAttempts int16, wantLockedUntil time.Time, gotAttempts int16, gotLockedUntil *time.Time) {
+			t.Helper()
+
+			if gotAttempts != wantAttempts {
+				t.Errorf("failed attempts = %d, want %d", gotAttempts, wantAttempts)
+			}
+			if gotLockedUntil == nil {
+				t.Fatal("locked until = nil, want a timestamp")
+			}
+			if !gotLockedUntil.Equal(wantLockedUntil) {
+				t.Errorf("locked until = %v, want %v", gotLockedUntil, wantLockedUntil)
+			}
+		}
+
+		firstAttemptTime := baseTime
+		failedAttempts, lockedUntil := recordFailure(firstAttemptTime)
+		firstCooldownUntil := firstAttemptTime.Add(30 * time.Second)
+		assertState(1, firstCooldownUntil, failedAttempts, lockedUntil)
+
+		failedAttempts, lockedUntil = recordFailure(firstAttemptTime.Add(10 * time.Second))
+		assertState(1, firstCooldownUntil, failedAttempts, lockedUntil)
+
+		for attemptNumber := int16(2); attemptNumber <= 4; attemptNumber++ {
+			attemptTime := baseTime.Add(time.Duration(attemptNumber-1) * 31 * time.Second)
+			failedAttempts, lockedUntil = recordFailure(attemptTime)
+			assertState(attemptNumber, attemptTime.Add(30*time.Second), failedAttempts, lockedUntil)
+		}
+
+		fifthAttemptTime := baseTime.Add(4 * 31 * time.Second)
+		failedAttempts, lockedUntil = recordFailure(fifthAttemptTime)
+		longBlockUntil := fifthAttemptTime.Add(5 * time.Minute)
+		assertState(0, longBlockUntil, failedAttempts, lockedUntil)
+
+		failedAttempts, lockedUntil = recordFailure(longBlockUntil.Add(time.Second))
+		assertState(1, longBlockUntil.Add(31*time.Second), failedAttempts, lockedUntil)
+	})
+
+	t.Run("does not record failure for expired registration attempt", func(t *testing.T) {
+		tokenHash := sha256.Sum256([]byte("expired-registration-token"))
+		proofHash := sha256.Sum256([]byte("expired-registration-proof"))
+		now := time.Now().UTC().Truncate(time.Microsecond)
+
+		attempt := models.PasswordRegistrationAttempt{
+			TokenHash:             tokenHash[:],
+			Email:                 "expired-registration@example.com",
+			PasswordHash:          "$argon2id$expired-registration-hash",
+			VerificationProofHash: proofHash[:],
+			LastCodeSentAt:        now,
+			CodeExpiresAt:         now.Add(30 * time.Second),
+			AttemptExpiresAt:      now.Add(time.Minute),
+		}
+
+		if err := repository.CreatePasswordRegistrationAttempt(t.Context(), attempt); err != nil {
+			t.Fatalf("CreatePasswordRegistrationAttempt() error = %v", err)
+		}
+
+		afterExpiration := attempt.AttemptExpiresAt.Add(time.Second)
+		_, _, err := repository.RecordPasswordRegistrationFailure(
+			t.Context(),
+			tokenHash[:],
+			afterExpiration,
+			afterExpiration.Add(30*time.Second),
+			afterExpiration.Add(5*time.Minute),
+			5,
+		)
+		if !errors.Is(err, repositories.ErrRegistrationAttemptNotFound) {
+			t.Fatalf("RecordPasswordRegistrationFailure() error = %v, want %v", err, repositories.ErrRegistrationAttemptNotFound)
+		}
+	})
+
+	t.Run("returns not found when recording failure for unknown token hash", func(t *testing.T) {
+		unknownTokenHash := sha256.Sum256([]byte("unknown-registration-failure-token"))
+		now := time.Now().UTC()
+
+		_, _, err := repository.RecordPasswordRegistrationFailure(
+			t.Context(),
+			unknownTokenHash[:],
+			now,
+			now.Add(30*time.Second),
+			now.Add(5*time.Minute),
+			5,
+		)
+		if !errors.Is(err, repositories.ErrRegistrationAttemptNotFound) {
+			t.Fatalf("RecordPasswordRegistrationFailure() error = %v, want %v", err, repositories.ErrRegistrationAttemptNotFound)
+		}
+	})
+
 	t.Run("returns false when user email does not exist", func(t *testing.T) {
 		exists, err := repository.UserExistsByEmail(t.Context(), "available@example.com")
 		if err != nil {

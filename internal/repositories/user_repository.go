@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 	"uuid"
 
 	"github.com/fredsaggio/url-shortener/internal/db"
@@ -352,6 +353,52 @@ func (r *UserRepository) FindPasswordRegistrationAttemptByTokenHash(ctx context.
 	}
 
 	return attempt, nil
+}
+
+func (r *UserRepository) RecordPasswordRegistrationFailure(ctx context.Context, tokenHash []byte, now, retryAt, lockUntil time.Time, maxAttempts int16) (int16, *time.Time, error) {
+	const q = `
+		UPDATE password_registration_attempts
+		SET
+			failed_attempts = CASE
+				WHEN locked_until IS NOT NULL AND locked_until > @now
+					THEN failed_attempts
+				WHEN failed_attempts + 1 >= @maxAttempts
+					THEN 0
+				ELSE failed_attempts + 1
+			END,
+			locked_until = CASE
+				WHEN locked_until IS NOT NULL AND locked_until > @now
+					THEN locked_until
+				WHEN failed_attempts + 1 >= @maxAttempts
+					THEN LEAST(@lockUntil, attempt_expires_at)
+				ELSE LEAST(@retryAt, attempt_expires_at)
+			END
+		WHERE
+			token_hash = @tokenHash
+			AND attempt_expires_at > @now
+		RETURNING failed_attempts, locked_until
+	`
+
+	args := pgx.StrictNamedArgs{
+		"tokenHash":   tokenHash,
+		"now":         now,
+		"retryAt":     retryAt,
+		"lockUntil":   lockUntil,
+		"maxAttempts": maxAttempts,
+	}
+
+	var failedAttempts int16
+	var lockedUntil *time.Time
+
+	if err := r.db.QueryRow(ctx, q, args).Scan(&failedAttempts, &lockedUntil); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, nil, ErrRegistrationAttemptNotFound
+		}
+
+		return 0, nil, fmt.Errorf("record password registration failure: %w", err)
+	}
+
+	return failedAttempts, lockedUntil, nil
 }
 
 func isEmailConflict(err error) bool {
