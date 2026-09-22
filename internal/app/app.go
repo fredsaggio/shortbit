@@ -9,6 +9,7 @@ import (
 	"github.com/fredsaggio/url-shortener/internal/db"
 	"github.com/fredsaggio/url-shortener/internal/email"
 	"github.com/fredsaggio/url-shortener/internal/handlers"
+	"github.com/fredsaggio/url-shortener/internal/jobs"
 	"github.com/fredsaggio/url-shortener/internal/middleware"
 	"github.com/fredsaggio/url-shortener/internal/repositories"
 	"github.com/fredsaggio/url-shortener/internal/server"
@@ -25,9 +26,10 @@ const (
 	loginEmailRateLimitStaleAfter        = 10 * time.Minute
 )
 
-func CompositionRoot(pool db.DB, cfg config.Config) *server.Handlers {
+func CompositionRoot(pool db.DB, cfg config.Config) (*server.Handlers, *jobs.PasswordRegistrationCleanup) {
 	passwordHasher := argon2.Argon2id{}
 	userRepository := repositories.NewUserRepository(pool)
+	passwordRegisterCleanup := jobs.NewPasswordRegistrationCleanup(userRepository)
 
 	codeSender := email.NewResendSender(cfg.Resend.APIKey, cfg.Email.From)
 
@@ -53,5 +55,5 @@ func CompositionRoot(pool db.DB, cfg config.Config) *server.Handlers {
 		UserHandler:    userHandler,
 		SessionHandler: sessionHandler,
 		MeHandler:      meHandler,
-	}
+	}, passwordRegisterCleanup
 }

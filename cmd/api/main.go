@@ -39,7 +39,7 @@ func Run(ctx context.Context, getEnv func(string) string) error {
 	}
 	defer pool.Close()
 
-	handlers := app.CompositionRoot(pool, cfg)
+	handlers, registrationCleanup := app.CompositionRoot(pool, cfg)
 	srv := server.NewServer(handlers, pool)
 
 	handler := srv.NewRouterHTTP()
@@ -57,6 +57,22 @@ func Run(ctx context.Context, getEnv func(string) string) error {
 
 	go func() {
 		serverErr <- server.ListenAndServe()
+	}()
+
+	jobCtx, stopJob := context.WithCancel(ctx)
+	jobDone := make(chan struct{})
+
+	go func() {
+		defer close(jobDone)
+
+		slog.Info("password registration cleanup job started")
+		registrationCleanup.Run(jobCtx)
+		slog.Info("password registration cleanup job stopped")
+	}()
+
+	defer func() {
+		stopJob()
+		<-jobDone
 	}()
 
 	select {
