@@ -326,6 +326,111 @@ func TestConcurrentPasswordRegistrationConfirmationsForSameEmail(t *testing.T) {
 	}
 }
 
+func TestRepeatedPasswordRegistrationConfirmationDoesNotCreateAnotherAccount(t *testing.T) {
+	const (
+		email    = "registration-repeated-confirmation@example.com"
+		password = "senha-confirmacao-repetida"
+		code     = "333333"
+	)
+
+	pool := dbtest.Open(t)
+	codeSender := &recordingPasswordRegistrationCodeSender{}
+	router := passwordRegistrationTestRouter(pool, codeSender, verificationCodeSequence(t, code))
+
+	startResponse := performJSONRequest(
+		t,
+		router,
+		http.MethodPost,
+		"/registrations/password",
+		`{"email":"registration-repeated-confirmation@example.com","password":"senha-confirmacao-repetida"}`,
+	)
+	if startResponse.StatusCode != http.StatusAccepted {
+		body := readResponseBody(t, startResponse)
+		startResponse.Body.Close()
+		t.Fatalf("start status code = %d, want %d; body = %q", startResponse.StatusCode, http.StatusAccepted, body)
+	}
+
+	registrationCookie := requireCookie(t, startResponse.Cookies(), "password_registration")
+	startResponse.Body.Close()
+
+	firstConfirmation := performJSONRequestWithCookie(
+		t,
+		router,
+		http.MethodPost,
+		"/registrations/password/confirm",
+		`{"code":"333333"}`,
+		registrationCookie,
+	)
+	if firstConfirmation.StatusCode != http.StatusCreated {
+		body := readResponseBody(t, firstConfirmation)
+		firstConfirmation.Body.Close()
+		t.Fatalf("first confirmation status code = %d, want %d; body = %q", firstConfirmation.StatusCode, http.StatusCreated, body)
+	}
+	firstConfirmation.Body.Close()
+
+	secondConfirmation := performJSONRequestWithCookie(
+		t,
+		router,
+		http.MethodPost,
+		"/registrations/password/confirm",
+		`{"code":"333333"}`,
+		registrationCookie,
+	)
+	defer secondConfirmation.Body.Close()
+
+	if secondConfirmation.StatusCode != http.StatusConflict {
+		t.Fatalf("repeated confirmation status code = %d, want %d; body = %q", secondConfirmation.StatusCode, http.StatusConflict, readResponseBody(t, secondConfirmation))
+	}
+
+	clearedCookie := requireCookie(t, secondConfirmation.Cookies(), "password_registration")
+	if clearedCookie.Value != "" || clearedCookie.MaxAge != -1 {
+		t.Errorf("repeated confirmation did not clear registration cookie: value = %q, MaxAge = %d", clearedCookie.Value, clearedCookie.MaxAge)
+	}
+
+	var userCount, credentialCount int
+	if err := pool.QueryRow(
+		t.Context(),
+		`
+			SELECT COUNT(DISTINCT u.id), COUNT(pc.user_id)
+			FROM users AS u
+			LEFT JOIN password_credentials AS pc ON pc.user_id = u.id
+			WHERE u.email = $1
+		`,
+		email,
+	).Scan(&userCount, &credentialCount); err != nil {
+		t.Fatalf("count account rows after repeated confirmation: %v", err)
+	}
+
+	if userCount != 1 {
+		t.Errorf("stored users = %d, want 1", userCount)
+	}
+	if credentialCount != 1 {
+		t.Errorf("stored password credentials = %d, want 1", credentialCount)
+	}
+
+	var storedPasswordHash string
+	if err := pool.QueryRow(
+		t.Context(),
+		`
+			SELECT pc.password_hash
+			FROM users AS u
+			JOIN password_credentials AS pc ON pc.user_id = u.id
+			WHERE u.email = $1
+		`,
+		email,
+	).Scan(&storedPasswordHash); err != nil {
+		t.Fatalf("query password credential after repeated confirmation: %v", err)
+	}
+
+	passwordMatches, err := (argon2.Argon2id{}).Compare(password, storedPasswordHash)
+	if err != nil {
+		t.Fatalf("compare password after repeated confirmation: %v", err)
+	}
+	if !passwordMatches {
+		t.Error("repeated confirmation changed the original password credential")
+	}
+}
+
 func verificationCodeSequence(t *testing.T, codes ...string) services.VerificationCodeGenerator {
 	t.Helper()
 
