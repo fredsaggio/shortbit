@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -173,6 +174,155 @@ func TestPasswordRegistrationResendIntegration(t *testing.T) {
 	clearedCookie := requireCookie(t, confirmResponse.Cookies(), "password_registration")
 	if clearedCookie.Value != "" || clearedCookie.MaxAge != -1 {
 		t.Errorf("confirmation did not clear registration cookie: value = %q, MaxAge = %d", clearedCookie.Value, clearedCookie.MaxAge)
+	}
+}
+
+func TestConcurrentPasswordRegistrationConfirmationsForSameEmail(t *testing.T) {
+	const email = "registration-concurrency@example.com"
+
+	attempts := []struct {
+		password string
+		code     string
+		body     string
+	}{
+		{password: "senha-concorrente-um", code: "111111", body: `{"email":"registration-concurrency@example.com","password":"senha-concorrente-um"}`},
+		{password: "senha-concorrente-dois", code: "222222", body: `{"email":"registration-concurrency@example.com","password":"senha-concorrente-dois"}`},
+	}
+
+	pool := dbtest.Open(t)
+	codeSender := &recordingPasswordRegistrationCodeSender{}
+	codeGenerator := verificationCodeSequence(t, attempts[0].code, attempts[1].code)
+	router := passwordRegistrationTestRouter(pool, codeSender, codeGenerator)
+
+	cookies := make([]*http.Cookie, len(attempts))
+	for index, attempt := range attempts {
+		response := performJSONRequest(t, router, http.MethodPost, "/registrations/password", attempt.body)
+		if response.StatusCode != http.StatusAccepted {
+			body := readResponseBody(t, response)
+			response.Body.Close()
+			t.Fatalf("start attempt %d status code = %d, want %d; body = %q", index, response.StatusCode, http.StatusAccepted, body)
+		}
+
+		cookies[index] = requireCookie(t, response.Cookies(), "password_registration")
+		response.Body.Close()
+	}
+
+	if len(codeSender.sent) != 2 {
+		t.Fatalf("sent registration codes = %d, want 2", len(codeSender.sent))
+	}
+
+	type confirmationResult struct {
+		attemptIndex int
+		statusCode   int
+	}
+
+	start := make(chan struct{})
+	results := make(chan confirmationResult, len(attempts))
+	var waitGroup sync.WaitGroup
+
+	for index, attempt := range attempts {
+		waitGroup.Add(1)
+
+		go func() {
+			defer waitGroup.Done()
+			<-start
+
+			request := httptest.NewRequest(
+				http.MethodPost,
+				"/registrations/password/confirm",
+				strings.NewReader(`{"code":"`+attempt.code+`"}`),
+			)
+			request.Header.Set("Content-Type", "application/json")
+			request.AddCookie(cookies[index])
+
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, request)
+
+			results <- confirmationResult{attemptIndex: index, statusCode: response.Code}
+		}()
+	}
+
+	close(start)
+	waitGroup.Wait()
+	close(results)
+
+	winnerIndex := -1
+	createdCount := 0
+	conflictCount := 0
+
+	for result := range results {
+		switch result.statusCode {
+		case http.StatusCreated:
+			createdCount++
+			winnerIndex = result.attemptIndex
+		case http.StatusConflict:
+			conflictCount++
+		default:
+			t.Errorf("attempt %d confirmation status code = %d, want %d or %d", result.attemptIndex, result.statusCode, http.StatusCreated, http.StatusConflict)
+		}
+	}
+
+	if createdCount != 1 {
+		t.Errorf("created confirmations = %d, want 1", createdCount)
+	}
+	if conflictCount != 1 {
+		t.Errorf("conflicting confirmations = %d, want 1", conflictCount)
+	}
+	if winnerIndex == -1 {
+		t.Fatal("no registration attempt won the concurrent confirmation")
+	}
+
+	var userCount, credentialCount int
+	if err := pool.QueryRow(
+		t.Context(),
+		`
+			SELECT COUNT(DISTINCT u.id), COUNT(pc.user_id)
+			FROM users AS u
+			LEFT JOIN password_credentials AS pc ON pc.user_id = u.id
+			WHERE u.email = $1
+		`,
+		email,
+	).Scan(&userCount, &credentialCount); err != nil {
+		t.Fatalf("count account rows after concurrent confirmation: %v", err)
+	}
+
+	if userCount != 1 {
+		t.Errorf("stored users = %d, want 1", userCount)
+	}
+	if credentialCount != 1 {
+		t.Errorf("stored password credentials = %d, want 1", credentialCount)
+	}
+
+	var storedPasswordHash string
+	if err := pool.QueryRow(
+		t.Context(),
+		`
+			SELECT pc.password_hash
+			FROM users AS u
+			JOIN password_credentials AS pc ON pc.user_id = u.id
+			WHERE u.email = $1
+		`,
+		email,
+	).Scan(&storedPasswordHash); err != nil {
+		t.Fatalf("query winning password credential: %v", err)
+	}
+
+	passwordHasher := argon2.Argon2id{}
+	winnerMatches, err := passwordHasher.Compare(attempts[winnerIndex].password, storedPasswordHash)
+	if err != nil {
+		t.Fatalf("compare winning password: %v", err)
+	}
+	if !winnerMatches {
+		t.Error("stored credential does not match the winning attempt password")
+	}
+
+	loserIndex := 1 - winnerIndex
+	loserMatches, err := passwordHasher.Compare(attempts[loserIndex].password, storedPasswordHash)
+	if err != nil {
+		t.Fatalf("compare losing password: %v", err)
+	}
+	if loserMatches {
+		t.Error("losing attempt overwrote the winning password credential")
 	}
 }
 
