@@ -520,6 +520,87 @@ func TestUserRepositoryIntegration(t *testing.T) {
 		}
 	})
 
+	t.Run("deletes obsolete password registration attempts idempotently", func(t *testing.T) {
+		baseTime := time.Now().UTC().Truncate(time.Microsecond)
+
+		createAttempt := func(tokenSeed, email string, codeExpiresAt, attemptExpiresAt time.Time) []byte {
+			t.Helper()
+
+			tokenHash := sha256.Sum256([]byte(tokenSeed))
+			proofHash := sha256.Sum256([]byte(tokenSeed + "-proof"))
+			attempt := models.PasswordRegistrationAttempt{
+				TokenHash:             tokenHash[:],
+				Email:                 email,
+				PasswordHash:          "$argon2id$cleanup-registration-attempt-hash",
+				VerificationProofHash: proofHash[:],
+				LastCodeSentAt:        baseTime,
+				CodeExpiresAt:         codeExpiresAt,
+				AttemptExpiresAt:      attemptExpiresAt,
+			}
+
+			if err := repository.CreatePasswordRegistrationAttempt(t.Context(), attempt); err != nil {
+				t.Fatalf("CreatePasswordRegistrationAttempt() error = %v", err)
+			}
+
+			return tokenHash[:]
+		}
+
+		expiredTokenHash := createAttempt(
+			"cleanup-expired-registration-token",
+			"cleanup-expired-registration@example.com",
+			baseTime.Add(5*time.Second),
+			baseTime.Add(10*time.Second),
+		)
+		registeredEmailTokenHash := createAttempt(
+			"cleanup-registered-email-token",
+			"cleanup-registered-email@example.com",
+			baseTime.Add(10*time.Minute),
+			baseTime.Add(30*time.Minute),
+		)
+		activeTokenHash := createAttempt(
+			"cleanup-active-registration-token",
+			"cleanup-active-registration@example.com",
+			baseTime.Add(10*time.Minute),
+			baseTime.Add(30*time.Minute),
+		)
+
+		if _, err := pool.Exec(
+			t.Context(),
+			"INSERT INTO users(email, email_verified_at) VALUES ($1, $2)",
+			"cleanup-registered-email@example.com",
+			baseTime,
+		); err != nil {
+			t.Fatalf("insert user for registration cleanup: %v", err)
+		}
+
+		deleted, err := repository.DeleteObsoletePasswordRegistrationAttempts(t.Context(), baseTime.Add(20*time.Second))
+		if err != nil {
+			t.Fatalf("DeleteObsoletePasswordRegistrationAttempts() error = %v", err)
+		}
+		if deleted != 2 {
+			t.Errorf("DeleteObsoletePasswordRegistrationAttempts() deleted = %d, want 2", deleted)
+		}
+
+		for _, tokenHash := range [][]byte{expiredTokenHash, registeredEmailTokenHash} {
+			_, err := repository.FindPasswordRegistrationAttemptByTokenHash(t.Context(), tokenHash)
+			if !errors.Is(err, repositories.ErrRegistrationAttemptNotFound) {
+				t.Errorf("FindPasswordRegistrationAttemptByTokenHash() error = %v, want %v", err, repositories.ErrRegistrationAttemptNotFound)
+			}
+		}
+
+		if _, err := repository.FindPasswordRegistrationAttemptByTokenHash(t.Context(), activeTokenHash); err != nil {
+			t.Errorf("active registration attempt was deleted: %v", err)
+		}
+
+		deleted, err = repository.DeleteObsoletePasswordRegistrationAttempts(t.Context(), baseTime.Add(20*time.Second))
+		if err != nil {
+			t.Fatalf("second DeleteObsoletePasswordRegistrationAttempts() error = %v", err)
+		}
+		if deleted != 0 {
+			t.Errorf("second DeleteObsoletePasswordRegistrationAttempts() deleted = %d, want 0", deleted)
+		}
+	})
+
 	t.Run("returns false when user email does not exist", func(t *testing.T) {
 		exists, err := repository.UserExistsByEmail(t.Context(), "available@example.com")
 		if err != nil {

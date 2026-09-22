@@ -432,6 +432,30 @@ func (r *UserRepository) UpdatePasswordRegistrationCode(ctx context.Context, tok
 	return result.RowsAffected() == 1, nil
 }
 
+func (r *UserRepository) DeleteObsoletePasswordRegistrationAttempts(ctx context.Context, now time.Time) (int64, error) {
+	const q = `
+		DELETE FROM password_registration_attempts AS attempt
+		WHERE
+			attempt.attempt_expires_at <= @now
+			OR EXISTS (
+				SELECT 1
+				FROM users
+				WHERE users.email = attempt.email
+			)
+	`
+
+	args := pgx.StrictNamedArgs{
+		"now": now,
+	}
+
+	result, err := r.db.Exec(ctx, q, args)
+	if err != nil {
+		return 0, fmt.Errorf("delete obsolete password registration attempts: %w", err)
+	}
+
+	return result.RowsAffected(), nil
+}
+
 func isEmailConflict(err error) bool {
 	var pgErr *pgconn.PgError
 
