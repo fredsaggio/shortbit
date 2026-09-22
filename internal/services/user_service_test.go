@@ -10,7 +10,9 @@ import (
 	"uuid"
 
 	"github.com/fredsaggio/url-shortener/internal/models"
+	"github.com/fredsaggio/url-shortener/internal/repositories"
 	"github.com/fredsaggio/url-shortener/internal/services"
+	"github.com/fredsaggio/url-shortener/internal/sessiontoken"
 	"github.com/fredsaggio/url-shortener/internal/verificationcode"
 )
 
@@ -20,9 +22,12 @@ const (
 )
 
 type userRepositoryStub struct {
-	userExistsByEmailFunc                 func(context.Context, string) (bool, error)
-	createPasswordRegistrationAttemptFunc func(context.Context, models.PasswordRegistrationAttempt) error
-	findByIDFunc                          func(context.Context, uuid.UUID) (models.User, error)
+	userExistsByEmailFunc                          func(context.Context, string) (bool, error)
+	createPasswordRegistrationAttemptFunc          func(context.Context, models.PasswordRegistrationAttempt) error
+	findPasswordRegistrationAttemptByTokenHashFunc func(context.Context, []byte) (models.PasswordRegistrationAttempt, error)
+	recordPasswordRegistrationFailureFunc          func(context.Context, []byte, time.Time, time.Time, time.Time, int16) (int16, *time.Time, error)
+	createWithPasswordFunc                         func(context.Context, string, string) (models.User, error)
+	findByIDFunc                                   func(context.Context, uuid.UUID) (models.User, error)
 }
 
 func (s userRepositoryStub) UserExistsByEmail(ctx context.Context, email string) (bool, error) {
@@ -31,6 +36,18 @@ func (s userRepositoryStub) UserExistsByEmail(ctx context.Context, email string)
 
 func (s userRepositoryStub) CreatePasswordRegistrationAttempt(ctx context.Context, attempt models.PasswordRegistrationAttempt) error {
 	return s.createPasswordRegistrationAttemptFunc(ctx, attempt)
+}
+
+func (s userRepositoryStub) FindPasswordRegistrationAttemptByTokenHash(ctx context.Context, tokenHash []byte) (models.PasswordRegistrationAttempt, error) {
+	return s.findPasswordRegistrationAttemptByTokenHashFunc(ctx, tokenHash)
+}
+
+func (s userRepositoryStub) RecordPasswordRegistrationFailure(ctx context.Context, tokenHash []byte, now, retryAt, lockUntil time.Time, maxAttempts int16) (int16, *time.Time, error) {
+	return s.recordPasswordRegistrationFailureFunc(ctx, tokenHash, now, retryAt, lockUntil, maxAttempts)
+}
+
+func (s userRepositoryStub) CreateWithPassword(ctx context.Context, email, passwordHash string) (models.User, error) {
+	return s.createWithPasswordFunc(ctx, email, passwordHash)
 }
 
 func (s userRepositoryStub) FindByID(ctx context.Context, userID uuid.UUID) (models.User, error) {
@@ -261,6 +278,286 @@ func TestUserServiceStartPasswordRegistrationPropagatesCodeSenderError(t *testin
 	}
 }
 
+func TestUserServiceConfirmPasswordRegistration(t *testing.T) {
+	const (
+		token        = "registration-token"
+		code         = "123456"
+		email        = "user@example.com"
+		passwordHash = "$argon2id$confirmed-password-hash"
+	)
+
+	wantUser := models.User{
+		ID:              uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c318"),
+		Email:           email,
+		EmailVerifiedAt: time.Now().UTC(),
+		CreatedAt:       time.Now().UTC(),
+		UpdatedAt:       time.Now().UTC(),
+	}
+	attempt := validConfirmationAttempt(token, code)
+	attempt.Email = email
+	attempt.PasswordHash = passwordHash
+
+	type contextKey struct{}
+	ctx := context.WithValue(context.Background(), contextKey{}, "request-context")
+	repository := unexpectedUserRepository(t)
+	repository.findPasswordRegistrationAttemptByTokenHashFunc = func(gotCtx context.Context, gotTokenHash []byte) (models.PasswordRegistrationAttempt, error) {
+		if got := gotCtx.Value(contextKey{}); got != "request-context" {
+			t.Errorf("FindPasswordRegistrationAttemptByTokenHash() context value = %v, want %q", got, "request-context")
+		}
+		if wantTokenHash := sessiontoken.Hash(token); !bytes.Equal(gotTokenHash, wantTokenHash) {
+			t.Errorf("token hash = %x, want %x", gotTokenHash, wantTokenHash)
+		}
+		return attempt, nil
+	}
+	repository.createWithPasswordFunc = func(gotCtx context.Context, gotEmail, gotPasswordHash string) (models.User, error) {
+		if got := gotCtx.Value(contextKey{}); got != "request-context" {
+			t.Errorf("CreateWithPassword() context value = %v, want %q", got, "request-context")
+		}
+		if gotEmail != email {
+			t.Errorf("CreateWithPassword() email = %q, want %q", gotEmail, email)
+		}
+		if gotPasswordHash != passwordHash {
+			t.Errorf("CreateWithPassword() password hash = %q, want %q", gotPasswordHash, passwordHash)
+		}
+		return wantUser, nil
+	}
+
+	service := newUserService(repository, unexpectedPasswordHasher(t), nil, nil, nil)
+	user, err := service.ConfirmPasswordRegistration(ctx, token, code)
+	if err != nil {
+		t.Fatalf("ConfirmPasswordRegistration() error = %v", err)
+	}
+	if user != wantUser {
+		t.Errorf("ConfirmPasswordRegistration() user = %+v, want %+v", user, wantUser)
+	}
+}
+
+func TestUserServiceConfirmPasswordRegistrationRejectsUnavailableAttempt(t *testing.T) {
+	const token = "registration-token"
+
+	t.Run("empty token", func(t *testing.T) {
+		service := newUserService(unexpectedUserRepository(t), unexpectedPasswordHasher(t), nil, nil, nil)
+		_, err := service.ConfirmPasswordRegistration(context.Background(), "", "123456")
+		if !errors.Is(err, services.ErrRegistrationAttemptUnavailable) {
+			t.Fatalf("ConfirmPasswordRegistration() error = %v, want %v", err, services.ErrRegistrationAttemptUnavailable)
+		}
+	})
+
+	t.Run("unknown token", func(t *testing.T) {
+		repository := unexpectedUserRepository(t)
+		repository.findPasswordRegistrationAttemptByTokenHashFunc = func(context.Context, []byte) (models.PasswordRegistrationAttempt, error) {
+			return models.PasswordRegistrationAttempt{}, repositories.ErrRegistrationAttemptNotFound
+		}
+		service := newUserService(repository, unexpectedPasswordHasher(t), nil, nil, nil)
+
+		_, err := service.ConfirmPasswordRegistration(context.Background(), token, "123456")
+		if !errors.Is(err, services.ErrRegistrationAttemptUnavailable) {
+			t.Fatalf("ConfirmPasswordRegistration() error = %v, want %v", err, services.ErrRegistrationAttemptUnavailable)
+		}
+	})
+
+	t.Run("expired attempt", func(t *testing.T) {
+		attempt := validConfirmationAttempt(token, "123456")
+		attempt.AttemptExpiresAt = time.Now().UTC().Add(-time.Minute)
+		repository := unexpectedUserRepository(t)
+		repository.findPasswordRegistrationAttemptByTokenHashFunc = func(context.Context, []byte) (models.PasswordRegistrationAttempt, error) {
+			return attempt, nil
+		}
+		service := newUserService(repository, unexpectedPasswordHasher(t), nil, nil, nil)
+
+		_, err := service.ConfirmPasswordRegistration(context.Background(), token, "123456")
+		if !errors.Is(err, services.ErrRegistrationAttemptUnavailable) {
+			t.Fatalf("ConfirmPasswordRegistration() error = %v, want %v", err, services.ErrRegistrationAttemptUnavailable)
+		}
+	})
+}
+
+func TestUserServiceConfirmPasswordRegistrationRejectsLockedOrExpiredCode(t *testing.T) {
+	const (
+		token = "registration-token"
+		code  = "123456"
+	)
+
+	tests := []struct {
+		name    string
+		prepare func(*models.PasswordRegistrationAttempt)
+		wantErr error
+	}{
+		{
+			name: "active cooldown or lock",
+			prepare: func(attempt *models.PasswordRegistrationAttempt) {
+				lockedUntil := time.Now().UTC().Add(time.Minute)
+				attempt.LockedUntil = &lockedUntil
+			},
+			wantErr: services.ErrRegistrationAttemptLocked,
+		},
+		{
+			name: "expired verification code",
+			prepare: func(attempt *models.PasswordRegistrationAttempt) {
+				attempt.CodeExpiresAt = time.Now().UTC().Add(-time.Minute)
+			},
+			wantErr: services.ErrVerificationCodeExpired,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			attempt := validConfirmationAttempt(token, code)
+			tt.prepare(&attempt)
+			repository := unexpectedUserRepository(t)
+			repository.findPasswordRegistrationAttemptByTokenHashFunc = func(context.Context, []byte) (models.PasswordRegistrationAttempt, error) {
+				return attempt, nil
+			}
+			service := newUserService(repository, unexpectedPasswordHasher(t), nil, nil, nil)
+
+			_, err := service.ConfirmPasswordRegistration(context.Background(), token, code)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("ConfirmPasswordRegistration() error = %v, want %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestUserServiceConfirmPasswordRegistrationRecordsInvalidCode(t *testing.T) {
+	const (
+		token       = "registration-token"
+		correctCode = "123456"
+		wrongCode   = "654321"
+	)
+
+	attempt := validConfirmationAttempt(token, correctCode)
+	repository := unexpectedUserRepository(t)
+	repository.findPasswordRegistrationAttemptByTokenHashFunc = func(context.Context, []byte) (models.PasswordRegistrationAttempt, error) {
+		return attempt, nil
+	}
+	repository.recordPasswordRegistrationFailureFunc = func(_ context.Context, gotTokenHash []byte, now, retryAt, lockUntil time.Time, maxAttempts int16) (int16, *time.Time, error) {
+		if wantTokenHash := sessiontoken.Hash(token); !bytes.Equal(gotTokenHash, wantTokenHash) {
+			t.Errorf("token hash = %x, want %x", gotTokenHash, wantTokenHash)
+		}
+		if !retryAt.Equal(now.Add(30 * time.Second)) {
+			t.Errorf("retry at = %v, want %v", retryAt, now.Add(30*time.Second))
+		}
+		if !lockUntil.Equal(now.Add(5 * time.Minute)) {
+			t.Errorf("lock until = %v, want %v", lockUntil, now.Add(5*time.Minute))
+		}
+		if maxAttempts != 5 {
+			t.Errorf("max attempts = %d, want 5", maxAttempts)
+		}
+		return 1, &retryAt, nil
+	}
+
+	service := newUserService(repository, unexpectedPasswordHasher(t), nil, nil, nil)
+	_, err := service.ConfirmPasswordRegistration(context.Background(), token, wrongCode)
+	if !errors.Is(err, services.ErrVerificationCodeInvalid) {
+		t.Fatalf("ConfirmPasswordRegistration() error = %v, want %v", err, services.ErrVerificationCodeInvalid)
+	}
+}
+
+func TestUserServiceConfirmPasswordRegistrationLocksOnFifthInvalidCode(t *testing.T) {
+	const token = "registration-token"
+
+	repository := unexpectedUserRepository(t)
+	repository.findPasswordRegistrationAttemptByTokenHashFunc = func(context.Context, []byte) (models.PasswordRegistrationAttempt, error) {
+		return validConfirmationAttempt(token, "123456"), nil
+	}
+	repository.recordPasswordRegistrationFailureFunc = func(_ context.Context, _ []byte, _ time.Time, _ time.Time, lockUntil time.Time, _ int16) (int16, *time.Time, error) {
+		return 0, &lockUntil, nil
+	}
+
+	service := newUserService(repository, unexpectedPasswordHasher(t), nil, nil, nil)
+	_, err := service.ConfirmPasswordRegistration(context.Background(), token, "654321")
+	if !errors.Is(err, services.ErrRegistrationAttemptLocked) {
+		t.Fatalf("ConfirmPasswordRegistration() error = %v, want %v", err, services.ErrRegistrationAttemptLocked)
+	}
+}
+
+func TestUserServiceConfirmPasswordRegistrationPropagatesRepositoryErrors(t *testing.T) {
+	const (
+		token = "registration-token"
+		code  = "123456"
+	)
+
+	t.Run("find attempt", func(t *testing.T) {
+		wantErr := errors.New("database unavailable")
+		repository := unexpectedUserRepository(t)
+		repository.findPasswordRegistrationAttemptByTokenHashFunc = func(context.Context, []byte) (models.PasswordRegistrationAttempt, error) {
+			return models.PasswordRegistrationAttempt{}, wantErr
+		}
+		service := newUserService(repository, unexpectedPasswordHasher(t), nil, nil, nil)
+
+		_, err := service.ConfirmPasswordRegistration(context.Background(), token, code)
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("ConfirmPasswordRegistration() error = %v, want wrapped %v", err, wantErr)
+		}
+	})
+
+	t.Run("record invalid code", func(t *testing.T) {
+		wantErr := errors.New("database unavailable")
+		repository := unexpectedUserRepository(t)
+		repository.findPasswordRegistrationAttemptByTokenHashFunc = func(context.Context, []byte) (models.PasswordRegistrationAttempt, error) {
+			return validConfirmationAttempt(token, code), nil
+		}
+		repository.recordPasswordRegistrationFailureFunc = func(context.Context, []byte, time.Time, time.Time, time.Time, int16) (int16, *time.Time, error) {
+			return 0, nil, wantErr
+		}
+		service := newUserService(repository, unexpectedPasswordHasher(t), nil, nil, nil)
+
+		_, err := service.ConfirmPasswordRegistration(context.Background(), token, "654321")
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("ConfirmPasswordRegistration() error = %v, want wrapped %v", err, wantErr)
+		}
+	})
+
+	t.Run("attempt expires while recording invalid code", func(t *testing.T) {
+		repository := unexpectedUserRepository(t)
+		repository.findPasswordRegistrationAttemptByTokenHashFunc = func(context.Context, []byte) (models.PasswordRegistrationAttempt, error) {
+			return validConfirmationAttempt(token, code), nil
+		}
+		repository.recordPasswordRegistrationFailureFunc = func(context.Context, []byte, time.Time, time.Time, time.Time, int16) (int16, *time.Time, error) {
+			return 0, nil, repositories.ErrRegistrationAttemptNotFound
+		}
+		service := newUserService(repository, unexpectedPasswordHasher(t), nil, nil, nil)
+
+		_, err := service.ConfirmPasswordRegistration(context.Background(), token, "654321")
+		if !errors.Is(err, services.ErrRegistrationAttemptUnavailable) {
+			t.Fatalf("ConfirmPasswordRegistration() error = %v, want %v", err, services.ErrRegistrationAttemptUnavailable)
+		}
+	})
+
+	t.Run("create user", func(t *testing.T) {
+		wantErr := errors.New("database unavailable")
+		repository := unexpectedUserRepository(t)
+		repository.findPasswordRegistrationAttemptByTokenHashFunc = func(context.Context, []byte) (models.PasswordRegistrationAttempt, error) {
+			return validConfirmationAttempt(token, code), nil
+		}
+		repository.createWithPasswordFunc = func(context.Context, string, string) (models.User, error) {
+			return models.User{}, wantErr
+		}
+		service := newUserService(repository, unexpectedPasswordHasher(t), nil, nil, nil)
+
+		_, err := service.ConfirmPasswordRegistration(context.Background(), token, code)
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("ConfirmPasswordRegistration() error = %v, want wrapped %v", err, wantErr)
+		}
+	})
+
+	t.Run("email already created by concurrent attempt", func(t *testing.T) {
+		repository := unexpectedUserRepository(t)
+		repository.findPasswordRegistrationAttemptByTokenHashFunc = func(context.Context, []byte) (models.PasswordRegistrationAttempt, error) {
+			return validConfirmationAttempt(token, code), nil
+		}
+		repository.createWithPasswordFunc = func(context.Context, string, string) (models.User, error) {
+			return models.User{}, repositories.ErrEmailAlreadyExists
+		}
+		service := newUserService(repository, unexpectedPasswordHasher(t), nil, nil, nil)
+
+		_, err := service.ConfirmPasswordRegistration(context.Background(), token, code)
+		if !errors.Is(err, services.ErrEmailAlreadyExists) {
+			t.Fatalf("ConfirmPasswordRegistration() error = %v, want %v", err, services.ErrEmailAlreadyExists)
+		}
+	})
+}
+
 func TestUserServiceGetByID(t *testing.T) {
 	wantUserID := uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c317")
 	wantUser := models.User{
@@ -328,6 +625,20 @@ func successfulVerificationCodeGenerator() services.VerificationCodeGenerator {
 	return func() (string, error) { return "123456", nil }
 }
 
+func validConfirmationAttempt(token, code string) models.PasswordRegistrationAttempt {
+	now := time.Now().UTC()
+
+	return models.PasswordRegistrationAttempt{
+		TokenHash:             sessiontoken.Hash(token),
+		Email:                 "user@example.com",
+		PasswordHash:          "$argon2id$confirmation-test-hash",
+		VerificationProofHash: verificationcode.Proof(token, code),
+		LastCodeSentAt:        now,
+		CodeExpiresAt:         now.Add(10 * time.Minute),
+		AttemptExpiresAt:      now.Add(30 * time.Minute),
+	}
+}
+
 func unexpectedUserRepository(t *testing.T) userRepositoryStub {
 	t.Helper()
 	return userRepositoryStub{
@@ -338,6 +649,22 @@ func unexpectedUserRepository(t *testing.T) userRepositoryStub {
 		createPasswordRegistrationAttemptFunc: func(context.Context, models.PasswordRegistrationAttempt) error {
 			t.Fatal("CreatePasswordRegistrationAttempt() should not be called")
 			return nil
+		},
+		findPasswordRegistrationAttemptByTokenHashFunc: func(context.Context, []byte) (models.PasswordRegistrationAttempt, error) {
+			t.Fatal("FindPasswordRegistrationAttemptByTokenHash() should not be called")
+			return models.PasswordRegistrationAttempt{}, nil
+		},
+		recordPasswordRegistrationFailureFunc: func(context.Context, []byte, time.Time, time.Time, time.Time, int16) (int16, *time.Time, error) {
+			t.Fatal("RecordPasswordRegistrationFailure() should not be called")
+			return 0, nil, nil
+		},
+		createWithPasswordFunc: func(context.Context, string, string) (models.User, error) {
+			t.Fatal("CreateWithPassword() should not be called")
+			return models.User{}, nil
+		},
+		findByIDFunc: func(context.Context, uuid.UUID) (models.User, error) {
+			t.Fatal("FindByID() should not be called")
+			return models.User{}, nil
 		},
 	}
 }
