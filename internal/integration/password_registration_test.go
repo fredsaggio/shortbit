@@ -202,7 +202,8 @@ func passwordRegistrationTestRouter(pool *pgxpool.Pool, codeSender services.Pass
 		codeSender,
 		services.PasswordRegistrationConfig{CodeTTL: 10 * time.Minute, AttemptTTL: 30 * time.Minute},
 	)
-	userHandler := handlers.NewUserHandler(userService, false)
+	registrationEmailLimiter := middleware.NewRateLimiter(1_000, 100, 100, time.Minute)
+	userHandler := handlers.NewUserHandler(userService, registrationEmailLimiter, false)
 
 	sessionRepository := repositories.NewUserSessionRepository(pool)
 	authService := services.NewAuthService(userRepository, sessionRepository, passwordHasher, sessiontoken.Generate, 24*time.Hour)

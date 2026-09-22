@@ -7,6 +7,8 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
+	"strings"
 	"uuid"
 
 	"github.com/fredsaggio/url-shortener/internal/ctxval"
@@ -19,6 +21,10 @@ type UserService interface {
 	ConfirmPasswordRegistration(ctx context.Context, token, code string) (models.User, error)
 	GetByID(ctx context.Context, userID uuid.UUID) (models.User, error)
 	ResendPasswordRegistrationCode(ctx context.Context, token string) error
+}
+
+type RegistrationRateLimiter interface {
+	Allow(key string) (allowed bool, retryAfter int)
 }
 
 type startPasswordRegistrationRequest struct {
@@ -36,14 +42,16 @@ type userResponse struct {
 }
 
 type UserHandler struct {
-	userServ     UserService
-	cookieSecure bool
+	userServ         UserService
+	emailRateLimiter RegistrationRateLimiter
+	cookieSecure     bool
 }
 
-func NewUserHandler(userServ UserService, cookieSecure bool) *UserHandler {
+func NewUserHandler(userServ UserService, emailRateLimiter RegistrationRateLimiter, cookieSecure bool) *UserHandler {
 	return &UserHandler{
-		userServ:     userServ,
-		cookieSecure: cookieSecure,
+		userServ:         userServ,
+		emailRateLimiter: emailRateLimiter,
+		cookieSecure:     cookieSecure,
 	}
 }
 
@@ -61,6 +69,14 @@ func (h *UserHandler) StartPasswordRegistration(w http.ResponseWriter, r *http.R
 
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
 		http.Error(w, "corpo da requisição deve conter exatamente um objeto JSON", http.StatusBadRequest)
+		return
+	}
+
+	normalizedEmail := strings.ToLower(strings.TrimSpace(req.Email))
+	allowed, retryAfter := h.emailRateLimiter.Allow(normalizedEmail)
+	if !allowed {
+		w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
+		http.Error(w, "muitas solicitações para este email, tente novamente mais tarde", http.StatusTooManyRequests)
 		return
 	}
 

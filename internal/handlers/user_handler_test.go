@@ -24,6 +24,20 @@ type userServiceStub struct {
 	getByIDFunc                        func(context.Context, uuid.UUID) (models.User, error)
 }
 
+type allowAllRegistrationRateLimiterStub struct{}
+
+func (allowAllRegistrationRateLimiterStub) Allow(string) (bool, int) {
+	return true, 0
+}
+
+type registrationRateLimiterStub struct {
+	allowFunc func(string) (bool, int)
+}
+
+func (s registrationRateLimiterStub) Allow(key string) (bool, int) {
+	return s.allowFunc(key)
+}
+
 func (s userServiceStub) StartPasswordRegistration(ctx context.Context, email, password string) (services.PasswordRegistrationResult, error) {
 	return s.startPasswordRegistrationFunc(ctx, email, password)
 }
@@ -61,7 +75,7 @@ func TestUserHandlerStartPasswordRegistration(t *testing.T) {
 		return services.PasswordRegistrationResult{Token: token, ExpiresAt: expiresAt}, nil
 	}}
 
-	handler := handlers.NewUserHandler(service, true)
+	handler := handlers.NewUserHandler(service, allowAllRegistrationRateLimiterStub{}, true)
 	request := httptest.NewRequest(http.MethodPost, "/registrations/password", strings.NewReader(`{"email":"USER@example.com","password":"senha-segura"}`))
 	response := httptest.NewRecorder()
 	handler.StartPasswordRegistration(response, request)
@@ -111,7 +125,7 @@ func TestUserHandlerStartPasswordRegistrationHonorsInsecureCookieConfiguration(t
 	service := userServiceStub{startPasswordRegistrationFunc: func(context.Context, string, string) (services.PasswordRegistrationResult, error) {
 		return services.PasswordRegistrationResult{Token: "registration-token", ExpiresAt: time.Now().UTC().Add(30 * time.Minute)}, nil
 	}}
-	handler := handlers.NewUserHandler(service, false)
+	handler := handlers.NewUserHandler(service, allowAllRegistrationRateLimiterStub{}, false)
 	response := httptest.NewRecorder()
 	handler.StartPasswordRegistration(response, httptest.NewRequest(http.MethodPost, "/registrations/password", strings.NewReader(`{"email":"user@example.com","password":"senha-segura"}`)))
 
@@ -121,6 +135,40 @@ func TestUserHandlerStartPasswordRegistrationHonorsInsecureCookieConfiguration(t
 	}
 	if cookies[0].Secure {
 		t.Error("cookie Secure = true, want false")
+	}
+}
+
+func TestUserHandlerStartPasswordRegistrationRateLimitsNormalizedEmail(t *testing.T) {
+	const retryAfter = 37
+
+	service := userServiceStub{startPasswordRegistrationFunc: func(context.Context, string, string) (services.PasswordRegistrationResult, error) {
+		t.Fatal("StartPasswordRegistration() should not be called after rate limit")
+		return services.PasswordRegistrationResult{}, nil
+	}}
+
+	limiter := registrationRateLimiterStub{allowFunc: func(key string) (bool, int) {
+		if key != "user@example.com" {
+			t.Errorf("rate limit key = %q, want %q", key, "user@example.com")
+		}
+		return false, retryAfter
+	}}
+
+	handler := handlers.NewUserHandler(service, limiter, false)
+	request := httptest.NewRequest(http.MethodPost, "/registrations/password", strings.NewReader(`{"email":"  USER@Example.COM  ","password":"senha-segura"}`))
+	response := httptest.NewRecorder()
+	handler.StartPasswordRegistration(response, request)
+
+	if response.Code != http.StatusTooManyRequests {
+		t.Errorf("status code = %d, want %d", response.Code, http.StatusTooManyRequests)
+	}
+	if response.Header().Get("Retry-After") != "37" {
+		t.Errorf("Retry-After = %q, want %q", response.Header().Get("Retry-After"), "37")
+	}
+	if response.Body.String() != "muitas solicitações para este email, tente novamente mais tarde\n" {
+		t.Errorf("response body = %q", response.Body.String())
+	}
+	if len(response.Result().Cookies()) != 0 {
+		t.Error("rate-limited registration created a cookie")
 	}
 }
 
@@ -141,7 +189,7 @@ func TestUserHandlerStartPasswordRegistrationRejectsInvalidJSON(t *testing.T) {
 				t.Fatal("StartPasswordRegistration() should not be called")
 				return services.PasswordRegistrationResult{}, nil
 			}}
-			handler := handlers.NewUserHandler(service, false)
+			handler := handlers.NewUserHandler(service, allowAllRegistrationRateLimiterStub{}, false)
 			response := httptest.NewRecorder()
 			handler.StartPasswordRegistration(response, httptest.NewRequest(http.MethodPost, "/registrations/password", strings.NewReader(tt.body)))
 
@@ -175,7 +223,7 @@ func TestUserHandlerStartPasswordRegistrationMapsServiceErrors(t *testing.T) {
 			service := userServiceStub{startPasswordRegistrationFunc: func(context.Context, string, string) (services.PasswordRegistrationResult, error) {
 				return services.PasswordRegistrationResult{}, tt.serviceErr
 			}}
-			handler := handlers.NewUserHandler(service, false)
+			handler := handlers.NewUserHandler(service, allowAllRegistrationRateLimiterStub{}, false)
 			request := httptest.NewRequest(http.MethodPost, "/registrations/password", strings.NewReader(`{"email":"user@example.com","password":"senha-segura"}`))
 			response := httptest.NewRecorder()
 			handler.StartPasswordRegistration(response, request)
@@ -219,7 +267,7 @@ func TestUserHandlerConfirmPasswordRegistration(t *testing.T) {
 		return wantUser, nil
 	}}
 
-	handler := handlers.NewUserHandler(service, true)
+	handler := handlers.NewUserHandler(service, allowAllRegistrationRateLimiterStub{}, true)
 	request := httptest.NewRequest(http.MethodPost, "/registrations/password/confirm", strings.NewReader(`{"code":"123456"}`))
 	request.AddCookie(&http.Cookie{Name: "password_registration", Value: token, Path: "/registrations/password"})
 	response := httptest.NewRecorder()
@@ -273,7 +321,7 @@ func TestUserHandlerConfirmPasswordRegistrationRejectsInvalidJSON(t *testing.T) 
 				t.Fatal("ConfirmPasswordRegistration() should not be called")
 				return models.User{}, nil
 			}}
-			handler := handlers.NewUserHandler(service, false)
+			handler := handlers.NewUserHandler(service, allowAllRegistrationRateLimiterStub{}, false)
 			request := httptest.NewRequest(http.MethodPost, "/registrations/password/confirm", strings.NewReader(tt.body))
 			request.AddCookie(&http.Cookie{Name: "password_registration", Value: "registration-token"})
 			response := httptest.NewRecorder()
@@ -294,7 +342,7 @@ func TestUserHandlerConfirmPasswordRegistrationRejectsMissingCookie(t *testing.T
 		t.Fatal("ConfirmPasswordRegistration() should not be called")
 		return models.User{}, nil
 	}}
-	handler := handlers.NewUserHandler(service, false)
+	handler := handlers.NewUserHandler(service, allowAllRegistrationRateLimiterStub{}, false)
 	response := httptest.NewRecorder()
 	handler.ConfirmPasswordRegistration(response, httptest.NewRequest(http.MethodPost, "/registrations/password/confirm", strings.NewReader(`{"code":"123456"}`)))
 
@@ -334,7 +382,7 @@ func TestUserHandlerConfirmPasswordRegistrationMapsServiceErrors(t *testing.T) {
 			service := userServiceStub{confirmPasswordRegistrationFunc: func(context.Context, string, string) (models.User, error) {
 				return models.User{}, tt.serviceErr
 			}}
-			handler := handlers.NewUserHandler(service, false)
+			handler := handlers.NewUserHandler(service, allowAllRegistrationRateLimiterStub{}, false)
 			request := httptest.NewRequest(http.MethodPost, "/registrations/password/confirm", strings.NewReader(`{"code":"123456"}`))
 			request.AddCookie(&http.Cookie{Name: "password_registration", Value: "registration-token"})
 			response := httptest.NewRecorder()
@@ -379,7 +427,7 @@ func TestUserHandlerResendPasswordRegistrationCode(t *testing.T) {
 		return nil
 	}}
 
-	handler := handlers.NewUserHandler(service, false)
+	handler := handlers.NewUserHandler(service, allowAllRegistrationRateLimiterStub{}, false)
 	request := httptest.NewRequest(http.MethodPost, "/registrations/password/resend", nil).WithContext(ctx)
 	request.AddCookie(&http.Cookie{Name: "password_registration", Value: token, Path: "/registrations/password"})
 	response := httptest.NewRecorder()
@@ -406,7 +454,7 @@ func TestUserHandlerResendPasswordRegistrationCodeRejectsMissingCookie(t *testin
 		serviceCalled = true
 		return nil
 	}}
-	handler := handlers.NewUserHandler(service, true)
+	handler := handlers.NewUserHandler(service, allowAllRegistrationRateLimiterStub{}, true)
 	response := httptest.NewRecorder()
 
 	handler.ResendPasswordRegistrationCode(
@@ -477,7 +525,7 @@ func TestUserHandlerResendPasswordRegistrationCodeMapsServiceErrors(t *testing.T
 				}
 				return tt.serviceErr
 			}}
-			handler := handlers.NewUserHandler(service, false)
+			handler := handlers.NewUserHandler(service, allowAllRegistrationRateLimiterStub{}, false)
 			request := httptest.NewRequest(http.MethodPost, "/registrations/password/resend", nil)
 			request.AddCookie(&http.Cookie{Name: "password_registration", Value: token, Path: "/registrations/password"})
 			response := httptest.NewRecorder()
@@ -522,7 +570,7 @@ func TestUserHandlerGetUserInfo(t *testing.T) {
 		return wantUser, nil
 	}}
 
-	handler := handlers.NewUserHandler(service, false)
+	handler := handlers.NewUserHandler(service, allowAllRegistrationRateLimiterStub{}, false)
 	request := httptest.NewRequest(http.MethodGet, "/me", nil)
 	request = request.WithContext(ctxval.ContextWithUserID(request.Context(), wantUser.ID))
 	response := httptest.NewRecorder()
@@ -558,7 +606,7 @@ func TestUserHandlerGetUserInfoRejectsMissingUserID(t *testing.T) {
 		serviceCalled = true
 		return models.User{}, errors.New("unexpected GetByID call")
 	}}
-	handler := handlers.NewUserHandler(service, false)
+	handler := handlers.NewUserHandler(service, allowAllRegistrationRateLimiterStub{}, false)
 	response := httptest.NewRecorder()
 	handler.GetUserInfo(response, httptest.NewRequest(http.MethodGet, "/me", nil))
 
@@ -576,7 +624,7 @@ func TestUserHandlerGetUserInfoHandlesServiceError(t *testing.T) {
 	service := userServiceStub{getByIDFunc: func(context.Context, uuid.UUID) (models.User, error) {
 		return models.User{}, wantErr
 	}}
-	handler := handlers.NewUserHandler(service, false)
+	handler := handlers.NewUserHandler(service, allowAllRegistrationRateLimiterStub{}, false)
 	request := httptest.NewRequest(http.MethodGet, "/me", nil)
 	request = request.WithContext(ctxval.ContextWithUserID(request.Context(), userID))
 	response := httptest.NewRecorder()

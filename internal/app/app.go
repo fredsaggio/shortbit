@@ -24,6 +24,11 @@ const (
 	loginEmailRateLimitBurst             = 5
 	loginEmailRateLimitMaxEntries        = 10_000
 	loginEmailRateLimitStaleAfter        = 10 * time.Minute
+
+	registrationEmailRateLimitRequestsPerSecond = 3.0 / (10.0 * 60.0)
+	registrationEmailRateLimitBurst             = 3
+	registrationEmailRateLimitMaxEntries        = 10_000
+	registrationEmailRateLimitStaleAfter        = 30 * time.Minute
 )
 
 func CompositionRoot(pool db.DB, cfg config.Config) (*server.Handlers, *jobs.PasswordRegistrationCleanup) {
@@ -40,7 +45,8 @@ func CompositionRoot(pool db.DB, cfg config.Config) (*server.Handlers, *jobs.Pas
 		codeSender,
 		services.PasswordRegistrationConfig{CodeTTL: cfg.PasswordRegistration.CodeTTL, AttemptTTL: cfg.PasswordRegistration.AttemptTTL},
 	)
-	userHandler := handlers.NewUserHandler(userService, cfg.Session.CookieSecure)
+	registrationEmailRateLimiter := middleware.NewRateLimiter(registrationEmailRateLimitRequestsPerSecond, registrationEmailRateLimitBurst, registrationEmailRateLimitMaxEntries, registrationEmailRateLimitStaleAfter)
+	userHandler := handlers.NewUserHandler(userService, registrationEmailRateLimiter, cfg.Session.CookieSecure)
 
 	userSessionRepository := repositories.NewUserSessionRepository(pool)
 
