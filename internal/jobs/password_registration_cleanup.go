@@ -48,6 +48,6 @@ func (j *PasswordRegistrationCleanup) runOnce(ctx context.Context) {
 	}
 
 	if deleted > 0 {
-		slog.InfoContext(ctx, "obsolete password registration attempts deleted", "delete_count", deleted)
+		slog.InfoContext(ctx, "obsolete password registration attempts deleted", "deleted_count", deleted)
 	}
 }
