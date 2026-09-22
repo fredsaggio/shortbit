@@ -325,6 +325,201 @@ func TestUserRepositoryIntegration(t *testing.T) {
 		}
 	})
 
+	t.Run("updates password registration code after resend cooldown", func(t *testing.T) {
+		tokenHash := sha256.Sum256([]byte("registration-token-to-resend"))
+		originalProofHash := sha256.Sum256([]byte("original-registration-proof"))
+		newProofHash := sha256.Sum256([]byte("new-registration-proof"))
+		now := time.Now().UTC().Truncate(time.Microsecond)
+
+		attempt := models.PasswordRegistrationAttempt{
+			TokenHash:             tokenHash[:],
+			Email:                 "resend-registration-code@example.com",
+			PasswordHash:          "$argon2id$resend-registration-code-hash",
+			VerificationProofHash: originalProofHash[:],
+			LastCodeSentAt:        now.Add(-time.Minute),
+			CodeExpiresAt:         now.Add(5 * time.Minute),
+			AttemptExpiresAt:      now.Add(20 * time.Minute),
+		}
+
+		if err := repository.CreatePasswordRegistrationAttempt(t.Context(), attempt); err != nil {
+			t.Fatalf("CreatePasswordRegistrationAttempt() error = %v", err)
+		}
+
+		updated, err := repository.UpdatePasswordRegistrationCode(
+			t.Context(),
+			tokenHash[:],
+			newProofHash[:],
+			now,
+			now.Add(30*time.Minute),
+			now.Add(-30*time.Second),
+		)
+		if err != nil {
+			t.Fatalf("UpdatePasswordRegistrationCode() error = %v", err)
+		}
+		if !updated {
+			t.Fatal("UpdatePasswordRegistrationCode() updated = false, want true")
+		}
+
+		stored, err := repository.FindPasswordRegistrationAttemptByTokenHash(t.Context(), tokenHash[:])
+		if err != nil {
+			t.Fatalf("FindPasswordRegistrationAttemptByTokenHash() error = %v", err)
+		}
+
+		if !bytes.Equal(stored.VerificationProofHash, newProofHash[:]) {
+			t.Errorf("verification proof hash = %x, want %x", stored.VerificationProofHash, newProofHash)
+		}
+		if !stored.LastCodeSentAt.Equal(now) {
+			t.Errorf("last code sent at = %v, want %v", stored.LastCodeSentAt, now)
+		}
+		if !stored.CodeExpiresAt.Equal(attempt.AttemptExpiresAt) {
+			t.Errorf("code expires at = %v, want capped at %v", stored.CodeExpiresAt, attempt.AttemptExpiresAt)
+		}
+	})
+
+	t.Run("does not update password registration code when resend is unavailable", func(t *testing.T) {
+		tests := []struct {
+			name         string
+			tokenSeed    string
+			email        string
+			prepare      func(models.PasswordRegistrationAttempt)
+			operationNow func(models.PasswordRegistrationAttempt) time.Time
+		}{
+			{
+				name:      "cooldown has not elapsed",
+				tokenSeed: "registration-resend-cooldown",
+				email:     "registration-resend-cooldown@example.com",
+				operationNow: func(attempt models.PasswordRegistrationAttempt) time.Time {
+					return attempt.LastCodeSentAt.Add(10 * time.Second)
+				},
+			},
+			{
+				name:      "attempt is locked",
+				tokenSeed: "registration-resend-locked",
+				email:     "registration-resend-locked@example.com",
+				prepare: func(attempt models.PasswordRegistrationAttempt) {
+					lockedUntil := attempt.LastCodeSentAt.Add(10 * time.Minute)
+					if _, err := pool.Exec(
+						t.Context(),
+						"UPDATE password_registration_attempts SET locked_until = $1 WHERE token_hash = $2",
+						lockedUntil,
+						attempt.TokenHash,
+					); err != nil {
+						t.Fatalf("lock password registration attempt: %v", err)
+					}
+				},
+				operationNow: func(attempt models.PasswordRegistrationAttempt) time.Time {
+					return attempt.LastCodeSentAt.Add(time.Minute)
+				},
+			},
+			{
+				name:      "attempt has expired",
+				tokenSeed: "registration-resend-expired",
+				email:     "registration-resend-expired@example.com",
+				operationNow: func(attempt models.PasswordRegistrationAttempt) time.Time {
+					return attempt.AttemptExpiresAt.Add(time.Second)
+				},
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				tokenHash := sha256.Sum256([]byte(tt.tokenSeed))
+				originalProofHash := sha256.Sum256([]byte(tt.tokenSeed + "-original-proof"))
+				newProofHash := sha256.Sum256([]byte(tt.tokenSeed + "-new-proof"))
+				baseTime := time.Now().UTC().Truncate(time.Microsecond)
+
+				attempt := models.PasswordRegistrationAttempt{
+					TokenHash:             tokenHash[:],
+					Email:                 tt.email,
+					PasswordHash:          "$argon2id$registration-resend-unavailable-hash",
+					VerificationProofHash: originalProofHash[:],
+					LastCodeSentAt:        baseTime,
+					CodeExpiresAt:         baseTime.Add(10 * time.Minute),
+					AttemptExpiresAt:      baseTime.Add(30 * time.Minute),
+				}
+
+				if err := repository.CreatePasswordRegistrationAttempt(t.Context(), attempt); err != nil {
+					t.Fatalf("CreatePasswordRegistrationAttempt() error = %v", err)
+				}
+
+				if tt.prepare != nil {
+					tt.prepare(attempt)
+				}
+
+				now := tt.operationNow(attempt)
+				updated, err := repository.UpdatePasswordRegistrationCode(
+					t.Context(),
+					tokenHash[:],
+					newProofHash[:],
+					now,
+					now.Add(10*time.Minute),
+					now.Add(-30*time.Second),
+				)
+				if err != nil {
+					t.Fatalf("UpdatePasswordRegistrationCode() error = %v", err)
+				}
+				if updated {
+					t.Fatal("UpdatePasswordRegistrationCode() updated = true, want false")
+				}
+
+				stored, err := repository.FindPasswordRegistrationAttemptByTokenHash(t.Context(), tokenHash[:])
+				if err != nil {
+					t.Fatalf("FindPasswordRegistrationAttemptByTokenHash() error = %v", err)
+				}
+				if !bytes.Equal(stored.VerificationProofHash, originalProofHash[:]) {
+					t.Errorf("verification proof hash changed to %x, want %x", stored.VerificationProofHash, originalProofHash)
+				}
+			})
+		}
+	})
+
+	t.Run("only updates password registration code once during the same cooldown window", func(t *testing.T) {
+		tokenHash := sha256.Sum256([]byte("registration-resend-repeated"))
+		originalProofHash := sha256.Sum256([]byte("registration-resend-repeated-original-proof"))
+		firstProofHash := sha256.Sum256([]byte("registration-resend-repeated-first-proof"))
+		secondProofHash := sha256.Sum256([]byte("registration-resend-repeated-second-proof"))
+		now := time.Now().UTC().Truncate(time.Microsecond)
+
+		attempt := models.PasswordRegistrationAttempt{
+			TokenHash:             tokenHash[:],
+			Email:                 "registration-resend-repeated@example.com",
+			PasswordHash:          "$argon2id$registration-resend-repeated-hash",
+			VerificationProofHash: originalProofHash[:],
+			LastCodeSentAt:        now.Add(-time.Minute),
+			CodeExpiresAt:         now.Add(10 * time.Minute),
+			AttemptExpiresAt:      now.Add(30 * time.Minute),
+		}
+
+		if err := repository.CreatePasswordRegistrationAttempt(t.Context(), attempt); err != nil {
+			t.Fatalf("CreatePasswordRegistrationAttempt() error = %v", err)
+		}
+
+		resendAllowedBefore := now.Add(-30 * time.Second)
+		firstUpdated, err := repository.UpdatePasswordRegistrationCode(t.Context(), tokenHash[:], firstProofHash[:], now, now.Add(10*time.Minute), resendAllowedBefore)
+		if err != nil {
+			t.Fatalf("first UpdatePasswordRegistrationCode() error = %v", err)
+		}
+		if !firstUpdated {
+			t.Fatal("first UpdatePasswordRegistrationCode() updated = false, want true")
+		}
+
+		secondUpdated, err := repository.UpdatePasswordRegistrationCode(t.Context(), tokenHash[:], secondProofHash[:], now, now.Add(10*time.Minute), resendAllowedBefore)
+		if err != nil {
+			t.Fatalf("second UpdatePasswordRegistrationCode() error = %v", err)
+		}
+		if secondUpdated {
+			t.Fatal("second UpdatePasswordRegistrationCode() updated = true, want false")
+		}
+
+		stored, err := repository.FindPasswordRegistrationAttemptByTokenHash(t.Context(), tokenHash[:])
+		if err != nil {
+			t.Fatalf("FindPasswordRegistrationAttemptByTokenHash() error = %v", err)
+		}
+		if !bytes.Equal(stored.VerificationProofHash, firstProofHash[:]) {
+			t.Errorf("verification proof hash = %x, want first proof %x", stored.VerificationProofHash, firstProofHash)
+		}
+	})
+
 	t.Run("returns false when user email does not exist", func(t *testing.T) {
 		exists, err := repository.UserExistsByEmail(t.Context(), "available@example.com")
 		if err != nil {

@@ -24,6 +24,7 @@ const (
 	maxRegistrationFailedAttempts   int16 = 5
 	registrationFailureCooldown           = 30 * time.Second
 	registrationFailureLockDuration       = 5 * time.Minute
+	registrationCodeResendCooldown        = 30 * time.Second
 )
 
 var (

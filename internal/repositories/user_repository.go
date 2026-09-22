@@ -401,6 +401,37 @@ func (r *UserRepository) RecordPasswordRegistrationFailure(ctx context.Context, 
 	return failedAttempts, lockedUntil, nil
 }
 
+func (r *UserRepository) UpdatePasswordRegistrationCode(ctx context.Context, tokenHash, proofHash []byte, now, codeExpiresAt, resendAllowedBefore time.Time) (bool, error) {
+	const q = `
+		UPDATE password_registration_attempts
+		SET
+			verification_proof_hash = @proofHash,
+			last_code_sent_at = @now,
+			code_expires_at = LEAST(@codeExpiresAt, attempt_expires_at)
+		WHERE 
+			token_hash = @tokenHash
+			AND attempt_expires_at > @now
+			AND (locked_until IS NULL OR locked_until <= @now)
+			AND last_code_sent_at <= @resendAllowedBefore
+	`
+
+	args := pgx.StrictNamedArgs{
+		"tokenHash":           tokenHash,
+		"proofHash":           proofHash,
+		"now":                 now,
+		"codeExpiresAt":       codeExpiresAt,
+		"resendAllowedBefore": resendAllowedBefore,
+	}
+
+	result, err := r.db.Exec(ctx, q, args)
+
+	if err != nil {
+		return false, fmt.Errorf("update password registration code: %w", err)
+	}
+
+	return result.RowsAffected() == 1, nil
+}
+
 func isEmailConflict(err error) bool {
 	var pgErr *pgconn.PgError
 
