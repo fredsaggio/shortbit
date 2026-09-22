@@ -24,6 +24,7 @@ const (
 type userRepositoryStub struct {
 	userExistsByEmailFunc                          func(context.Context, string) (bool, error)
 	createPasswordRegistrationAttemptFunc          func(context.Context, models.PasswordRegistrationAttempt) error
+	updatePasswordRegistrationCodeFunc             func(context.Context, []byte, []byte, time.Time, time.Time, time.Time) (bool, error)
 	findPasswordRegistrationAttemptByTokenHashFunc func(context.Context, []byte) (models.PasswordRegistrationAttempt, error)
 	recordPasswordRegistrationFailureFunc          func(context.Context, []byte, time.Time, time.Time, time.Time, int16) (int16, *time.Time, error)
 	createWithPasswordFunc                         func(context.Context, string, string) (models.User, error)
@@ -36,6 +37,10 @@ func (s userRepositoryStub) UserExistsByEmail(ctx context.Context, email string)
 
 func (s userRepositoryStub) CreatePasswordRegistrationAttempt(ctx context.Context, attempt models.PasswordRegistrationAttempt) error {
 	return s.createPasswordRegistrationAttemptFunc(ctx, attempt)
+}
+
+func (s userRepositoryStub) UpdatePasswordRegistrationCode(ctx context.Context, tokenHash, proofHash []byte, now, codeExpiresAt, resendAllowedBefore time.Time) (bool, error) {
+	return s.updatePasswordRegistrationCodeFunc(ctx, tokenHash, proofHash, now, codeExpiresAt, resendAllowedBefore)
 }
 
 func (s userRepositoryStub) FindPasswordRegistrationAttemptByTokenHash(ctx context.Context, tokenHash []byte) (models.PasswordRegistrationAttempt, error) {
@@ -558,6 +563,272 @@ func TestUserServiceConfirmPasswordRegistrationPropagatesRepositoryErrors(t *tes
 	})
 }
 
+func TestUserServiceResendPasswordRegistrationCode(t *testing.T) {
+	const (
+		token       = "registration-token"
+		newCode     = "654321"
+		email       = "user@example.com"
+		contextData = "request-context"
+	)
+
+	attempt := validConfirmationAttempt(token, "123456")
+	attempt.Email = email
+	attempt.LastCodeSentAt = time.Now().UTC().Add(-time.Minute)
+
+	type contextKey struct{}
+	ctx := context.WithValue(context.Background(), contextKey{}, contextData)
+	updateCalled := false
+
+	repository := unexpectedUserRepository(t)
+	repository.findPasswordRegistrationAttemptByTokenHashFunc = func(gotCtx context.Context, gotTokenHash []byte) (models.PasswordRegistrationAttempt, error) {
+		if got := gotCtx.Value(contextKey{}); got != contextData {
+			t.Errorf("FindPasswordRegistrationAttemptByTokenHash() context value = %v, want %q", got, contextData)
+		}
+		if wantTokenHash := sessiontoken.Hash(token); !bytes.Equal(gotTokenHash, wantTokenHash) {
+			t.Errorf("token hash = %x, want %x", gotTokenHash, wantTokenHash)
+		}
+		return attempt, nil
+	}
+	repository.updatePasswordRegistrationCodeFunc = func(gotCtx context.Context, gotTokenHash, gotProofHash []byte, now, codeExpiresAt, resendAllowedBefore time.Time) (bool, error) {
+		updateCalled = true
+		if got := gotCtx.Value(contextKey{}); got != contextData {
+			t.Errorf("UpdatePasswordRegistrationCode() context value = %v, want %q", got, contextData)
+		}
+		if wantTokenHash := sessiontoken.Hash(token); !bytes.Equal(gotTokenHash, wantTokenHash) {
+			t.Errorf("token hash = %x, want %x", gotTokenHash, wantTokenHash)
+		}
+		if wantProofHash := verificationcode.Proof(token, newCode); !bytes.Equal(gotProofHash, wantProofHash) {
+			t.Errorf("proof hash = %x, want %x", gotProofHash, wantProofHash)
+		}
+		if !codeExpiresAt.Equal(now.Add(testCodeTTL)) {
+			t.Errorf("code expires at = %v, want %v", codeExpiresAt, now.Add(testCodeTTL))
+		}
+		if !resendAllowedBefore.Equal(now.Add(-30 * time.Second)) {
+			t.Errorf("resend allowed before = %v, want %v", resendAllowedBefore, now.Add(-30*time.Second))
+		}
+		return true, nil
+	}
+
+	codeSender := passwordRegistrationCodeSenderStub{sendFunc: func(gotCtx context.Context, gotEmail, gotCode string) error {
+		if !updateCalled {
+			t.Error("SendPasswordRegistrationCode() called before UpdatePasswordRegistrationCode()")
+		}
+		if got := gotCtx.Value(contextKey{}); got != contextData {
+			t.Errorf("SendPasswordRegistrationCode() context value = %v, want %q", got, contextData)
+		}
+		if gotEmail != email {
+			t.Errorf("email = %q, want %q", gotEmail, email)
+		}
+		if gotCode != newCode {
+			t.Errorf("code = %q, want %q", gotCode, newCode)
+		}
+		return nil
+	}}
+
+	service := newUserService(repository, unexpectedPasswordHasher(t), nil, func() (string, error) { return newCode, nil }, codeSender)
+	if err := service.ResendPasswordRegistrationCode(ctx, token); err != nil {
+		t.Fatalf("ResendPasswordRegistrationCode() error = %v", err)
+	}
+}
+
+func TestUserServiceResendPasswordRegistrationCodeRejectsUnavailableAttempt(t *testing.T) {
+	const token = "registration-token"
+
+	t.Run("empty token", func(t *testing.T) {
+		service := newUserService(unexpectedUserRepository(t), unexpectedPasswordHasher(t), nil, unexpectedVerificationCodeGenerator(t), unexpectedCodeSender(t))
+
+		err := service.ResendPasswordRegistrationCode(context.Background(), "")
+		if !errors.Is(err, services.ErrRegistrationAttemptUnavailable) {
+			t.Fatalf("ResendPasswordRegistrationCode() error = %v, want %v", err, services.ErrRegistrationAttemptUnavailable)
+		}
+	})
+
+	t.Run("unknown token", func(t *testing.T) {
+		repository := unexpectedUserRepository(t)
+		repository.findPasswordRegistrationAttemptByTokenHashFunc = func(context.Context, []byte) (models.PasswordRegistrationAttempt, error) {
+			return models.PasswordRegistrationAttempt{}, repositories.ErrRegistrationAttemptNotFound
+		}
+		service := newUserService(repository, unexpectedPasswordHasher(t), nil, unexpectedVerificationCodeGenerator(t), unexpectedCodeSender(t))
+
+		err := service.ResendPasswordRegistrationCode(context.Background(), token)
+		if !errors.Is(err, services.ErrRegistrationAttemptUnavailable) {
+			t.Fatalf("ResendPasswordRegistrationCode() error = %v, want %v", err, services.ErrRegistrationAttemptUnavailable)
+		}
+	})
+
+	t.Run("expired attempt", func(t *testing.T) {
+		attempt := validConfirmationAttempt(token, "123456")
+		attempt.AttemptExpiresAt = time.Now().UTC().Add(-time.Minute)
+		repository := unexpectedUserRepository(t)
+		repository.findPasswordRegistrationAttemptByTokenHashFunc = func(context.Context, []byte) (models.PasswordRegistrationAttempt, error) {
+			return attempt, nil
+		}
+		service := newUserService(repository, unexpectedPasswordHasher(t), nil, unexpectedVerificationCodeGenerator(t), unexpectedCodeSender(t))
+
+		err := service.ResendPasswordRegistrationCode(context.Background(), token)
+		if !errors.Is(err, services.ErrRegistrationAttemptUnavailable) {
+			t.Fatalf("ResendPasswordRegistrationCode() error = %v, want %v", err, services.ErrRegistrationAttemptUnavailable)
+		}
+	})
+}
+
+func TestUserServiceResendPasswordRegistrationCodeRejectsLockAndCooldown(t *testing.T) {
+	const token = "registration-token"
+
+	tests := []struct {
+		name    string
+		prepare func(*models.PasswordRegistrationAttempt)
+		wantErr error
+	}{
+		{
+			name: "locked attempt",
+			prepare: func(attempt *models.PasswordRegistrationAttempt) {
+				lockedUntil := time.Now().UTC().Add(time.Minute)
+				attempt.LockedUntil = &lockedUntil
+			},
+			wantErr: services.ErrRegistrationAttemptLocked,
+		},
+		{
+			name: "resend cooldown has not elapsed",
+			prepare: func(attempt *models.PasswordRegistrationAttempt) {
+				attempt.LastCodeSentAt = time.Now().UTC().Add(-10 * time.Second)
+			},
+			wantErr: services.ErrRegistrationCodeResendTooSoon,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			attempt := validConfirmationAttempt(token, "123456")
+			tt.prepare(&attempt)
+			repository := unexpectedUserRepository(t)
+			repository.findPasswordRegistrationAttemptByTokenHashFunc = func(context.Context, []byte) (models.PasswordRegistrationAttempt, error) {
+				return attempt, nil
+			}
+			service := newUserService(repository, unexpectedPasswordHasher(t), nil, unexpectedVerificationCodeGenerator(t), unexpectedCodeSender(t))
+
+			err := service.ResendPasswordRegistrationCode(context.Background(), token)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("ResendPasswordRegistrationCode() error = %v, want %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestUserServiceResendPasswordRegistrationCodeCapsCodeExpiration(t *testing.T) {
+	const token = "registration-token"
+	attempt := validConfirmationAttempt(token, "123456")
+	attempt.LastCodeSentAt = time.Now().UTC().Add(-time.Minute)
+	attempt.AttemptExpiresAt = time.Now().UTC().Add(time.Minute)
+
+	repository := unexpectedUserRepository(t)
+	repository.findPasswordRegistrationAttemptByTokenHashFunc = func(context.Context, []byte) (models.PasswordRegistrationAttempt, error) {
+		return attempt, nil
+	}
+	repository.updatePasswordRegistrationCodeFunc = func(_ context.Context, _, _ []byte, _ time.Time, codeExpiresAt, _ time.Time) (bool, error) {
+		if !codeExpiresAt.Equal(attempt.AttemptExpiresAt) {
+			t.Errorf("code expires at = %v, want capped at %v", codeExpiresAt, attempt.AttemptExpiresAt)
+		}
+		return true, nil
+	}
+	codeSender := passwordRegistrationCodeSenderStub{sendFunc: func(context.Context, string, string) error { return nil }}
+	service := newUserService(repository, unexpectedPasswordHasher(t), nil, successfulVerificationCodeGenerator(), codeSender)
+
+	if err := service.ResendPasswordRegistrationCode(context.Background(), token); err != nil {
+		t.Fatalf("ResendPasswordRegistrationCode() error = %v", err)
+	}
+}
+
+func TestUserServiceResendPasswordRegistrationCodePropagatesErrors(t *testing.T) {
+	const token = "registration-token"
+
+	validAttempt := func() models.PasswordRegistrationAttempt {
+		attempt := validConfirmationAttempt(token, "123456")
+		attempt.LastCodeSentAt = time.Now().UTC().Add(-time.Minute)
+		return attempt
+	}
+
+	t.Run("find attempt", func(t *testing.T) {
+		wantErr := errors.New("database unavailable")
+		repository := unexpectedUserRepository(t)
+		repository.findPasswordRegistrationAttemptByTokenHashFunc = func(context.Context, []byte) (models.PasswordRegistrationAttempt, error) {
+			return models.PasswordRegistrationAttempt{}, wantErr
+		}
+		service := newUserService(repository, unexpectedPasswordHasher(t), nil, unexpectedVerificationCodeGenerator(t), unexpectedCodeSender(t))
+
+		err := service.ResendPasswordRegistrationCode(context.Background(), token)
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("ResendPasswordRegistrationCode() error = %v, want wrapped %v", err, wantErr)
+		}
+	})
+
+	t.Run("generate code", func(t *testing.T) {
+		wantErr := errors.New("random source unavailable")
+		repository := unexpectedUserRepository(t)
+		repository.findPasswordRegistrationAttemptByTokenHashFunc = func(context.Context, []byte) (models.PasswordRegistrationAttempt, error) {
+			return validAttempt(), nil
+		}
+		generator := func() (string, error) { return "", wantErr }
+		service := newUserService(repository, unexpectedPasswordHasher(t), nil, generator, unexpectedCodeSender(t))
+
+		err := service.ResendPasswordRegistrationCode(context.Background(), token)
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("ResendPasswordRegistrationCode() error = %v, want wrapped %v", err, wantErr)
+		}
+	})
+
+	t.Run("update attempt", func(t *testing.T) {
+		wantErr := errors.New("database unavailable")
+		repository := unexpectedUserRepository(t)
+		repository.findPasswordRegistrationAttemptByTokenHashFunc = func(context.Context, []byte) (models.PasswordRegistrationAttempt, error) {
+			return validAttempt(), nil
+		}
+		repository.updatePasswordRegistrationCodeFunc = func(context.Context, []byte, []byte, time.Time, time.Time, time.Time) (bool, error) {
+			return false, wantErr
+		}
+		service := newUserService(repository, unexpectedPasswordHasher(t), nil, successfulVerificationCodeGenerator(), unexpectedCodeSender(t))
+
+		err := service.ResendPasswordRegistrationCode(context.Background(), token)
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("ResendPasswordRegistrationCode() error = %v, want wrapped %v", err, wantErr)
+		}
+	})
+
+	t.Run("concurrent resend wins", func(t *testing.T) {
+		repository := unexpectedUserRepository(t)
+		repository.findPasswordRegistrationAttemptByTokenHashFunc = func(context.Context, []byte) (models.PasswordRegistrationAttempt, error) {
+			return validAttempt(), nil
+		}
+		repository.updatePasswordRegistrationCodeFunc = func(context.Context, []byte, []byte, time.Time, time.Time, time.Time) (bool, error) {
+			return false, nil
+		}
+		service := newUserService(repository, unexpectedPasswordHasher(t), nil, successfulVerificationCodeGenerator(), unexpectedCodeSender(t))
+
+		err := service.ResendPasswordRegistrationCode(context.Background(), token)
+		if !errors.Is(err, services.ErrRegistrationCodeResendTooSoon) {
+			t.Fatalf("ResendPasswordRegistrationCode() error = %v, want %v", err, services.ErrRegistrationCodeResendTooSoon)
+		}
+	})
+
+	t.Run("send code", func(t *testing.T) {
+		wantErr := errors.New("email provider unavailable")
+		repository := unexpectedUserRepository(t)
+		repository.findPasswordRegistrationAttemptByTokenHashFunc = func(context.Context, []byte) (models.PasswordRegistrationAttempt, error) {
+			return validAttempt(), nil
+		}
+		repository.updatePasswordRegistrationCodeFunc = func(context.Context, []byte, []byte, time.Time, time.Time, time.Time) (bool, error) {
+			return true, nil
+		}
+		codeSender := passwordRegistrationCodeSenderStub{sendFunc: func(context.Context, string, string) error { return wantErr }}
+		service := newUserService(repository, unexpectedPasswordHasher(t), nil, successfulVerificationCodeGenerator(), codeSender)
+
+		err := service.ResendPasswordRegistrationCode(context.Background(), token)
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("ResendPasswordRegistrationCode() error = %v, want wrapped %v", err, wantErr)
+		}
+	})
+}
+
 func TestUserServiceGetByID(t *testing.T) {
 	wantUserID := uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c317")
 	wantUser := models.User{
@@ -649,6 +920,10 @@ func unexpectedUserRepository(t *testing.T) userRepositoryStub {
 		createPasswordRegistrationAttemptFunc: func(context.Context, models.PasswordRegistrationAttempt) error {
 			t.Fatal("CreatePasswordRegistrationAttempt() should not be called")
 			return nil
+		},
+		updatePasswordRegistrationCodeFunc: func(context.Context, []byte, []byte, time.Time, time.Time, time.Time) (bool, error) {
+			t.Fatal("UpdatePasswordRegistrationCode() should not be called")
+			return false, nil
 		},
 		findPasswordRegistrationAttemptByTokenHashFunc: func(context.Context, []byte) (models.PasswordRegistrationAttempt, error) {
 			t.Fatal("FindPasswordRegistrationAttemptByTokenHash() should not be called")

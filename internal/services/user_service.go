@@ -37,11 +37,13 @@ var (
 	ErrRegistrationAttemptLocked      = errors.New("registration attempt is locked")
 	ErrVerificationCodeExpired        = errors.New("verification code is expired")
 	ErrVerificationCodeInvalid        = errors.New("verification code is invalid")
+	ErrRegistrationCodeResendTooSoon  = errors.New("registration code resend is too soon")
 )
 
 type UserRepository interface {
 	UserExistsByEmail(ctx context.Context, email string) (bool, error)
 	CreatePasswordRegistrationAttempt(ctx context.Context, attempt models.PasswordRegistrationAttempt) error
+	UpdatePasswordRegistrationCode(ctx context.Context, tokenHash, proofHash []byte, now, codeExpiresAt, resendAllowedBefore time.Time) (bool, error)
 	FindPasswordRegistrationAttemptByTokenHash(ctx context.Context, tokenHash []byte) (models.PasswordRegistrationAttempt, error)
 	CreateWithPassword(ctx context.Context, email, passwordHash string) (models.User, error)
 	RecordPasswordRegistrationFailure(ctx context.Context, tokenHash []byte, now, retryAt, lockUntil time.Time, maxAttempts int16) (int16,
@@ -226,6 +228,68 @@ func (s *UserService) ConfirmPasswordRegistration(ctx context.Context, token, co
 	}
 
 	return user, nil
+}
+
+func (s *UserService) ResendPasswordRegistrationCode(ctx context.Context, token string) error {
+	if token == "" {
+		return ErrRegistrationAttemptUnavailable
+	}
+
+	tokenHash := sessiontoken.Hash(token)
+
+	attempt, err := s.userRepo.FindPasswordRegistrationAttemptByTokenHash(ctx, tokenHash)
+	if err != nil {
+		if errors.Is(err, repositories.ErrRegistrationAttemptNotFound) {
+			return ErrRegistrationAttemptUnavailable
+		}
+		return fmt.Errorf("find password registration attempt for resend: %w", err)
+	}
+
+	now := time.Now().UTC()
+
+	if !attempt.AttemptExpiresAt.After(now) {
+		return ErrRegistrationAttemptUnavailable
+	}
+
+	if attempt.LockedUntil != nil && attempt.LockedUntil.After(now) {
+		return ErrRegistrationAttemptLocked
+	}
+
+	nextResendAt := attempt.LastCodeSentAt.Add(registrationCodeResendCooldown)
+	if nextResendAt.After(now) {
+		return ErrRegistrationCodeResendTooSoon
+	}
+
+	code, err := s.generateVerificationCode()
+
+	if err != nil {
+		return fmt.Errorf("generate password registration resend code: %w", err)
+	}
+
+	proofHash := verificationcode.Proof(token, code)
+	codeExpiresAt := now.Add(s.registrationConfig.CodeTTL)
+
+	if codeExpiresAt.After(attempt.AttemptExpiresAt) {
+		codeExpiresAt = attempt.AttemptExpiresAt
+	}
+
+	resendAllowedBefore := now.Add(-registrationCodeResendCooldown)
+
+	updated, err := s.userRepo.UpdatePasswordRegistrationCode(ctx, tokenHash, proofHash, now, codeExpiresAt, resendAllowedBefore)
+
+	if err != nil {
+		return fmt.Errorf("update password registration resend code: %w", err)
+	}
+
+	if !updated {
+		return ErrRegistrationCodeResendTooSoon
+	}
+
+	if err := s.codeSender.SendPasswordRegistrationCode(ctx, attempt.Email, code); err != nil {
+		return fmt.Errorf("send password registration resend code: %w", err)
+	}
+
+	return nil
 }
 
 func (s *UserService) GetByID(ctx context.Context, userID uuid.UUID) (models.User, error) {
