@@ -20,6 +20,18 @@ const (
 	loginRateLimitBurst             = 5
 	loginRateLimitMaxClients        = 10_000
 	loginRateLimitStaleAfter        = 10 * time.Minute
+
+	registrationStartRateLimitRequestsPerSecond = 5.0 / 60.0
+	registrationStartRateLimitBurst             = 3
+
+	registrationConfirmRateLimitRequestsPerSecond = 10.0 / 60.0
+	registrationConfirmRateLimitBurst             = 5
+
+	registrationResendRateLimitRequestsPerSecond = 5.0 / 60.0
+	registrationResendRateLimitBurst             = 3
+
+	registrationRateLimitMaxClients = 10_000
+	registrationRateLimitStaleAfter = 10 * time.Minute
 )
 
 type DatabasePinger interface {
@@ -33,18 +45,24 @@ type Handlers struct {
 }
 
 type Server struct {
-	h                *Handlers
-	database         DatabasePinger
-	rateLimiter      *middleware.RateLimiter
-	loginRateLimiter *middleware.RateLimiter
+	h                          *Handlers
+	database                   DatabasePinger
+	rateLimiter                *middleware.RateLimiter
+	loginRateLimiter           *middleware.RateLimiter
+	registrationStartLimiter   *middleware.RateLimiter
+	registrationConfirmLimiter *middleware.RateLimiter
+	registrationResendLimiter  *middleware.RateLimiter
 }
 
 func NewServer(h *Handlers, database DatabasePinger) *Server {
 	return &Server{
-		h:                h,
-		database:         database,
-		rateLimiter:      middleware.NewRateLimiter(globalRateLimitRequestsPerSecond, globalRateLimitBurst, globalRateLimitMaxClients, globalRateLimitStaleAfter),
-		loginRateLimiter: middleware.NewRateLimiter(loginRateLimitRequestsPerSecond, loginRateLimitBurst, loginRateLimitMaxClients, loginRateLimitStaleAfter),
+		h:                          h,
+		database:                   database,
+		rateLimiter:                middleware.NewRateLimiter(globalRateLimitRequestsPerSecond, globalRateLimitBurst, globalRateLimitMaxClients, globalRateLimitStaleAfter),
+		loginRateLimiter:           middleware.NewRateLimiter(loginRateLimitRequestsPerSecond, loginRateLimitBurst, loginRateLimitMaxClients, loginRateLimitStaleAfter),
+		registrationStartLimiter:   middleware.NewRateLimiter(registrationStartRateLimitRequestsPerSecond, registrationStartRateLimitBurst, registrationRateLimitMaxClients, registrationRateLimitStaleAfter),
+		registrationConfirmLimiter: middleware.NewRateLimiter(registrationConfirmRateLimitRequestsPerSecond, registrationConfirmRateLimitBurst, registrationRateLimitMaxClients, registrationRateLimitStaleAfter),
+		registrationResendLimiter:  middleware.NewRateLimiter(registrationResendRateLimitRequestsPerSecond, registrationResendRateLimitBurst, registrationRateLimitMaxClients, registrationRateLimitStaleAfter),
 	}
 }
 
@@ -69,9 +87,13 @@ func (srv *Server) registerRoutes(mux *http.ServeMux) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	mux.HandleFunc("POST /registrations/password", srv.h.UserHandler.StartPasswordRegistration)
-	mux.HandleFunc("POST /registrations/password/confirm", srv.h.UserHandler.ConfirmPasswordRegistration)
-	mux.HandleFunc("POST /registrations/password/resend", srv.h.UserHandler.ResendPasswordRegistrationCode)
+	startRegistrationHandler := srv.registrationStartLimiter.MiddlewareByIP(http.HandlerFunc(srv.h.UserHandler.StartPasswordRegistration))
+	confirmRegistrationHandler := srv.registrationConfirmLimiter.MiddlewareByIP(http.HandlerFunc(srv.h.UserHandler.ConfirmPasswordRegistration))
+	resendRegistrationHandler := srv.registrationResendLimiter.MiddlewareByIP(http.HandlerFunc(srv.h.UserHandler.ResendPasswordRegistrationCode))
+
+	mux.Handle("POST /registrations/password", startRegistrationHandler)
+	mux.Handle("POST /registrations/password/confirm", confirmRegistrationHandler)
+	mux.Handle("POST /registrations/password/resend", resendRegistrationHandler)
 
 	mux.Handle("GET /me", srv.h.MeHandler)
 

@@ -114,3 +114,126 @@ func TestNewRouterHTTPAppliesLoginRateLimitOnlyToSessions(t *testing.T) {
 		t.Errorf("health status code = %d, want %d", healthResponse.Code, http.StatusOK)
 	}
 }
+
+func TestNewRouterHTTPAppliesPasswordRegistrationRateLimits(t *testing.T) {
+	tests := []struct {
+		name          string
+		path          string
+		body          string
+		allowedStatus int
+		setLimiter    func(*Server, *middleware.RateLimiter)
+	}{
+		{
+			name:          "start registration",
+			path:          "/registrations/password",
+			body:          `{`,
+			allowedStatus: http.StatusBadRequest,
+			setLimiter: func(srv *Server, limiter *middleware.RateLimiter) {
+				srv.registrationStartLimiter = limiter
+			},
+		},
+		{
+			name:          "confirm registration",
+			path:          "/registrations/password/confirm",
+			body:          `{`,
+			allowedStatus: http.StatusBadRequest,
+			setLimiter: func(srv *Server, limiter *middleware.RateLimiter) {
+				srv.registrationConfirmLimiter = limiter
+			},
+		},
+		{
+			name:          "resend registration code",
+			path:          "/registrations/password/resend",
+			allowedStatus: http.StatusGone,
+			setLimiter: func(srv *Server, limiter *middleware.RateLimiter) {
+				srv.registrationResendLimiter = limiter
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			applicationHandlers := &Handlers{
+				UserHandler:    &handlers.UserHandler{},
+				SessionHandler: &handlers.SessionHandler{},
+				MeHandler:      http.NotFoundHandler(),
+			}
+
+			srv := NewServer(applicationHandlers, nil)
+			srv.rateLimiter = middleware.NewRateLimiter(1_000, 100, 10, time.Minute)
+			tt.setLimiter(srv, middleware.NewRateLimiter(0.001, 2, 10, time.Minute))
+			router := srv.NewRouterHTTP()
+
+			for requestNumber := 1; requestNumber <= 2; requestNumber++ {
+				request := httptest.NewRequestWithContext(t.Context(), http.MethodPost, tt.path, strings.NewReader(tt.body))
+				request.RemoteAddr = "192.0.2.1:1234"
+				response := httptest.NewRecorder()
+				router.ServeHTTP(response, request)
+
+				if response.Code != tt.allowedStatus {
+					t.Fatalf("request %d status code = %d, want %d", requestNumber, response.Code, tt.allowedStatus)
+				}
+			}
+
+			request := httptest.NewRequestWithContext(t.Context(), http.MethodPost, tt.path, strings.NewReader(tt.body))
+			request.RemoteAddr = "192.0.2.1:5678"
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, request)
+
+			if response.Code != http.StatusTooManyRequests {
+				t.Errorf("request after burst status code = %d, want %d", response.Code, http.StatusTooManyRequests)
+			}
+
+			if response.Header().Get("Retry-After") == "" {
+				t.Error("rate-limited response does not contain Retry-After")
+			}
+		})
+	}
+}
+
+func TestPasswordRegistrationRateLimitersAreIndependent(t *testing.T) {
+	applicationHandlers := &Handlers{
+		UserHandler:    &handlers.UserHandler{},
+		SessionHandler: &handlers.SessionHandler{},
+		MeHandler:      http.NotFoundHandler(),
+	}
+
+	srv := NewServer(applicationHandlers, nil)
+	srv.rateLimiter = middleware.NewRateLimiter(1_000, 100, 10, time.Minute)
+	srv.registrationStartLimiter = middleware.NewRateLimiter(0.001, 1, 10, time.Minute)
+	srv.registrationConfirmLimiter = middleware.NewRateLimiter(0.001, 1, 10, time.Minute)
+	srv.registrationResendLimiter = middleware.NewRateLimiter(0.001, 1, 10, time.Minute)
+	router := srv.NewRouterHTTP()
+
+	requests := []struct {
+		path          string
+		body          string
+		allowedStatus int
+	}{
+		{path: "/registrations/password", body: `{`, allowedStatus: http.StatusBadRequest},
+		{path: "/registrations/password/confirm", body: `{`, allowedStatus: http.StatusBadRequest},
+		{path: "/registrations/password/resend", allowedStatus: http.StatusGone},
+	}
+
+	for _, requestData := range requests {
+		request := httptest.NewRequestWithContext(t.Context(), http.MethodPost, requestData.path, strings.NewReader(requestData.body))
+		request.RemoteAddr = "192.0.2.1:1234"
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+
+		if response.Code != requestData.allowedStatus {
+			t.Fatalf("first request to %s status code = %d, want %d", requestData.path, response.Code, requestData.allowedStatus)
+		}
+	}
+
+	for _, requestData := range requests {
+		request := httptest.NewRequestWithContext(t.Context(), http.MethodPost, requestData.path, strings.NewReader(requestData.body))
+		request.RemoteAddr = "192.0.2.1:5678"
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+
+		if response.Code != http.StatusTooManyRequests {
+			t.Errorf("second request to %s status code = %d, want %d", requestData.path, response.Code, http.StatusTooManyRequests)
+		}
+	}
+}
