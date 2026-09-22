@@ -71,6 +71,7 @@ func (srv *Server) registerRoutes(mux *http.ServeMux) {
 
 	mux.HandleFunc("POST /registrations/password", srv.h.UserHandler.StartPasswordRegistration)
 	mux.HandleFunc("POST /registrations/password/confirm", srv.h.UserHandler.ConfirmPasswordRegistration)
+	mux.HandleFunc("POST /registrations/password/resend", srv.h.UserHandler.ResendPasswordRegistrationCode)
 
 	mux.Handle("GET /me", srv.h.MeHandler)
 

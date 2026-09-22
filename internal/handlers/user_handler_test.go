@@ -18,9 +18,10 @@ import (
 )
 
 type userServiceStub struct {
-	startPasswordRegistrationFunc   func(context.Context, string, string) (services.PasswordRegistrationResult, error)
-	confirmPasswordRegistrationFunc func(context.Context, string, string) (models.User, error)
-	getByIDFunc                     func(context.Context, uuid.UUID) (models.User, error)
+	startPasswordRegistrationFunc      func(context.Context, string, string) (services.PasswordRegistrationResult, error)
+	confirmPasswordRegistrationFunc    func(context.Context, string, string) (models.User, error)
+	resendPasswordRegistrationCodeFunc func(context.Context, string) error
+	getByIDFunc                        func(context.Context, uuid.UUID) (models.User, error)
 }
 
 func (s userServiceStub) StartPasswordRegistration(ctx context.Context, email, password string) (services.PasswordRegistrationResult, error) {
@@ -29,6 +30,10 @@ func (s userServiceStub) StartPasswordRegistration(ctx context.Context, email, p
 
 func (s userServiceStub) ConfirmPasswordRegistration(ctx context.Context, token, code string) (models.User, error) {
 	return s.confirmPasswordRegistrationFunc(ctx, token, code)
+}
+
+func (s userServiceStub) ResendPasswordRegistrationCode(ctx context.Context, token string) error {
+	return s.resendPasswordRegistrationCodeFunc(ctx, token)
 }
 
 func (s userServiceStub) GetByID(ctx context.Context, userID uuid.UUID) (models.User, error) {
@@ -354,6 +359,152 @@ func TestUserHandlerConfirmPasswordRegistrationMapsServiceErrors(t *testing.T) {
 
 			if errors.Is(tt.serviceErr, unexpectedErr) && strings.Contains(response.Body.String(), unexpectedErr.Error()) {
 				t.Error("response body exposes an internal error")
+			}
+		})
+	}
+}
+
+func TestUserHandlerResendPasswordRegistrationCode(t *testing.T) {
+	const token = "password-registration-token"
+
+	type contextKey struct{}
+	ctx := context.WithValue(context.Background(), contextKey{}, "request-context")
+	service := userServiceStub{resendPasswordRegistrationCodeFunc: func(gotCtx context.Context, gotToken string) error {
+		if got := gotCtx.Value(contextKey{}); got != "request-context" {
+			t.Errorf("ResendPasswordRegistrationCode() context value = %v, want %q", got, "request-context")
+		}
+		if gotToken != token {
+			t.Errorf("ResendPasswordRegistrationCode() token = %q, want %q", gotToken, token)
+		}
+		return nil
+	}}
+
+	handler := handlers.NewUserHandler(service, false)
+	request := httptest.NewRequest(http.MethodPost, "/registrations/password/resend", nil).WithContext(ctx)
+	request.AddCookie(&http.Cookie{Name: "password_registration", Value: token, Path: "/registrations/password"})
+	response := httptest.NewRecorder()
+
+	handler.ResendPasswordRegistrationCode(response, request)
+
+	result := response.Result()
+	defer result.Body.Close()
+
+	if result.StatusCode != http.StatusAccepted {
+		t.Fatalf("status code = %d, want %d", result.StatusCode, http.StatusAccepted)
+	}
+	if response.Body.Len() != 0 {
+		t.Errorf("response body = %q, want empty", response.Body.String())
+	}
+	if cookies := result.Cookies(); len(cookies) != 0 {
+		t.Errorf("response cookies = %d, want 0", len(cookies))
+	}
+}
+
+func TestUserHandlerResendPasswordRegistrationCodeRejectsMissingCookie(t *testing.T) {
+	serviceCalled := false
+	service := userServiceStub{resendPasswordRegistrationCodeFunc: func(context.Context, string) error {
+		serviceCalled = true
+		return nil
+	}}
+	handler := handlers.NewUserHandler(service, true)
+	response := httptest.NewRecorder()
+
+	handler.ResendPasswordRegistrationCode(
+		response,
+		httptest.NewRequest(http.MethodPost, "/registrations/password/resend", nil),
+	)
+
+	result := response.Result()
+	defer result.Body.Close()
+
+	if result.StatusCode != http.StatusGone {
+		t.Errorf("status code = %d, want %d", result.StatusCode, http.StatusGone)
+	}
+	if serviceCalled {
+		t.Error("ResendPasswordRegistrationCode() was called without a registration cookie")
+	}
+
+	cookies := result.Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("response cookies = %d, want 1", len(cookies))
+	}
+	assertClearedPasswordRegistrationCookie(t, cookies[0], true)
+}
+
+func TestUserHandlerResendPasswordRegistrationCodeMapsServiceErrors(t *testing.T) {
+	const token = "password-registration-token"
+	wantInternalErr := errors.New("email provider unavailable")
+
+	tests := []struct {
+		name         string
+		serviceErr   error
+		wantStatus   int
+		wantMessage  string
+		clearsCookie bool
+	}{
+		{
+			name:         "unavailable attempt",
+			serviceErr:   services.ErrRegistrationAttemptUnavailable,
+			wantStatus:   http.StatusGone,
+			wantMessage:  "tentativa de cadastro ausente ou expirada",
+			clearsCookie: true,
+		},
+		{
+			name:        "locked attempt",
+			serviceErr:  services.ErrRegistrationAttemptLocked,
+			wantStatus:  http.StatusTooManyRequests,
+			wantMessage: "aguarde antes de solicitar outro código",
+		},
+		{
+			name:        "resend cooldown",
+			serviceErr:  services.ErrRegistrationCodeResendTooSoon,
+			wantStatus:  http.StatusTooManyRequests,
+			wantMessage: "aguarde 30 segundos antes de solicitar outro código",
+		},
+		{
+			name:        "internal error",
+			serviceErr:  wantInternalErr,
+			wantStatus:  http.StatusInternalServerError,
+			wantMessage: "erro interno do servidor",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			service := userServiceStub{resendPasswordRegistrationCodeFunc: func(_ context.Context, gotToken string) error {
+				if gotToken != token {
+					t.Errorf("ResendPasswordRegistrationCode() token = %q, want %q", gotToken, token)
+				}
+				return tt.serviceErr
+			}}
+			handler := handlers.NewUserHandler(service, false)
+			request := httptest.NewRequest(http.MethodPost, "/registrations/password/resend", nil)
+			request.AddCookie(&http.Cookie{Name: "password_registration", Value: token, Path: "/registrations/password"})
+			response := httptest.NewRecorder()
+
+			handler.ResendPasswordRegistrationCode(response, request)
+
+			result := response.Result()
+			defer result.Body.Close()
+
+			if result.StatusCode != tt.wantStatus {
+				t.Errorf("status code = %d, want %d", result.StatusCode, tt.wantStatus)
+			}
+			if !strings.Contains(response.Body.String(), tt.wantMessage) {
+				t.Errorf("response body = %q, want message containing %q", response.Body.String(), tt.wantMessage)
+			}
+			if strings.Contains(response.Body.String(), wantInternalErr.Error()) {
+				t.Error("response body exposes an internal error")
+			}
+
+			cookies := result.Cookies()
+			if tt.clearsCookie {
+				if len(cookies) != 1 {
+					t.Fatalf("response cookies = %d, want 1", len(cookies))
+				}
+				assertClearedPasswordRegistrationCookie(t, cookies[0], false)
+			} else if len(cookies) != 0 {
+				t.Errorf("response cookies = %d, want 0", len(cookies))
 			}
 		})
 	}

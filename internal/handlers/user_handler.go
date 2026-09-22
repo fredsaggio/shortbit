@@ -18,6 +18,7 @@ type UserService interface {
 	StartPasswordRegistration(ctx context.Context, email, password string) (services.PasswordRegistrationResult, error)
 	ConfirmPasswordRegistration(ctx context.Context, token, code string) (models.User, error)
 	GetByID(ctx context.Context, userID uuid.UUID) (models.User, error)
+	ResendPasswordRegistrationCode(ctx context.Context, token string) error
 }
 
 type startPasswordRegistrationRequest struct {
@@ -186,6 +187,63 @@ func (h *UserHandler) ConfirmPasswordRegistration(w http.ResponseWriter, r *http
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		slog.ErrorContext(ctx, "encode confirmed user response failed", "error", err)
 	}
+}
+
+func (h *UserHandler) ResendPasswordRegistrationCode(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	token, err := requiredCookieValue(r, passwordRegistrationCookieName)
+
+	if err != nil {
+		clearPasswordRegistrationCookie(w, h.cookieSecure)
+		http.Error(w, "tentativa de cadastro ausente ou expirada", http.StatusGone)
+		return
+	}
+
+	err = h.userServ.ResendPasswordRegistrationCode(ctx, token)
+
+	if err != nil {
+		switch {
+		case errors.Is(err, services.ErrRegistrationAttemptUnavailable):
+			clearPasswordRegistrationCookie(w, h.cookieSecure)
+			http.Error(
+				w,
+				"tentativa de cadastro ausente ou expirada",
+				http.StatusGone,
+			)
+
+		case errors.Is(err, services.ErrRegistrationAttemptLocked):
+			http.Error(
+				w,
+				"aguarde antes de solicitar outro código",
+				http.StatusTooManyRequests,
+			)
+
+		case errors.Is(err, services.ErrRegistrationCodeResendTooSoon):
+			http.Error(
+				w,
+				"aguarde 30 segundos antes de solicitar outro código",
+				http.StatusTooManyRequests,
+			)
+
+		default:
+			slog.ErrorContext(
+				ctx,
+				"resend password registration code failed",
+				"error",
+				err,
+			)
+			http.Error(
+				w,
+				"erro interno do servidor",
+				http.StatusInternalServerError,
+			)
+		}
+		return
+	}
+
+	w.WriteHeader(http.StatusAccepted)
+
 }
 
 func (h *UserHandler) GetUserInfo(w http.ResponseWriter, r *http.Request) {
