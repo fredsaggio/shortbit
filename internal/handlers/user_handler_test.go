@@ -18,12 +18,17 @@ import (
 )
 
 type userServiceStub struct {
-	startPasswordRegistrationFunc func(context.Context, string, string) (services.PasswordRegistrationResult, error)
-	getByIDFunc                   func(context.Context, uuid.UUID) (models.User, error)
+	startPasswordRegistrationFunc   func(context.Context, string, string) (services.PasswordRegistrationResult, error)
+	confirmPasswordRegistrationFunc func(context.Context, string, string) (models.User, error)
+	getByIDFunc                     func(context.Context, uuid.UUID) (models.User, error)
 }
 
 func (s userServiceStub) StartPasswordRegistration(ctx context.Context, email, password string) (services.PasswordRegistrationResult, error) {
 	return s.startPasswordRegistrationFunc(ctx, email, password)
+}
+
+func (s userServiceStub) ConfirmPasswordRegistration(ctx context.Context, token, code string) (models.User, error) {
+	return s.confirmPasswordRegistrationFunc(ctx, token, code)
 }
 
 func (s userServiceStub) GetByID(ctx context.Context, userID uuid.UUID) (models.User, error) {
@@ -186,6 +191,174 @@ func TestUserHandlerStartPasswordRegistrationMapsServiceErrors(t *testing.T) {
 	}
 }
 
+func TestUserHandlerConfirmPasswordRegistration(t *testing.T) {
+	const (
+		token = "password-registration-token"
+		code  = "123456"
+	)
+	wantUser := models.User{
+		ID:    uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c318"),
+		Email: "user@example.com",
+	}
+
+	service := userServiceStub{confirmPasswordRegistrationFunc: func(ctx context.Context, gotToken, gotCode string) (models.User, error) {
+		if ctx == nil {
+			t.Fatal("ConfirmPasswordRegistration() received a nil context")
+		}
+		if gotToken != token {
+			t.Errorf("ConfirmPasswordRegistration() token = %q, want %q", gotToken, token)
+		}
+		if gotCode != code {
+			t.Errorf("ConfirmPasswordRegistration() code = %q, want %q", gotCode, code)
+		}
+		return wantUser, nil
+	}}
+
+	handler := handlers.NewUserHandler(service, true)
+	request := httptest.NewRequest(http.MethodPost, "/registrations/password/confirm", strings.NewReader(`{"code":"123456"}`))
+	request.AddCookie(&http.Cookie{Name: "password_registration", Value: token, Path: "/registrations/password"})
+	response := httptest.NewRecorder()
+	handler.ConfirmPasswordRegistration(response, request)
+
+	result := response.Result()
+	defer result.Body.Close()
+
+	if result.StatusCode != http.StatusCreated {
+		t.Fatalf("status code = %d, want %d; body = %q", result.StatusCode, http.StatusCreated, response.Body.String())
+	}
+	if got := result.Header.Get("Content-Type"); got != "application/json" {
+		t.Errorf("Content-Type = %q, want %q", got, "application/json")
+	}
+
+	var gotUser struct {
+		ID    string `json:"id"`
+		Email string `json:"email"`
+	}
+	if err := json.NewDecoder(result.Body).Decode(&gotUser); err != nil {
+		t.Fatalf("decode response body: %v", err)
+	}
+	if gotUser.ID != wantUser.ID.String() {
+		t.Errorf("response ID = %q, want %q", gotUser.ID, wantUser.ID.String())
+	}
+	if gotUser.Email != wantUser.Email {
+		t.Errorf("response email = %q, want %q", gotUser.Email, wantUser.Email)
+	}
+
+	cookies := result.Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("response cookies = %d, want 1", len(cookies))
+	}
+	assertClearedPasswordRegistrationCookie(t, cookies[0], true)
+}
+
+func TestUserHandlerConfirmPasswordRegistrationRejectsInvalidJSON(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+	}{
+		{name: "empty body", body: ""},
+		{name: "malformed JSON", body: `{"code":`},
+		{name: "unknown field", body: `{"code":"123456","email":"user@example.com"}`},
+		{name: "multiple JSON objects", body: `{"code":"123456"} {"code":"654321"}`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			service := userServiceStub{confirmPasswordRegistrationFunc: func(context.Context, string, string) (models.User, error) {
+				t.Fatal("ConfirmPasswordRegistration() should not be called")
+				return models.User{}, nil
+			}}
+			handler := handlers.NewUserHandler(service, false)
+			request := httptest.NewRequest(http.MethodPost, "/registrations/password/confirm", strings.NewReader(tt.body))
+			request.AddCookie(&http.Cookie{Name: "password_registration", Value: "registration-token"})
+			response := httptest.NewRecorder()
+			handler.ConfirmPasswordRegistration(response, request)
+
+			if response.Code != http.StatusBadRequest {
+				t.Errorf("status code = %d, want %d", response.Code, http.StatusBadRequest)
+			}
+			if len(response.Result().Cookies()) != 0 {
+				t.Error("invalid JSON changed the registration cookie")
+			}
+		})
+	}
+}
+
+func TestUserHandlerConfirmPasswordRegistrationRejectsMissingCookie(t *testing.T) {
+	service := userServiceStub{confirmPasswordRegistrationFunc: func(context.Context, string, string) (models.User, error) {
+		t.Fatal("ConfirmPasswordRegistration() should not be called")
+		return models.User{}, nil
+	}}
+	handler := handlers.NewUserHandler(service, false)
+	response := httptest.NewRecorder()
+	handler.ConfirmPasswordRegistration(response, httptest.NewRequest(http.MethodPost, "/registrations/password/confirm", strings.NewReader(`{"code":"123456"}`)))
+
+	if response.Code != http.StatusGone {
+		t.Errorf("status code = %d, want %d", response.Code, http.StatusGone)
+	}
+	if response.Body.String() != "tentativa de cadastro ausente ou expirada\n" {
+		t.Errorf("response body = %q, want %q", response.Body.String(), "tentativa de cadastro ausente ou expirada\n")
+	}
+
+	cookies := response.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("response cookies = %d, want 1", len(cookies))
+	}
+	assertClearedPasswordRegistrationCookie(t, cookies[0], false)
+}
+
+func TestUserHandlerConfirmPasswordRegistrationMapsServiceErrors(t *testing.T) {
+	unexpectedErr := errors.New("database unavailable")
+	tests := []struct {
+		name         string
+		serviceErr   error
+		wantStatus   int
+		wantBody     string
+		clearsCookie bool
+	}{
+		{name: "attempt unavailable", serviceErr: services.ErrRegistrationAttemptUnavailable, wantStatus: http.StatusGone, wantBody: "tentativa de cadastro ausente ou expirada\n", clearsCookie: true},
+		{name: "attempt locked", serviceErr: services.ErrRegistrationAttemptLocked, wantStatus: http.StatusTooManyRequests, wantBody: "aguarde antes de tentar novamente\n"},
+		{name: "verification code expired", serviceErr: services.ErrVerificationCodeExpired, wantStatus: http.StatusBadRequest, wantBody: "código expirado; solicite um novo código\n"},
+		{name: "verification code invalid", serviceErr: services.ErrVerificationCodeInvalid, wantStatus: http.StatusBadRequest, wantBody: "código de confirmação inválido\n"},
+		{name: "email already exists", serviceErr: services.ErrEmailAlreadyExists, wantStatus: http.StatusConflict, wantBody: "email já está em uso; faça login\n", clearsCookie: true},
+		{name: "unexpected error", serviceErr: unexpectedErr, wantStatus: http.StatusInternalServerError, wantBody: "erro interno do servidor\n"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			service := userServiceStub{confirmPasswordRegistrationFunc: func(context.Context, string, string) (models.User, error) {
+				return models.User{}, tt.serviceErr
+			}}
+			handler := handlers.NewUserHandler(service, false)
+			request := httptest.NewRequest(http.MethodPost, "/registrations/password/confirm", strings.NewReader(`{"code":"123456"}`))
+			request.AddCookie(&http.Cookie{Name: "password_registration", Value: "registration-token"})
+			response := httptest.NewRecorder()
+			handler.ConfirmPasswordRegistration(response, request)
+
+			if response.Code != tt.wantStatus {
+				t.Errorf("status code = %d, want %d", response.Code, tt.wantStatus)
+			}
+			if response.Body.String() != tt.wantBody {
+				t.Errorf("response body = %q, want %q", response.Body.String(), tt.wantBody)
+			}
+
+			cookies := response.Result().Cookies()
+			if tt.clearsCookie {
+				if len(cookies) != 1 {
+					t.Fatalf("response cookies = %d, want 1", len(cookies))
+				}
+				assertClearedPasswordRegistrationCookie(t, cookies[0], false)
+			} else if len(cookies) != 0 {
+				t.Error("recoverable confirmation error changed the registration cookie")
+			}
+
+			if errors.Is(tt.serviceErr, unexpectedErr) && strings.Contains(response.Body.String(), unexpectedErr.Error()) {
+				t.Error("response body exposes an internal error")
+			}
+		})
+	}
+}
+
 func TestUserHandlerGetUserInfo(t *testing.T) {
 	wantUser := models.User{ID: uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c317"), Email: "user@example.com"}
 	service := userServiceStub{getByIDFunc: func(ctx context.Context, userID uuid.UUID) (models.User, error) {
@@ -263,5 +436,34 @@ func TestUserHandlerGetUserInfoHandlesServiceError(t *testing.T) {
 	}
 	if strings.Contains(response.Body.String(), wantErr.Error()) {
 		t.Error("response body exposes an internal error")
+	}
+}
+
+func assertClearedPasswordRegistrationCookie(t *testing.T, cookie *http.Cookie, secure bool) {
+	t.Helper()
+
+	if cookie.Name != "password_registration" {
+		t.Errorf("cookie name = %q, want %q", cookie.Name, "password_registration")
+	}
+	if cookie.Value != "" {
+		t.Errorf("cookie value = %q, want empty", cookie.Value)
+	}
+	if cookie.Path != "/registrations/password" {
+		t.Errorf("cookie path = %q, want %q", cookie.Path, "/registrations/password")
+	}
+	if cookie.MaxAge != -1 {
+		t.Errorf("cookie MaxAge = %d, want -1", cookie.MaxAge)
+	}
+	if !cookie.Expires.Equal(time.Unix(0, 0).UTC()) {
+		t.Errorf("cookie expiration = %v, want %v", cookie.Expires, time.Unix(0, 0).UTC())
+	}
+	if !cookie.HttpOnly {
+		t.Error("cookie HttpOnly = false, want true")
+	}
+	if cookie.Secure != secure {
+		t.Errorf("cookie Secure = %t, want %t", cookie.Secure, secure)
+	}
+	if cookie.SameSite != http.SameSiteStrictMode {
+		t.Errorf("cookie SameSite = %v, want %v", cookie.SameSite, http.SameSiteStrictMode)
 	}
 }
