@@ -92,9 +92,6 @@ func (h *GoogleAuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 			slog.WarnContext(ctx, "Google authentication failed", "error", err)
 			http.Error(w, "não foi possível autenticar com o Google", http.StatusUnauthorized)
 
-		case errors.Is(err, services.ErrEmailAlreadyExists):
-			http.Error(w, "já existe uma conta usando este email", http.StatusConflict)
-
 		default:
 			slog.ErrorContext(ctx, "Complete Google login failed", "error", err)
 			http.Error(w, "erro interno no servidor", http.StatusInternalServerError)

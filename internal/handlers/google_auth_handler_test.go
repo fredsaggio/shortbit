@@ -404,10 +404,20 @@ func TestGoogleAuthHandlerCallbackHandlesServiceErrors(t *testing.T) {
 		name       string
 		err        error
 		wantStatus int
+		wantBody   string
 	}{
-		{name: "invalid Google authentication", err: services.ErrGoogleAuthenticationFailed, wantStatus: http.StatusUnauthorized},
-		{name: "email already exists", err: services.ErrEmailAlreadyExists, wantStatus: http.StatusConflict},
-		{name: "unexpected error", err: errors.New("database unavailable"), wantStatus: http.StatusInternalServerError},
+		{
+			name:       "invalid Google authentication",
+			err:        services.ErrGoogleAuthenticationFailed,
+			wantStatus: http.StatusUnauthorized,
+			wantBody:   "não foi possível autenticar com o Google\n",
+		},
+		{
+			name:       "unexpected error",
+			err:        errors.New("database unavailable"),
+			wantStatus: http.StatusInternalServerError,
+			wantBody:   "erro interno no servidor\n",
+		},
 	}
 
 	for _, test := range tests {
@@ -433,6 +443,9 @@ func TestGoogleAuthHandlerCallbackHandlesServiceErrors(t *testing.T) {
 
 			if result.StatusCode != test.wantStatus {
 				t.Errorf("status code = %d, want %d", result.StatusCode, test.wantStatus)
+			}
+			if response.Body.String() != test.wantBody {
+				t.Errorf("response body = %q, want %q", response.Body.String(), test.wantBody)
 			}
 			if len(result.Cookies()) != 3 {
 				t.Fatalf("cookie count = %d, want 3", len(result.Cookies()))

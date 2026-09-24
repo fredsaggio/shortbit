@@ -12,11 +12,7 @@ import (
 
 const googleProvider = "google"
 
-var (
-	ErrAuthIdentityAlreadyExists  = errors.New("auth identity already exists")
-	ErrGoogleAuthenticationFailed = errors.New("error in google authentication")
-	ErrProviderAlreadyLinked      = errors.New("provider already linked")
-)
+var ErrGoogleAuthenticationFailed = errors.New("error in google authentication")
 
 type GoogleIdentity struct {
 	// Email é o endereço confirmado pelo provedor de identidade.
@@ -108,7 +104,7 @@ func (s *GoogleAuthService) loginWithProvider(ctx context.Context, email, provid
 		}
 
 	case errors.Is(err, repositories.ErrProviderAlreadyLinked):
-		return LoginResult{}, ErrProviderAlreadyLinked
+		return LoginResult{}, ErrGoogleAuthenticationFailed
 
 	case errors.Is(err, repositories.ErrPasswordAccountNotFound):
 		user, err = s.googleRepo.CreateWithIdentity(ctx, normalizedEmail, googleProvider, providerUserID)

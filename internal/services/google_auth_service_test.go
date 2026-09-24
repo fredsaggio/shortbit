@@ -291,6 +291,40 @@ func TestGoogleAuthServiceCompleteLoginLinksIdentityToPasswordAccount(t *testing
 	}
 }
 
+func TestGoogleAuthServiceCompleteLoginRejectsDifferentGoogleIdentityAlreadyLinkedToUser(t *testing.T) {
+	const providerUserID = "different-google-subject"
+
+	repository := googleUserRepositoryStub{
+		findUserByProviderIdentityFunc: func(context.Context, string, string) (models.User, error) {
+			return models.User{}, repositories.ErrAuthIdentityNotFound
+		},
+		linkIdentityToPasswordUserByEmailFunc: func(_ context.Context, email, provider, gotProviderUserID string) (models.User, error) {
+			if email != "user@example.com" {
+				t.Errorf("LinkIdentityToPasswordUserByEmail() email = %q, want %q", email, "user@example.com")
+			}
+			if provider != "google" {
+				t.Errorf("LinkIdentityToPasswordUserByEmail() provider = %q, want %q", provider, "google")
+			}
+			if gotProviderUserID != providerUserID {
+				t.Errorf("LinkIdentityToPasswordUserByEmail() provider user ID = %q, want %q", gotProviderUserID, providerUserID)
+			}
+
+			return models.User{}, repositories.ErrProviderAlreadyLinked
+		},
+		createWithIdentityFunc: func(context.Context, string, string, string) (models.User, error) {
+			t.Fatal("CreateWithIdentity() should not be called when another Google identity is already linked")
+			return models.User{}, nil
+		},
+	}
+
+	service := services.NewGoogleAuthService(repository, unexpectedUserSessionCreator(t), verifiedGoogleOIDCClient("user@example.com", providerUserID))
+	_, err := service.CompleteLogin(context.Background(), "authorization-code", "expected-nonce", "code-verifier")
+
+	if !errors.Is(err, services.ErrGoogleAuthenticationFailed) {
+		t.Fatalf("CompleteLogin() error = %v, want %v", err, services.ErrGoogleAuthenticationFailed)
+	}
+}
+
 func TestGoogleAuthServiceCompleteLoginFindsIdentityLinkedConcurrently(t *testing.T) {
 	const providerUserID = "concurrently-linked-google-subject"
 
