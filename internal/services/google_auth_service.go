@@ -12,7 +12,11 @@ import (
 
 const googleProvider = "google"
 
-var ErrGoogleAuthenticationFailed = errors.New("error in google authentication")
+var (
+	ErrAuthIdentityAlreadyExists  = errors.New("auth identity already exists")
+	ErrGoogleAuthenticationFailed = errors.New("error in google authentication")
+	ErrProviderAlreadyLinked      = errors.New("provider already linked")
+)
 
 type GoogleIdentity struct {
 	// Email é o endereço confirmado pelo provedor de identidade.
@@ -39,6 +43,7 @@ type GoogleOIDCClient interface {
 type GoogleUserRepository interface {
 	CreateWithIdentity(ctx context.Context, email, provider, providerUserID string) (models.User, error)
 	FindUserByProviderIdentity(ctx context.Context, provider, providerUserID string) (models.User, error)
+	LinkIdentityToPasswordUserByEmail(ctx context.Context, email, provider, providerUserID string) (models.User, error)
 }
 
 type UserSessionCreator interface {
@@ -78,25 +83,75 @@ func (s *GoogleAuthService) CompleteLogin(ctx context.Context, code, expectedNon
 func (s *GoogleAuthService) loginWithProvider(ctx context.Context, email, providerUserID string) (LoginResult, error) {
 	user, err := s.googleRepo.FindUserByProviderIdentity(ctx, googleProvider, providerUserID)
 
+	if err == nil {
+		return s.sessionCreator.CreateSession(ctx, user.ID)
+	}
+
+	if !errors.Is(err, repositories.ErrAuthIdentityNotFound) {
+		return LoginResult{}, fmt.Errorf("find user by Google identity: %w", err)
+	}
+
+	normalizedEmail := normalizeEmail(email)
+	if !isValidEmail(normalizedEmail) {
+		return LoginResult{}, ErrInvalidEmail
+	}
+
+	user, err = s.googleRepo.LinkIdentityToPasswordUserByEmail(ctx, normalizedEmail, googleProvider, providerUserID)
+
 	switch {
 	case err == nil:
-	case errors.Is(err, repositories.ErrAuthIdentityNotFound):
-		normalizedEmail := normalizeEmail(email)
 
-		if !isValidEmail(normalizedEmail) {
-			return LoginResult{}, ErrInvalidEmail
-		}
-
-		user, err = s.googleRepo.CreateWithIdentity(ctx, normalizedEmail, googleProvider, providerUserID)
-		if errors.Is(err, repositories.ErrEmailAlreadyExists) {
-			return LoginResult{}, ErrEmailAlreadyExists
-		}
+	case errors.Is(err, repositories.ErrAuthIdentityAlreadyExists):
+		user, err = s.googleRepo.FindUserByProviderIdentity(ctx, googleProvider, providerUserID)
 		if err != nil {
+			return LoginResult{}, fmt.Errorf("find concurrently linked Google identity: %w", err)
+		}
+
+	case errors.Is(err, repositories.ErrProviderAlreadyLinked):
+		return LoginResult{}, ErrProviderAlreadyLinked
+
+	case errors.Is(err, repositories.ErrPasswordAccountNotFound):
+		user, err = s.googleRepo.CreateWithIdentity(ctx, normalizedEmail, googleProvider, providerUserID)
+
+		switch {
+		case err == nil:
+
+		case errors.Is(err, repositories.ErrEmailAlreadyExists):
+			user, err = s.googleRepo.FindUserByProviderIdentity(ctx, googleProvider, providerUserID)
+
+			switch {
+			case err == nil:
+
+			case errors.Is(err, repositories.ErrAuthIdentityNotFound):
+				user, err = s.googleRepo.LinkIdentityToPasswordUserByEmail(ctx, normalizedEmail, googleProvider, providerUserID)
+
+				switch {
+				case err == nil:
+
+				case errors.Is(err, repositories.ErrAuthIdentityAlreadyExists):
+					user, err = s.googleRepo.FindUserByProviderIdentity(ctx, googleProvider, providerUserID)
+					if err != nil {
+						return LoginResult{}, fmt.Errorf("find concurrently linked Google identity after email conflict: %w", err)
+					}
+
+				case errors.Is(err, repositories.ErrPasswordAccountNotFound),
+					errors.Is(err, repositories.ErrProviderAlreadyLinked):
+					return LoginResult{}, ErrGoogleAuthenticationFailed
+
+				default:
+					return LoginResult{}, fmt.Errorf("link Google identity after email conflict: %w", err)
+				}
+
+			default:
+				return LoginResult{}, fmt.Errorf("find Google identity after email conflict: %w", err)
+			}
+
+		default:
 			return LoginResult{}, fmt.Errorf("create user with Google identity: %w", err)
 		}
 
 	default:
-		return LoginResult{}, fmt.Errorf("find user by Google identity: %w", err)
+		return LoginResult{}, fmt.Errorf("link Google identity to password account: %w", err)
 	}
 
 	return s.sessionCreator.CreateSession(ctx, user.ID)

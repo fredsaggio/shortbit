@@ -13,8 +13,9 @@ import (
 )
 
 type googleUserRepositoryStub struct {
-	createWithIdentityFunc         func(ctx context.Context, email, provider, providerUserID string) (models.User, error)
-	findUserByProviderIdentityFunc func(ctx context.Context, provider, providerUserID string) (models.User, error)
+	createWithIdentityFunc                func(ctx context.Context, email, provider, providerUserID string) (models.User, error)
+	findUserByProviderIdentityFunc        func(ctx context.Context, provider, providerUserID string) (models.User, error)
+	linkIdentityToPasswordUserByEmailFunc func(ctx context.Context, email, provider, providerUserID string) (models.User, error)
 }
 
 func (s googleUserRepositoryStub) CreateWithIdentity(ctx context.Context, email, provider, providerUserID string) (models.User, error) {
@@ -23,6 +24,10 @@ func (s googleUserRepositoryStub) CreateWithIdentity(ctx context.Context, email,
 
 func (s googleUserRepositoryStub) FindUserByProviderIdentity(ctx context.Context, provider, providerUserID string) (models.User, error) {
 	return s.findUserByProviderIdentityFunc(ctx, provider, providerUserID)
+}
+
+func (s googleUserRepositoryStub) LinkIdentityToPasswordUserByEmail(ctx context.Context, email, provider, providerUserID string) (models.User, error) {
+	return s.linkIdentityToPasswordUserByEmailFunc(ctx, email, provider, providerUserID)
 }
 
 type userSessionCreatorStub struct {
@@ -167,6 +172,19 @@ func TestGoogleAuthServiceCompleteLoginCreatesMissingIdentity(t *testing.T) {
 		findUserByProviderIdentityFunc: func(context.Context, string, string) (models.User, error) {
 			return models.User{}, repositories.ErrAuthIdentityNotFound
 		},
+		linkIdentityToPasswordUserByEmailFunc: func(_ context.Context, email, provider, gotProviderUserID string) (models.User, error) {
+			if email != normalizedEmail {
+				t.Errorf("LinkIdentityToPasswordUserByEmail() email = %q, want %q", email, normalizedEmail)
+			}
+			if provider != "google" {
+				t.Errorf("LinkIdentityToPasswordUserByEmail() provider = %q, want %q", provider, "google")
+			}
+			if gotProviderUserID != providerUserID {
+				t.Errorf("LinkIdentityToPasswordUserByEmail() provider user ID = %q, want %q", gotProviderUserID, providerUserID)
+			}
+
+			return models.User{}, repositories.ErrPasswordAccountNotFound
+		},
 		createWithIdentityFunc: func(_ context.Context, email, provider, gotProviderUserID string) (models.User, error) {
 			if email != normalizedEmail {
 				t.Errorf("CreateWithIdentity() email = %q, want %q", email, normalizedEmail)
@@ -222,21 +240,197 @@ func TestGoogleAuthServiceCompleteLoginRejectsInvalidEmailForMissingIdentity(t *
 	}
 }
 
-func TestGoogleAuthServiceCompleteLoginRejectsExistingEmail(t *testing.T) {
+func TestGoogleAuthServiceCompleteLoginLinksIdentityToPasswordAccount(t *testing.T) {
+	const (
+		inputEmail      = "  USER@Example.COM  "
+		normalizedEmail = "user@example.com"
+		providerUserID  = "linked-google-subject"
+	)
+
+	wantUser := models.User{ID: uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c320"), Email: normalizedEmail}
+	wantLogin := services.LoginResult{Token: "linked-session-token", ExpiresAt: time.Date(2026, time.September, 15, 12, 0, 0, 0, time.UTC)}
+
 	repository := googleUserRepositoryStub{
 		findUserByProviderIdentityFunc: func(context.Context, string, string) (models.User, error) {
 			return models.User{}, repositories.ErrAuthIdentityNotFound
+		},
+		linkIdentityToPasswordUserByEmailFunc: func(_ context.Context, email, provider, gotProviderUserID string) (models.User, error) {
+			if email != normalizedEmail {
+				t.Errorf("LinkIdentityToPasswordUserByEmail() email = %q, want %q", email, normalizedEmail)
+			}
+			if provider != "google" {
+				t.Errorf("LinkIdentityToPasswordUserByEmail() provider = %q, want %q", provider, "google")
+			}
+			if gotProviderUserID != providerUserID {
+				t.Errorf("LinkIdentityToPasswordUserByEmail() provider user ID = %q, want %q", gotProviderUserID, providerUserID)
+			}
+
+			return wantUser, nil
+		},
+		createWithIdentityFunc: func(context.Context, string, string, string) (models.User, error) {
+			t.Fatal("CreateWithIdentity() should not be called after linking a password account")
+			return models.User{}, nil
+		},
+	}
+
+	sessionCreator := userSessionCreatorStub{createSessionFunc: func(_ context.Context, userID uuid.UUID) (services.LoginResult, error) {
+		if userID != wantUser.ID {
+			t.Errorf("CreateSession() user ID = %s, want %s", userID, wantUser.ID)
+		}
+		return wantLogin, nil
+	}}
+
+	service := services.NewGoogleAuthService(repository, sessionCreator, verifiedGoogleOIDCClient(inputEmail, providerUserID))
+	login, err := service.CompleteLogin(context.Background(), "authorization-code", "expected-nonce", "code-verifier")
+	if err != nil {
+		t.Fatalf("CompleteLogin() error = %v", err)
+	}
+
+	if login != wantLogin {
+		t.Errorf("CompleteLogin() result = %+v, want %+v", login, wantLogin)
+	}
+}
+
+func TestGoogleAuthServiceCompleteLoginFindsIdentityLinkedConcurrently(t *testing.T) {
+	const providerUserID = "concurrently-linked-google-subject"
+
+	wantUser := models.User{ID: uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c321"), Email: "user@example.com"}
+	wantLogin := services.LoginResult{Token: "concurrently-linked-session-token", ExpiresAt: time.Date(2026, time.September, 15, 13, 0, 0, 0, time.UTC)}
+	findCalls := 0
+
+	repository := googleUserRepositoryStub{
+		findUserByProviderIdentityFunc: func(_ context.Context, provider, gotProviderUserID string) (models.User, error) {
+			findCalls++
+			if provider != "google" {
+				t.Errorf("FindUserByProviderIdentity() provider = %q, want %q", provider, "google")
+			}
+			if gotProviderUserID != providerUserID {
+				t.Errorf("FindUserByProviderIdentity() provider user ID = %q, want %q", gotProviderUserID, providerUserID)
+			}
+
+			if findCalls == 1 {
+				return models.User{}, repositories.ErrAuthIdentityNotFound
+			}
+
+			return wantUser, nil
+		},
+		linkIdentityToPasswordUserByEmailFunc: func(context.Context, string, string, string) (models.User, error) {
+			return models.User{}, repositories.ErrAuthIdentityAlreadyExists
+		},
+		createWithIdentityFunc: func(context.Context, string, string, string) (models.User, error) {
+			t.Fatal("CreateWithIdentity() should not be called when identity was linked concurrently")
+			return models.User{}, nil
+		},
+	}
+
+	sessionCreator := userSessionCreatorStub{createSessionFunc: func(_ context.Context, userID uuid.UUID) (services.LoginResult, error) {
+		if userID != wantUser.ID {
+			t.Errorf("CreateSession() user ID = %s, want %s", userID, wantUser.ID)
+		}
+		return wantLogin, nil
+	}}
+
+	service := services.NewGoogleAuthService(repository, sessionCreator, verifiedGoogleOIDCClient(wantUser.Email, providerUserID))
+	login, err := service.CompleteLogin(context.Background(), "authorization-code", "expected-nonce", "code-verifier")
+	if err != nil {
+		t.Fatalf("CompleteLogin() error = %v", err)
+	}
+	if login != wantLogin {
+		t.Errorf("CompleteLogin() result = %+v, want %+v", login, wantLogin)
+	}
+	if findCalls != 2 {
+		t.Errorf("FindUserByProviderIdentity() calls = %d, want 2", findCalls)
+	}
+}
+
+func TestGoogleAuthServiceCompleteLoginFindsIdentityCreatedConcurrently(t *testing.T) {
+	const providerUserID = "concurrently-created-google-subject"
+
+	wantUser := models.User{ID: uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c322"), Email: "user@example.com"}
+	wantLogin := services.LoginResult{Token: "concurrently-created-session-token", ExpiresAt: time.Date(2026, time.September, 15, 14, 0, 0, 0, time.UTC)}
+	findCalls := 0
+
+	repository := googleUserRepositoryStub{
+		findUserByProviderIdentityFunc: func(context.Context, string, string) (models.User, error) {
+			findCalls++
+			if findCalls == 1 {
+				return models.User{}, repositories.ErrAuthIdentityNotFound
+			}
+			return wantUser, nil
+		},
+		linkIdentityToPasswordUserByEmailFunc: func(context.Context, string, string, string) (models.User, error) {
+			return models.User{}, repositories.ErrPasswordAccountNotFound
 		},
 		createWithIdentityFunc: func(context.Context, string, string, string) (models.User, error) {
 			return models.User{}, repositories.ErrEmailAlreadyExists
 		},
 	}
 
-	service := services.NewGoogleAuthService(repository, unexpectedUserSessionCreator(t), verifiedGoogleOIDCClient("user@example.com", "new-google-subject"))
-	_, err := service.CompleteLogin(context.Background(), "authorization-code", "expected-nonce", "code-verifier")
+	sessionCreator := userSessionCreatorStub{createSessionFunc: func(_ context.Context, userID uuid.UUID) (services.LoginResult, error) {
+		if userID != wantUser.ID {
+			t.Errorf("CreateSession() user ID = %s, want %s", userID, wantUser.ID)
+		}
+		return wantLogin, nil
+	}}
 
-	if !errors.Is(err, services.ErrEmailAlreadyExists) {
-		t.Fatalf("CompleteLogin() error = %v, want %v", err, services.ErrEmailAlreadyExists)
+	service := services.NewGoogleAuthService(repository, sessionCreator, verifiedGoogleOIDCClient(wantUser.Email, providerUserID))
+	login, err := service.CompleteLogin(context.Background(), "authorization-code", "expected-nonce", "code-verifier")
+	if err != nil {
+		t.Fatalf("CompleteLogin() error = %v", err)
+	}
+	if login != wantLogin {
+		t.Errorf("CompleteLogin() result = %+v, want %+v", login, wantLogin)
+	}
+	if findCalls != 2 {
+		t.Errorf("FindUserByProviderIdentity() calls = %d, want 2", findCalls)
+	}
+}
+
+func TestGoogleAuthServiceCompleteLoginLinksPasswordAccountCreatedConcurrently(t *testing.T) {
+	const providerUserID = "concurrent-password-account-google-subject"
+
+	wantUser := models.User{ID: uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c323"), Email: "user@example.com"}
+	wantLogin := services.LoginResult{Token: "concurrent-password-account-session-token", ExpiresAt: time.Date(2026, time.September, 15, 15, 0, 0, 0, time.UTC)}
+	findCalls := 0
+	linkCalls := 0
+
+	repository := googleUserRepositoryStub{
+		findUserByProviderIdentityFunc: func(context.Context, string, string) (models.User, error) {
+			findCalls++
+			return models.User{}, repositories.ErrAuthIdentityNotFound
+		},
+		linkIdentityToPasswordUserByEmailFunc: func(context.Context, string, string, string) (models.User, error) {
+			linkCalls++
+			if linkCalls == 1 {
+				return models.User{}, repositories.ErrPasswordAccountNotFound
+			}
+			return wantUser, nil
+		},
+		createWithIdentityFunc: func(context.Context, string, string, string) (models.User, error) {
+			return models.User{}, repositories.ErrEmailAlreadyExists
+		},
+	}
+
+	sessionCreator := userSessionCreatorStub{createSessionFunc: func(_ context.Context, userID uuid.UUID) (services.LoginResult, error) {
+		if userID != wantUser.ID {
+			t.Errorf("CreateSession() user ID = %s, want %s", userID, wantUser.ID)
+		}
+		return wantLogin, nil
+	}}
+
+	service := services.NewGoogleAuthService(repository, sessionCreator, verifiedGoogleOIDCClient(wantUser.Email, providerUserID))
+	login, err := service.CompleteLogin(context.Background(), "authorization-code", "expected-nonce", "code-verifier")
+	if err != nil {
+		t.Fatalf("CompleteLogin() error = %v", err)
+	}
+	if login != wantLogin {
+		t.Errorf("CompleteLogin() result = %+v, want %+v", login, wantLogin)
+	}
+	if findCalls != 2 {
+		t.Errorf("FindUserByProviderIdentity() calls = %d, want 2", findCalls)
+	}
+	if linkCalls != 2 {
+		t.Errorf("LinkIdentityToPasswordUserByEmail() calls = %d, want 2", linkCalls)
 	}
 }
 
@@ -265,6 +459,9 @@ func TestGoogleAuthServiceCompleteLoginPropagatesIdentityCreationError(t *testin
 	repository := googleUserRepositoryStub{
 		findUserByProviderIdentityFunc: func(context.Context, string, string) (models.User, error) {
 			return models.User{}, repositories.ErrAuthIdentityNotFound
+		},
+		linkIdentityToPasswordUserByEmailFunc: func(context.Context, string, string, string) (models.User, error) {
+			return models.User{}, repositories.ErrPasswordAccountNotFound
 		},
 		createWithIdentityFunc: func(context.Context, string, string, string) (models.User, error) {
 			return models.User{}, wantErr
