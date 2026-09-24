@@ -8,6 +8,7 @@ import (
 	"github.com/fredsaggio/url-shortener/internal/config"
 	"github.com/fredsaggio/url-shortener/internal/db"
 	"github.com/fredsaggio/url-shortener/internal/email"
+	"github.com/fredsaggio/url-shortener/internal/googleoidc"
 	"github.com/fredsaggio/url-shortener/internal/handlers"
 	"github.com/fredsaggio/url-shortener/internal/jobs"
 	"github.com/fredsaggio/url-shortener/internal/middleware"
@@ -30,7 +31,7 @@ const (
 	registrationEmailRateLimitStaleAfter        = 30 * time.Minute
 )
 
-func CompositionRoot(pool db.DB, cfg config.Config) (*server.Handlers, *jobs.PasswordRegistrationCleanup) {
+func CompositionRoot(pool db.DB, cfg config.Config, googleClient services.GoogleOIDCClient) (*server.Handlers, *jobs.PasswordRegistrationCleanup) {
 	passwordHasher := argon2.Argon2id{}
 	userRepository := repositories.NewUserRepository(pool)
 	passwordRegisterCleanup := jobs.NewPasswordRegistrationCleanup(userRepository)
@@ -51,14 +52,18 @@ func CompositionRoot(pool db.DB, cfg config.Config) (*server.Handlers, *jobs.Pas
 
 	authService := services.NewAuthService(userRepository, userSessionRepository, passwordHasher, sessiontoken.Generate, cfg.Session.TTL)
 
+	googleAuthService := services.NewGoogleAuthService(userRepository, authService, googleClient)
+	googleAuthHandler := handlers.NewGoogleAuthHandler(googleAuthService, googleoidc.GenerateAuthorizationValues, cfg.Session.CookieSecure)
+
 	loginEmailRateLimiter := middleware.NewRateLimiter(loginEmailRateLimitRequestsPerSecond, loginEmailRateLimitBurst, loginEmailRateLimitMaxEntries, loginEmailRateLimitStaleAfter)
 	sessionHandler := handlers.NewSessionHandler(authService, loginEmailRateLimiter, cfg.Session.CookieSecure)
 
 	meHandler := middleware.Authenticator(authService)(http.HandlerFunc(userHandler.GetUserInfo))
 
 	return &server.Handlers{
-		UserHandler:    userHandler,
-		SessionHandler: sessionHandler,
-		MeHandler:      meHandler,
+		UserHandler:       userHandler,
+		SessionHandler:    sessionHandler,
+		GoogleAuthHandler: googleAuthHandler,
+		MeHandler:         meHandler,
 	}, passwordRegisterCleanup
 }

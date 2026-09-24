@@ -24,7 +24,7 @@ func TestMeIntegration(t *testing.T) {
 	)
 
 	pool := dbtest.Open(t)
-	applicationHandlers, _ := app.CompositionRoot(pool, testConfig(sessionTTL))
+	applicationHandlers, _ := app.CompositionRoot(pool, testConfig(sessionTTL), unusedGoogleOIDCClient{})
 	router := server.NewServer(applicationHandlers, pool).NewRouterHTTP()
 
 	t.Run("rejects request without a session cookie", func(t *testing.T) {

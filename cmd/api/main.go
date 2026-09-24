@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"github.com/fredsaggio/url-shortener/internal/app"
 	"github.com/fredsaggio/url-shortener/internal/config"
 	"github.com/fredsaggio/url-shortener/internal/db"
+	"github.com/fredsaggio/url-shortener/internal/googleoidc"
 	"github.com/fredsaggio/url-shortener/internal/server"
 )
 
@@ -39,7 +41,13 @@ func Run(ctx context.Context, getEnv func(string) string) error {
 	}
 	defer pool.Close()
 
-	handlers, registrationCleanup := app.CompositionRoot(pool, cfg)
+	googleClient, err := googleoidc.New(ctx, cfg.Google)
+
+	if err != nil {
+		return fmt.Errorf("initialize Google OIDC client: %w", err)
+	}
+
+	handlers, registrationCleanup := app.CompositionRoot(pool, cfg, googleClient)
 	srv := server.NewServer(handlers, pool)
 
 	handler := srv.NewRouterHTTP()

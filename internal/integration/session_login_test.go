@@ -29,7 +29,7 @@ func TestPasswordLoginIntegration(t *testing.T) {
 	)
 
 	pool := dbtest.Open(t)
-	applicationHandlers, _ := app.CompositionRoot(pool, testConfig(sessionTTL))
+	applicationHandlers, _ := app.CompositionRoot(pool, testConfig(sessionTTL), unusedGoogleOIDCClient{})
 	router := server.NewServer(applicationHandlers, pool).NewRouterHTTP()
 
 	createConfirmedPasswordUser(t, pool, email, password)

@@ -39,9 +39,10 @@ type DatabasePinger interface {
 }
 
 type Handlers struct {
-	UserHandler    *handlers.UserHandler
-	SessionHandler *handlers.SessionHandler
-	MeHandler      http.Handler
+	UserHandler       *handlers.UserHandler
+	SessionHandler    *handlers.SessionHandler
+	GoogleAuthHandler *handlers.GoogleAuthHandler
+	MeHandler         http.Handler
 }
 
 type Server struct {
@@ -100,6 +101,10 @@ func (srv *Server) registerRoutes(mux *http.ServeMux) {
 	loginHandler := srv.loginRateLimiter.MiddlewareByIP(http.HandlerFunc(srv.h.SessionHandler.LoginWithPassword))
 	mux.Handle("POST /sessions", loginHandler)
 	mux.HandleFunc("DELETE /sessions/current", srv.h.SessionHandler.Logout)
+
+	googleStartHandler := srv.loginRateLimiter.MiddlewareByIP(http.HandlerFunc(srv.h.GoogleAuthHandler.Start))
+	mux.Handle("GET /auth/google", googleStartHandler)
+	mux.HandleFunc("GET /auth/google/callback", srv.h.GoogleAuthHandler.Callback)
 
 }
 
