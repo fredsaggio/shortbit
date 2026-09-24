@@ -19,6 +19,10 @@ var (
 	ErrUserNotFound                = errors.New("user not found")
 	ErrAuthIdentityNotFound        = errors.New("auth identity not found")
 	ErrRegistrationAttemptNotFound = errors.New("registration attempt not found")
+	ErrPasswordAccountNotFound     = errors.New("account not found")
+
+	ErrAuthIdentityAlreadyExists = errors.New("auth identity already exists")
+	ErrProviderAlreadyLinked     = errors.New("provider already linked")
 )
 
 type UserRepository struct {
@@ -118,7 +122,7 @@ func (r *UserRepository) CreateWithPassword(ctx context.Context, email, password
 	err = tx.QueryRow(ctx, q, args).Scan(&user.ID, &user.Email, &user.EmailVerifiedAt, &user.CreatedAt, &user.UpdatedAt)
 
 	if err != nil {
-		if isEmailConflict(err) {
+		if isConstraintConflict(err, "uq_users_email") {
 			return models.User{}, ErrEmailAlreadyExists
 		}
 		return models.User{}, fmt.Errorf("insert user: %w", err)
@@ -249,7 +253,7 @@ func (r *UserRepository) CreateWithIdentity(ctx context.Context, email, provider
 	var user models.User
 
 	if err := tx.QueryRow(ctx, q, args).Scan(&user.ID, &user.Email, &user.EmailVerifiedAt, &user.CreatedAt, &user.UpdatedAt); err != nil {
-		if isEmailConflict(err) {
+		if isConstraintConflict(err, "uq_users_email") {
 			return models.User{}, ErrEmailAlreadyExists
 		}
 		return models.User{}, fmt.Errorf("insert user: %w", err)
@@ -456,8 +460,79 @@ func (r *UserRepository) DeleteObsoletePasswordRegistrationAttempts(ctx context.
 	return result.RowsAffected(), nil
 }
 
-func isEmailConflict(err error) bool {
+func (r *UserRepository) LinkIdentityToPasswordUserByEmail(ctx context.Context, email, provider, providerUserID string) (models.User, error) {
+	tx, err := r.db.Begin(ctx)
+
+	if err != nil {
+		return models.User{}, fmt.Errorf("begin link identity transaction: %w", err)
+	}
+
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	const q1 = `
+		SELECT
+			u.id,
+			u.email,
+			u.email_verified_at,
+			u.created_at,
+			u.updated_at
+		FROM users AS u
+		JOIN password_credentials AS pc ON pc.user_id = u.id
+		WHERE u.email = @email
+		FOR UPDATE OF u
+	`
+
+	var user models.User
+
+	args := pgx.StrictNamedArgs{
+		"email": email,
+	}
+
+	err = tx.QueryRow(ctx, q1, args).Scan(&user.ID, &user.Email, &user.EmailVerifiedAt, &user.CreatedAt, &user.UpdatedAt)
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.User{}, ErrPasswordAccountNotFound
+		}
+
+		return models.User{}, fmt.Errorf("find password account for identity linking: %w", err)
+	}
+
+	const q2 = `
+		INSERT INTO auth_identities(user_id, provider, provider_user_id)
+		VALUES(@userID, @provider, @providerUserID)
+	`
+
+	args2 := pgx.StrictNamedArgs{
+		"userID":         user.ID,
+		"provider":       provider,
+		"providerUserID": providerUserID,
+	}
+
+	if _, err := tx.Exec(ctx, q2, args2); err != nil {
+		switch {
+		case isConstraintConflict(err, "pk_auth_identities"):
+			return models.User{}, ErrAuthIdentityAlreadyExists
+
+		case isConstraintConflict(err, "uq_auth_identities_user_provider"):
+			return models.User{}, ErrProviderAlreadyLinked
+
+		default:
+			return models.User{}, fmt.Errorf("insert identity for password account: %w", err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return models.User{}, fmt.Errorf("commit identity linking transaction: %w", err)
+	}
+
+	return user, nil
+}
+
+func isConstraintConflict(err error, constraintName string) bool {
 	var pgErr *pgconn.PgError
 
-	return errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "uq_users_email"
+	return errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == constraintName
 }
