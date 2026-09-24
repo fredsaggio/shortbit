@@ -47,3 +47,11 @@ type UserSession struct {
 	CreatedAt time.Time
 	ExpiresAt time.Time
 }
+
+type PasswordResetToken struct {
+	TokenHash []byte
+	UserID    uuid.UUID
+	CreatedAt time.Time
+	ExpiresAt time.Time
+	UsedAt    *time.Time
+}

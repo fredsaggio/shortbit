@@ -770,6 +770,137 @@ func TestUserRepositoryIntegration(t *testing.T) {
 		}
 	})
 
+	t.Run("creates password reset token for password account", func(t *testing.T) {
+		const email = "password-reset@example.com"
+		user, err := repository.CreateWithPassword(t.Context(), email, "$argon2id$password-reset-hash")
+		if err != nil {
+			t.Fatalf("CreateWithPassword() error = %v", err)
+		}
+
+		rawToken := "password-reset-raw-token"
+		tokenHash := sha256.Sum256([]byte(rawToken))
+		expiresAt := time.Now().UTC().Add(15 * time.Minute).Truncate(time.Microsecond)
+
+		if err := repository.CreatePasswordResetToken(t.Context(), email, tokenHash[:], expiresAt); err != nil {
+			t.Fatalf("CreatePasswordResetToken() error = %v", err)
+		}
+
+		var stored models.PasswordResetToken
+		if err := pool.QueryRow(
+			t.Context(),
+			`SELECT token_hash, user_id, created_at, expires_at, used_at
+			 FROM password_reset_tokens
+			 WHERE user_id = $1`,
+			user.ID,
+		).Scan(&stored.TokenHash, &stored.UserID, &stored.CreatedAt, &stored.ExpiresAt, &stored.UsedAt); err != nil {
+			t.Fatalf("query password reset token: %v", err)
+		}
+
+		if !bytes.Equal(stored.TokenHash, tokenHash[:]) {
+			t.Errorf("stored token hash = %x, want %x", stored.TokenHash, tokenHash)
+		}
+		if bytes.Equal(stored.TokenHash, []byte(rawToken)) {
+			t.Error("stored the raw password reset token")
+		}
+		if stored.UserID != user.ID {
+			t.Errorf("stored user ID = %s, want %s", stored.UserID, user.ID)
+		}
+		if stored.CreatedAt.IsZero() {
+			t.Error("stored password reset token has a zero CreatedAt")
+		}
+		if !stored.ExpiresAt.Equal(expiresAt) {
+			t.Errorf("stored expiration = %v, want %v", stored.ExpiresAt, expiresAt)
+		}
+		if stored.UsedAt != nil {
+			t.Errorf("stored UsedAt = %v, want nil", stored.UsedAt)
+		}
+	})
+
+	t.Run("replaces previous password reset token", func(t *testing.T) {
+		const email = "replace-password-reset@example.com"
+		user, err := repository.CreateWithPassword(t.Context(), email, "$argon2id$replace-password-reset-hash")
+		if err != nil {
+			t.Fatalf("CreateWithPassword() error = %v", err)
+		}
+
+		firstHash := sha256.Sum256([]byte("first-password-reset-token"))
+		secondHash := sha256.Sum256([]byte("second-password-reset-token"))
+		firstExpiresAt := time.Now().UTC().Add(15 * time.Minute).Truncate(time.Microsecond)
+		secondExpiresAt := firstExpiresAt.Add(5 * time.Minute)
+
+		if err := repository.CreatePasswordResetToken(t.Context(), email, firstHash[:], firstExpiresAt); err != nil {
+			t.Fatalf("first CreatePasswordResetToken() error = %v", err)
+		}
+		if _, err := pool.Exec(t.Context(), "UPDATE password_reset_tokens SET used_at = NOW() WHERE user_id = $1", user.ID); err != nil {
+			t.Fatalf("mark first password reset token as used: %v", err)
+		}
+		if err := repository.CreatePasswordResetToken(t.Context(), email, secondHash[:], secondExpiresAt); err != nil {
+			t.Fatalf("second CreatePasswordResetToken() error = %v", err)
+		}
+
+		var (
+			storedHash      []byte
+			storedExpiresAt time.Time
+			storedUsedAt    *time.Time
+			tokenCount      int
+		)
+		if err := pool.QueryRow(
+			t.Context(),
+			`SELECT token_hash, expires_at, used_at
+			 FROM password_reset_tokens
+			 WHERE user_id = $1`,
+			user.ID,
+		).Scan(&storedHash, &storedExpiresAt, &storedUsedAt); err != nil {
+			t.Fatalf("query replaced password reset token: %v", err)
+		}
+		if err := pool.QueryRow(t.Context(), "SELECT COUNT(*) FROM password_reset_tokens WHERE user_id = $1", user.ID).Scan(&tokenCount); err != nil {
+			t.Fatalf("count password reset tokens: %v", err)
+		}
+
+		if !bytes.Equal(storedHash, secondHash[:]) {
+			t.Errorf("stored token hash = %x, want second hash %x", storedHash, secondHash)
+		}
+		if !storedExpiresAt.Equal(secondExpiresAt) {
+			t.Errorf("stored expiration = %v, want %v", storedExpiresAt, secondExpiresAt)
+		}
+		if storedUsedAt != nil {
+			t.Errorf("stored UsedAt = %v, want nil", storedUsedAt)
+		}
+		if tokenCount != 1 {
+			t.Errorf("password reset token count = %d, want 1", tokenCount)
+		}
+	})
+
+	t.Run("does not create password reset token for unknown email", func(t *testing.T) {
+		tokenHash := sha256.Sum256([]byte("unknown-email-password-reset-token"))
+		err := repository.CreatePasswordResetToken(t.Context(), "unknown-password-reset@example.com", tokenHash[:], time.Now().UTC().Add(15*time.Minute))
+		if !errors.Is(err, repositories.ErrPasswordCredentialNotFound) {
+			t.Fatalf("CreatePasswordResetToken() error = %v, want %v", err, repositories.ErrPasswordCredentialNotFound)
+		}
+	})
+
+	t.Run("does not create password reset token for Google-only account", func(t *testing.T) {
+		const email = "google-only-password-reset@example.com"
+		user, err := repository.CreateWithIdentity(t.Context(), email, "google", "google-only-password-reset-subject")
+		if err != nil {
+			t.Fatalf("CreateWithIdentity() error = %v", err)
+		}
+
+		tokenHash := sha256.Sum256([]byte("google-only-password-reset-token"))
+		err = repository.CreatePasswordResetToken(t.Context(), email, tokenHash[:], time.Now().UTC().Add(15*time.Minute))
+		if !errors.Is(err, repositories.ErrPasswordCredentialNotFound) {
+			t.Fatalf("CreatePasswordResetToken() error = %v, want %v", err, repositories.ErrPasswordCredentialNotFound)
+		}
+
+		var tokenExists bool
+		if err := pool.QueryRow(t.Context(), "SELECT EXISTS(SELECT 1 FROM password_reset_tokens WHERE user_id = $1)", user.ID).Scan(&tokenExists); err != nil {
+			t.Fatalf("check Google-only password reset token: %v", err)
+		}
+		if tokenExists {
+			t.Error("password reset token was created for Google-only account")
+		}
+	})
+
 	t.Run("finds user by ID", func(t *testing.T) {
 		createdUser, err := repository.CreateWithPassword(t.Context(), "find-by-id@example.com", "$argon2id$find-by-id-test-hash")
 		if err != nil {

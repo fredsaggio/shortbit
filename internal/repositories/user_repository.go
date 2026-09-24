@@ -205,6 +205,47 @@ func (r *UserRepository) FindPasswordCredentialsByEmail(
 	return user, credential, nil
 }
 
+func (r *UserRepository) CreatePasswordResetToken(ctx context.Context, email string, tokenHash []byte, expiresAt time.Time) error {
+	const q = `
+		INSERT INTO password_reset_tokens (
+			token_hash,
+			user_id,
+			expires_at
+		)
+		SELECT
+			@tokenHash,
+			u.id,
+			@expiresAt
+		FROM users AS u
+		JOIN password_credentials AS pc ON pc.user_id = u.id
+		WHERE u.email = @email
+		ON CONFLICT (user_id) DO UPDATE
+		SET
+			token_hash = EXCLUDED.token_hash,
+			created_at = NOW(),
+			expires_at = EXCLUDED.expires_at,
+			used_at = NULL
+		RETURNING user_id
+	`
+
+	args := pgx.StrictNamedArgs{
+		"email":     email,
+		"tokenHash": tokenHash,
+		"expiresAt": expiresAt,
+	}
+
+	var userID uuid.UUID
+	if err := r.db.QueryRow(ctx, q, args).Scan(&userID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrPasswordCredentialNotFound
+		}
+
+		return fmt.Errorf("create password reset token: %w", err)
+	}
+
+	return nil
+}
+
 func (r *UserRepository) FindByID(ctx context.Context, userID uuid.UUID) (models.User, error) {
 	const q = `
 		SELECT id, email, email_verified_at, created_at, updated_at
