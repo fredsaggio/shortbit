@@ -8,10 +8,10 @@ ShortBit is a URL shortener for public or password-protected links with optional
 
 - cadastro com senha e confirmação de email;
 - login com senha ou Google OIDC;
-- sessões opacas em cookies;
+- sessões opacas em cookies, com `remember_me` opcional para login por senha e sessão lembrada por padrão no Google;
 - autenticação, `/me` e logout;
 - rate limiting e limpeza de cadastros pendentes;
-- recuperação de senha em desenvolvimento;
+- recuperação de senha por código enviado por email;
 - domínio HTTP de URLs curtas ainda planejado.
 
 ## Documentação

@@ -1,7 +1,7 @@
 # API HTTP
 
 > Status: contratos implementados e planejados
-> Última atualização: 24 de setembro de 2026
+> Última atualização: 26 de setembro de 2026
 
 Base local:
 
@@ -139,7 +139,8 @@ Pode retornar `410`, `429` ou `500`.
 ```json
 {
   "email": "usuario@example.com",
-  "password": "senha12345"
+  "password": "senha12345",
+  "remember_me": false
 }
 ```
 
@@ -157,7 +158,7 @@ Set-Cookie: user_session=...
 | `429` | Rate limit por IP ou email |
 | `500` | Erro interno |
 
-`remember_me` ainda não faz parte do body implementado.
+`remember_me` é opcional e assume `false` quando omitido. Sem ele, a sessão expira no servidor após 12h por padrão e o cookie não tem `Expires`/`Max-Age`. Com `true`, a sessão e o cookie persistente duram 30 dias por padrão. Ambos os prazos são configuráveis e absolutos; atividade não os renova.
 
 ## Usuário atual ✅
 
@@ -196,6 +197,8 @@ Cria cookies temporários e responde com redirect para o Google:
 302 Found
 ```
 
+Não recebe `remember_me`. O login Google cria uma sessão lembrada por padrão.
+
 ### `GET /auth/google/callback`
 
 O Google envia `code` e `state`. Em sucesso:
@@ -204,6 +207,8 @@ O Google envia `code` e `state`. Em sucesso:
 204 No Content
 Set-Cookie: user_session=...
 ```
+
+O cookie `user_session` é persistente e acompanha o TTL lembrado, de 30 dias por padrão.
 
 Atualmente não há frontend para receber um redirect final, por isso o callback termina em uma página vazia.
 

@@ -1,7 +1,7 @@
 # Autenticação
 
-> Status: cadastro, login e recuperação de senha concluídos; “lembrar de mim” pendente
-> Última atualização: 24 de setembro de 2026
+> Status: cadastro, login, recuperação de senha e duração de sessões concluídos
+> Última atualização: 26 de setembro de 2026
 
 ## Visão geral
 
@@ -87,11 +87,11 @@ sequenceDiagram
     participant API
     participant DB as PostgreSQL
 
-    Client->>API: POST /sessions<br/>email + senha
+    Client->>API: POST /sessions<br/>email + senha + remember_me opcional
     API->>DB: Busca user + password_credentials
     API->>API: Compara senha com Argon2id
     API->>API: Gera token opaco aleatório
-    API->>DB: Salva SHA-256(token) em user_sessions
+    API->>DB: Salva SHA-256(token) e expiração escolhida em user_sessions
     API-->>Client: 204 + cookie user_session
 ```
 
@@ -119,8 +119,8 @@ sequenceDiagram
     Google-->>API: ID token
     API->>API: Valida assinatura, issuer, audience,<br/>expiração, nonce e email_verified
     API->>DB: Encontra, cria ou vincula usuário pelo sub
-    API->>DB: Cria user_session local
-    API-->>Browser: 204 + cookie user_session
+    API->>DB: Cria user_session local com TTL lembrado
+    API-->>Browser: 204 + cookie user_session persistente
 ```
 
 ### Regra de localização e vinculação
@@ -227,16 +227,18 @@ sequenceDiagram
 
 Email inexistente, conta Google-only e conta com senha têm a mesma resposta externa no pedido de recuperação. Erros reais de infraestrutura continuam sendo `500`. Falha da notificação posterior não desfaz a senha já alterada.
 
-## “Lembrar de mim” 📋
+## “Lembrar de mim” ✅
 
-Será a mesma sessão opaca com duas políticas de duração:
+É a mesma sessão opaca com duas políticas de duração no login por senha:
 
 ```text
-remember_me=false → TTL curto + cookie de sessão sem Expires/Max-Age
-remember_me=true  → TTL longo + cookie persistente
+remember_me ausente/false → 12h por padrão no banco + cookie de sessão sem Expires/Max-Age
+remember_me=true         → 30 dias por padrão no banco + cookie persistente
 ```
 
-Não haverá token em `localStorage`, JWT próprio ou expiração deslizante no MVP.
+O login Google usa a política lembrada por padrão, sem checkbox ou parâmetro `remember_me` no fluxo OAuth. O cookie guarda o token nos dois casos; apenas sua persistência no navegador muda. Fechar o navegador normalmente remove o cookie de sessão, mas a restauração de sessão pode preservá-lo. O servidor sempre rejeita a sessão depois de `user_sessions.expires_at`.
+
+Não há token em `localStorage`, JWT próprio ou expiração deslizante no MVP.
 
 ## Inventário de códigos e tokens
 
