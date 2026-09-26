@@ -27,6 +27,23 @@ func TestGenerateReturnsSixDecimalDigits(t *testing.T) {
 	}
 }
 
+func TestGeneratePasswordResetReturnsEightDecimalDigits(t *testing.T) {
+	for range 100 {
+		code, err := verificationcode.GeneratePasswordReset()
+		if err != nil {
+			t.Fatalf("GeneratePasswordReset() error = %v", err)
+		}
+		if len(code) != 8 {
+			t.Fatalf("GeneratePasswordReset() code length = %d, want 8; code = %q", len(code), code)
+		}
+		for _, character := range code {
+			if character < '0' || character > '9' {
+				t.Fatalf("GeneratePasswordReset() code = %q, want only decimal digits", code)
+			}
+		}
+	}
+}
+
 func TestProofIsDeterministicAndBoundToTokenAndCode(t *testing.T) {
 	const (
 		token = "registration-token"

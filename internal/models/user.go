@@ -48,10 +48,16 @@ type UserSession struct {
 	ExpiresAt time.Time
 }
 
-type PasswordResetToken struct {
-	TokenHash []byte
-	UserID    uuid.UUID
-	CreatedAt time.Time
-	ExpiresAt time.Time
-	UsedAt    *time.Time
+type PasswordResetAttempt struct {
+	TokenHash             []byte
+	UserID                uuid.UUID
+	VerificationProofHash []byte
+	FailedAttempts        int16
+	LockedUntil           *time.Time
+	LastCodeSentAt        time.Time
+	CodeExpiresAt         time.Time
+	AttemptExpiresAt      time.Time
+	UsedAt                *time.Time
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
 }
