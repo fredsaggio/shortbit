@@ -120,9 +120,9 @@ func TestAuthServiceLogin(t *testing.T) {
 		},
 	}
 
-	service := services.NewAuthService(userRepository, sessionRepository, comparator, generateToken, sessionTTL)
+	service := services.NewAuthService(userRepository, sessionRepository, comparator, generateToken, sessionTTL, 30*24*time.Hour)
 	beforeLogin := time.Now().UTC()
-	result, err := service.LoginWithPassword(ctx, inputEmail, inputPassword)
+	result, err := service.LoginWithPassword(ctx, inputEmail, inputPassword, false)
 	afterLogin := time.Now().UTC()
 
 	if err != nil {
@@ -139,6 +139,49 @@ func TestAuthServiceLogin(t *testing.T) {
 
 	if result.ExpiresAt.Before(beforeLogin.Add(sessionTTL)) || result.ExpiresAt.After(afterLogin.Add(sessionTTL)) {
 		t.Errorf("Login() expiration = %v, want between %v and %v", result.ExpiresAt, beforeLogin.Add(sessionTTL), afterLogin.Add(sessionTTL))
+	}
+}
+
+func TestAuthServiceCreatesRememberedSessionWithLongerTTL(t *testing.T) {
+	const (
+		sessionTTL           = 12 * time.Hour
+		rememberedSessionTTL = 30 * 24 * time.Hour
+	)
+
+	userID := uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c317")
+	tokenHash := []byte("hashed-session-token")
+	var persistedExpiresAt time.Time
+	sessionRepository := userSessionRepositoryStub{
+		createFunc: func(_ context.Context, gotUserID uuid.UUID, gotTokenHash []byte, expiresAt time.Time) error {
+			if gotUserID != userID {
+				t.Errorf("Create() user ID = %s, want %s", gotUserID, userID)
+			}
+			if !bytes.Equal(gotTokenHash, tokenHash) {
+				t.Errorf("Create() token hash = %q, want %q", gotTokenHash, tokenHash)
+			}
+			persistedExpiresAt = expiresAt
+			return nil
+		},
+	}
+
+	service := services.NewAuthService(nil, sessionRepository, nil, func() (string, []byte, error) {
+		return "raw-session-token", tokenHash, nil
+	}, sessionTTL, rememberedSessionTTL)
+
+	beforeCreate := time.Now().UTC()
+	result, err := service.CreateSession(t.Context(), userID, true)
+	afterCreate := time.Now().UTC()
+	if err != nil {
+		t.Fatalf("CreateSession() error = %v", err)
+	}
+	if result.Token != "raw-session-token" {
+		t.Errorf("CreateSession() token = %q, want raw-session-token", result.Token)
+	}
+	if !result.ExpiresAt.Equal(persistedExpiresAt) {
+		t.Errorf("CreateSession() expiration = %v, persisted expiration = %v", result.ExpiresAt, persistedExpiresAt)
+	}
+	if result.ExpiresAt.Before(beforeCreate.Add(rememberedSessionTTL)) || result.ExpiresAt.After(afterCreate.Add(rememberedSessionTTL)) {
+		t.Errorf("CreateSession() expiration = %v, want between %v and %v", result.ExpiresAt, beforeCreate.Add(rememberedSessionTTL), afterCreate.Add(rememberedSessionTTL))
 	}
 }
 
@@ -162,8 +205,8 @@ func TestAuthServiceLoginRejectsEmptyCredentials(t *testing.T) {
 				},
 			}
 
-			service := services.NewAuthService(userRepository, unexpectedSessionRepository(t), unexpectedComparator(t), unexpectedTokenGenerator(t), time.Hour)
-			_, err := service.LoginWithPassword(context.Background(), tt.email, tt.password)
+			service := services.NewAuthService(userRepository, unexpectedSessionRepository(t), unexpectedComparator(t), unexpectedTokenGenerator(t), time.Hour, 30*24*time.Hour)
+			_, err := service.LoginWithPassword(context.Background(), tt.email, tt.password, false)
 
 			if !errors.Is(err, services.ErrIncorrectEmailOrPassword) {
 				t.Fatalf("Login() error = %v, want %v", err, services.ErrIncorrectEmailOrPassword)
@@ -179,8 +222,8 @@ func TestAuthServiceLoginTranslatesMissingCredential(t *testing.T) {
 		},
 	}
 
-	service := services.NewAuthService(userRepository, unexpectedSessionRepository(t), unexpectedComparator(t), unexpectedTokenGenerator(t), time.Hour)
-	_, err := service.LoginWithPassword(context.Background(), "user@example.com", "senha-segura")
+	service := services.NewAuthService(userRepository, unexpectedSessionRepository(t), unexpectedComparator(t), unexpectedTokenGenerator(t), time.Hour, 30*24*time.Hour)
+	_, err := service.LoginWithPassword(context.Background(), "user@example.com", "senha-segura", false)
 
 	if !errors.Is(err, services.ErrIncorrectEmailOrPassword) {
 		t.Fatalf("Login() error = %v, want %v", err, services.ErrIncorrectEmailOrPassword)
@@ -195,8 +238,8 @@ func TestAuthServiceLoginPropagatesCredentialRepositoryError(t *testing.T) {
 		},
 	}
 
-	service := services.NewAuthService(userRepository, unexpectedSessionRepository(t), unexpectedComparator(t), unexpectedTokenGenerator(t), time.Hour)
-	_, err := service.LoginWithPassword(context.Background(), "user@example.com", "senha-segura")
+	service := services.NewAuthService(userRepository, unexpectedSessionRepository(t), unexpectedComparator(t), unexpectedTokenGenerator(t), time.Hour, 30*24*time.Hour)
+	_, err := service.LoginWithPassword(context.Background(), "user@example.com", "senha-segura", false)
 
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("Login() error = %v, want wrapped %v", err, wantErr)
@@ -212,8 +255,8 @@ func TestAuthServiceLoginPropagatesComparatorError(t *testing.T) {
 		},
 	}
 
-	service := services.NewAuthService(userRepository, unexpectedSessionRepository(t), comparator, unexpectedTokenGenerator(t), time.Hour)
-	_, err := service.LoginWithPassword(context.Background(), "user@example.com", "senha-segura")
+	service := services.NewAuthService(userRepository, unexpectedSessionRepository(t), comparator, unexpectedTokenGenerator(t), time.Hour, 30*24*time.Hour)
+	_, err := service.LoginWithPassword(context.Background(), "user@example.com", "senha-segura", false)
 
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("Login() error = %v, want wrapped %v", err, wantErr)
@@ -227,8 +270,8 @@ func TestAuthServiceLoginRejectsIncorrectPassword(t *testing.T) {
 		},
 	}
 
-	service := services.NewAuthService(validPasswordCredentialRepository(), unexpectedSessionRepository(t), comparator, unexpectedTokenGenerator(t), time.Hour)
-	_, err := service.LoginWithPassword(context.Background(), "user@example.com", "senha-incorreta")
+	service := services.NewAuthService(validPasswordCredentialRepository(), unexpectedSessionRepository(t), comparator, unexpectedTokenGenerator(t), time.Hour, 30*24*time.Hour)
+	_, err := service.LoginWithPassword(context.Background(), "user@example.com", "senha-incorreta", false)
 
 	if !errors.Is(err, services.ErrIncorrectEmailOrPassword) {
 		t.Fatalf("Login() error = %v, want %v", err, services.ErrIncorrectEmailOrPassword)
@@ -241,8 +284,8 @@ func TestAuthServiceLoginPropagatesTokenGeneratorError(t *testing.T) {
 		return "", nil, wantErr
 	}
 
-	service := services.NewAuthService(validPasswordCredentialRepository(), unexpectedSessionRepository(t), matchingPasswordComparator(), generateToken, time.Hour)
-	_, err := service.LoginWithPassword(context.Background(), "user@example.com", "senha-segura")
+	service := services.NewAuthService(validPasswordCredentialRepository(), unexpectedSessionRepository(t), matchingPasswordComparator(), generateToken, time.Hour, 30*24*time.Hour)
+	_, err := service.LoginWithPassword(context.Background(), "user@example.com", "senha-segura", false)
 
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("Login() error = %v, want wrapped %v", err, wantErr)
@@ -261,8 +304,8 @@ func TestAuthServiceLoginPropagatesSessionRepositoryError(t *testing.T) {
 		return "raw-session-token", []byte("hashed-session-token"), nil
 	}
 
-	service := services.NewAuthService(validPasswordCredentialRepository(), sessionRepository, matchingPasswordComparator(), generateToken, time.Hour)
-	_, err := service.LoginWithPassword(context.Background(), "user@example.com", "senha-segura")
+	service := services.NewAuthService(validPasswordCredentialRepository(), sessionRepository, matchingPasswordComparator(), generateToken, time.Hour, 30*24*time.Hour)
+	_, err := service.LoginWithPassword(context.Background(), "user@example.com", "senha-segura", false)
 
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("Login() error = %v, want wrapped %v", err, wantErr)
@@ -298,7 +341,7 @@ func TestAuthServiceAuthenticate(t *testing.T) {
 		},
 	}
 
-	service := services.NewAuthService(unexpectedPasswordCredentialRepository(t), sessionRepository, unexpectedComparator(t), unexpectedTokenGenerator(t), time.Hour)
+	service := services.NewAuthService(unexpectedPasswordCredentialRepository(t), sessionRepository, unexpectedComparator(t), unexpectedTokenGenerator(t), time.Hour, 30*24*time.Hour)
 	userID, err := service.Authenticate(ctx, rawToken)
 	if err != nil {
 		t.Fatalf("Authenticate() error = %v", err)
@@ -318,7 +361,7 @@ func TestAuthServiceAuthenticateRejectsEmptyToken(t *testing.T) {
 		},
 	}
 
-	service := services.NewAuthService(unexpectedPasswordCredentialRepository(t), sessionRepository, unexpectedComparator(t), unexpectedTokenGenerator(t), time.Hour)
+	service := services.NewAuthService(unexpectedPasswordCredentialRepository(t), sessionRepository, unexpectedComparator(t), unexpectedTokenGenerator(t), time.Hour, 30*24*time.Hour)
 	userID, err := service.Authenticate(context.Background(), "")
 
 	if !errors.Is(err, services.ErrUnauthenticated) {
@@ -341,7 +384,7 @@ func TestAuthServiceAuthenticateTranslatesMissingSession(t *testing.T) {
 		},
 	}
 
-	service := services.NewAuthService(unexpectedPasswordCredentialRepository(t), sessionRepository, unexpectedComparator(t), unexpectedTokenGenerator(t), time.Hour)
+	service := services.NewAuthService(unexpectedPasswordCredentialRepository(t), sessionRepository, unexpectedComparator(t), unexpectedTokenGenerator(t), time.Hour, 30*24*time.Hour)
 	userID, err := service.Authenticate(context.Background(), "unknown-session-token")
 
 	if !errors.Is(err, services.ErrUnauthenticated) {
@@ -361,7 +404,7 @@ func TestAuthServiceAuthenticatePropagatesRepositoryError(t *testing.T) {
 		},
 	}
 
-	service := services.NewAuthService(unexpectedPasswordCredentialRepository(t), sessionRepository, unexpectedComparator(t), unexpectedTokenGenerator(t), time.Hour)
+	service := services.NewAuthService(unexpectedPasswordCredentialRepository(t), sessionRepository, unexpectedComparator(t), unexpectedTokenGenerator(t), time.Hour, 30*24*time.Hour)
 	userID, err := service.Authenticate(context.Background(), "validly-shaped-token")
 
 	if !errors.Is(err, wantErr) {
@@ -405,7 +448,7 @@ func TestAuthServiceLogout(t *testing.T) {
 		},
 	}
 
-	service := services.NewAuthService(unexpectedPasswordCredentialRepository(t), sessionRepository, unexpectedComparator(t), unexpectedTokenGenerator(t), time.Hour)
+	service := services.NewAuthService(unexpectedPasswordCredentialRepository(t), sessionRepository, unexpectedComparator(t), unexpectedTokenGenerator(t), time.Hour, 30*24*time.Hour)
 	if err := service.Logout(ctx, rawToken); err != nil {
 		t.Fatalf("Logout() error = %v", err)
 	}
@@ -420,7 +463,7 @@ func TestAuthServiceLogoutAllowsEmptyToken(t *testing.T) {
 		},
 	}
 
-	service := services.NewAuthService(unexpectedPasswordCredentialRepository(t), sessionRepository, unexpectedComparator(t), unexpectedTokenGenerator(t), time.Hour)
+	service := services.NewAuthService(unexpectedPasswordCredentialRepository(t), sessionRepository, unexpectedComparator(t), unexpectedTokenGenerator(t), time.Hour, 30*24*time.Hour)
 	if err := service.Logout(context.Background(), ""); err != nil {
 		t.Fatalf("Logout() error = %v, want nil", err)
 	}
@@ -438,7 +481,7 @@ func TestAuthServiceLogoutPropagatesRepositoryError(t *testing.T) {
 		},
 	}
 
-	service := services.NewAuthService(unexpectedPasswordCredentialRepository(t), sessionRepository, unexpectedComparator(t), unexpectedTokenGenerator(t), time.Hour)
+	service := services.NewAuthService(unexpectedPasswordCredentialRepository(t), sessionRepository, unexpectedComparator(t), unexpectedTokenGenerator(t), time.Hour, 30*24*time.Hour)
 	err := service.Logout(context.Background(), "raw-session-token")
 
 	if !errors.Is(err, wantErr) {

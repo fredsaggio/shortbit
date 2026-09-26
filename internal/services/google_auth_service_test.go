@@ -31,11 +31,11 @@ func (s googleUserRepositoryStub) LinkIdentityToPasswordUserByEmail(ctx context.
 }
 
 type userSessionCreatorStub struct {
-	createSessionFunc func(ctx context.Context, userID uuid.UUID) (services.LoginResult, error)
+	createSessionFunc func(ctx context.Context, userID uuid.UUID, rememberMe bool) (services.LoginResult, error)
 }
 
-func (s userSessionCreatorStub) CreateSession(ctx context.Context, userID uuid.UUID) (services.LoginResult, error) {
-	return s.createSessionFunc(ctx, userID)
+func (s userSessionCreatorStub) CreateSession(ctx context.Context, userID uuid.UUID, rememberMe bool) (services.LoginResult, error) {
+	return s.createSessionFunc(ctx, userID, rememberMe)
 }
 
 type googleOIDCClientStub struct {
@@ -116,9 +116,12 @@ func TestGoogleAuthServiceCompleteLoginExistingIdentity(t *testing.T) {
 	}
 
 	sessionCreator := userSessionCreatorStub{
-		createSessionFunc: func(gotCtx context.Context, userID uuid.UUID) (services.LoginResult, error) {
+		createSessionFunc: func(gotCtx context.Context, userID uuid.UUID, rememberMe bool) (services.LoginResult, error) {
 			if got := gotCtx.Value(contextKey{}); got != contextValue {
 				t.Errorf("CreateSession() context value = %v, want %q", got, contextValue)
+			}
+			if !rememberMe {
+				t.Error("CreateSession() rememberMe = false, want true for Google login")
 			}
 			if userID != wantUser.ID {
 				t.Errorf("CreateSession() user ID = %s, want %s", userID, wantUser.ID)
@@ -201,7 +204,10 @@ func TestGoogleAuthServiceCompleteLoginCreatesMissingIdentity(t *testing.T) {
 	}
 
 	sessionCreator := userSessionCreatorStub{
-		createSessionFunc: func(_ context.Context, userID uuid.UUID) (services.LoginResult, error) {
+		createSessionFunc: func(_ context.Context, userID uuid.UUID, rememberMe bool) (services.LoginResult, error) {
+			if !rememberMe {
+				t.Error("CreateSession() rememberMe = false, want true for Google login")
+			}
 			if userID != wantUser.ID {
 				t.Errorf("CreateSession() user ID = %s, want %s", userID, wantUser.ID)
 			}
@@ -273,7 +279,10 @@ func TestGoogleAuthServiceCompleteLoginLinksIdentityToPasswordAccount(t *testing
 		},
 	}
 
-	sessionCreator := userSessionCreatorStub{createSessionFunc: func(_ context.Context, userID uuid.UUID) (services.LoginResult, error) {
+	sessionCreator := userSessionCreatorStub{createSessionFunc: func(_ context.Context, userID uuid.UUID, rememberMe bool) (services.LoginResult, error) {
+		if !rememberMe {
+			t.Error("CreateSession() rememberMe = false, want true for Google login")
+		}
 		if userID != wantUser.ID {
 			t.Errorf("CreateSession() user ID = %s, want %s", userID, wantUser.ID)
 		}
@@ -357,7 +366,10 @@ func TestGoogleAuthServiceCompleteLoginFindsIdentityLinkedConcurrently(t *testin
 		},
 	}
 
-	sessionCreator := userSessionCreatorStub{createSessionFunc: func(_ context.Context, userID uuid.UUID) (services.LoginResult, error) {
+	sessionCreator := userSessionCreatorStub{createSessionFunc: func(_ context.Context, userID uuid.UUID, rememberMe bool) (services.LoginResult, error) {
+		if !rememberMe {
+			t.Error("CreateSession() rememberMe = false, want true for Google login")
+		}
 		if userID != wantUser.ID {
 			t.Errorf("CreateSession() user ID = %s, want %s", userID, wantUser.ID)
 		}
@@ -400,7 +412,10 @@ func TestGoogleAuthServiceCompleteLoginFindsIdentityCreatedConcurrently(t *testi
 		},
 	}
 
-	sessionCreator := userSessionCreatorStub{createSessionFunc: func(_ context.Context, userID uuid.UUID) (services.LoginResult, error) {
+	sessionCreator := userSessionCreatorStub{createSessionFunc: func(_ context.Context, userID uuid.UUID, rememberMe bool) (services.LoginResult, error) {
+		if !rememberMe {
+			t.Error("CreateSession() rememberMe = false, want true for Google login")
+		}
 		if userID != wantUser.ID {
 			t.Errorf("CreateSession() user ID = %s, want %s", userID, wantUser.ID)
 		}
@@ -445,7 +460,10 @@ func TestGoogleAuthServiceCompleteLoginLinksPasswordAccountCreatedConcurrently(t
 		},
 	}
 
-	sessionCreator := userSessionCreatorStub{createSessionFunc: func(_ context.Context, userID uuid.UUID) (services.LoginResult, error) {
+	sessionCreator := userSessionCreatorStub{createSessionFunc: func(_ context.Context, userID uuid.UUID, rememberMe bool) (services.LoginResult, error) {
+		if !rememberMe {
+			t.Error("CreateSession() rememberMe = false, want true for Google login")
+		}
 		if userID != wantUser.ID {
 			t.Errorf("CreateSession() user ID = %s, want %s", userID, wantUser.ID)
 		}
@@ -524,7 +542,7 @@ func TestGoogleAuthServiceCompleteLoginPropagatesSessionCreationError(t *testing
 	}
 
 	sessionCreator := userSessionCreatorStub{
-		createSessionFunc: func(context.Context, uuid.UUID) (services.LoginResult, error) {
+		createSessionFunc: func(context.Context, uuid.UUID, bool) (services.LoginResult, error) {
 			return services.LoginResult{}, wantErr
 		},
 	}
@@ -565,7 +583,7 @@ func unexpectedUserSessionCreator(t *testing.T) userSessionCreatorStub {
 	t.Helper()
 
 	return userSessionCreatorStub{
-		createSessionFunc: func(context.Context, uuid.UUID) (services.LoginResult, error) {
+		createSessionFunc: func(context.Context, uuid.UUID, bool) (services.LoginResult, error) {
 			t.Fatal("CreateSession() should not be called")
 			return services.LoginResult{}, nil
 		},

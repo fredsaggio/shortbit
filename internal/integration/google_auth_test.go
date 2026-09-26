@@ -102,12 +102,26 @@ func TestGoogleLoginIntegration(t *testing.T) {
 	)
 
 	t.Run("creates a Google-only user and a local session", func(t *testing.T) {
+		beforeLogin := time.Now().UTC()
 		googleSessionCookie = performGoogleLogin(t, router, googleClient, newUserCode)
+		afterLogin := time.Now().UTC()
 		googleUserID = findUserIDByEmail(t, pool, googleEmail)
 
 		assertGoogleIdentity(t, pool, googleUserID, googleSubject)
 		assertPasswordCredentialExists(t, pool, googleUserID, false)
 		assertSessionBelongsToUser(t, pool, googleSessionCookie.Value, googleUserID)
+
+		var expiresAt time.Time
+		if err := pool.QueryRow(t.Context(), "SELECT expires_at FROM user_sessions WHERE token_hash = $1", sessiontoken.Hash(googleSessionCookie.Value)).Scan(&expiresAt); err != nil {
+			t.Fatalf("find Google session expiration: %v", err)
+		}
+		rememberedTTL := 30 * 24 * time.Hour
+		if expiresAt.Before(beforeLogin.Add(rememberedTTL)) || expiresAt.After(afterLogin.Add(rememberedTTL)) {
+			t.Errorf("Google session expiration = %v, want 30 days after login", expiresAt)
+		}
+		if !googleSessionCookie.Expires.Equal(expiresAt.Truncate(time.Second)) {
+			t.Errorf("Google cookie expiration = %v, stored expiration = %v", googleSessionCookie.Expires, expiresAt)
+		}
 	})
 
 	t.Run("uses the subject to find the same Google user", func(t *testing.T) {

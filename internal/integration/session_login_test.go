@@ -158,6 +158,30 @@ func TestPasswordLoginIntegration(t *testing.T) {
 			t.Error("second session hash was not found in the database")
 		}
 	})
+
+	t.Run("remember me creates a 30-day session", func(t *testing.T) {
+		beforeLogin := time.Now().UTC()
+		response := performJSONRequest(t, router, http.MethodPost, "/sessions", `{"email":"login-integration@example.com","password":"senha12345","remember_me":true}`)
+		afterLogin := time.Now().UTC()
+		defer response.Body.Close()
+
+		if response.StatusCode != http.StatusNoContent {
+			t.Fatalf("status code = %d, want %d; body = %q", response.StatusCode, http.StatusNoContent, readResponseBody(t, response))
+		}
+
+		cookie := requireCookie(t, response.Cookies(), "user_session")
+		var expiresAt time.Time
+		if err := pool.QueryRow(t.Context(), "SELECT expires_at FROM user_sessions WHERE token_hash = $1", sessiontoken.Hash(cookie.Value)).Scan(&expiresAt); err != nil {
+			t.Fatalf("find remembered session expiration: %v", err)
+		}
+		rememberedTTL := 30 * 24 * time.Hour
+		if expiresAt.Before(beforeLogin.Add(rememberedTTL)) || expiresAt.After(afterLogin.Add(rememberedTTL)) {
+			t.Errorf("remembered session expiration = %v, want 30 days after login", expiresAt)
+		}
+		if !cookie.Expires.Equal(expiresAt.Truncate(time.Second)) {
+			t.Errorf("remembered cookie expiration = %v, stored expiration = %v", cookie.Expires, expiresAt)
+		}
+	})
 }
 
 func testConfig(sessionTTL time.Duration) config.Config {

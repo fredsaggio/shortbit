@@ -80,7 +80,7 @@ func (s *GoogleAuthService) loginWithProvider(ctx context.Context, email, provid
 	user, err := s.googleRepo.FindUserByProviderIdentity(ctx, googleProvider, providerUserID)
 
 	if err == nil {
-		return s.sessionCreator.CreateSession(ctx, user.ID, false)
+		return s.sessionCreator.CreateSession(ctx, user.ID, true)
 	}
 
 	if !errors.Is(err, repositories.ErrAuthIdentityNotFound) {
@@ -150,5 +150,5 @@ func (s *GoogleAuthService) loginWithProvider(ctx context.Context, email, provid
 		return LoginResult{}, fmt.Errorf("link Google identity to password account: %w", err)
 	}
 
-	return s.sessionCreator.CreateSession(ctx, user.ID, false)
+	return s.sessionCreator.CreateSession(ctx, user.ID, true)
 }

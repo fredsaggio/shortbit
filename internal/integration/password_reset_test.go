@@ -43,7 +43,7 @@ func TestPasswordResetIntegration(t *testing.T) {
 		t.Fatalf("create Google-only account: %v", err)
 	}
 	sessionRepo := repositories.NewUserSessionRepository(pool)
-	authService := services.NewAuthService(userRepo, sessionRepo, hasher, sessiontoken.Generate, 24*time.Hour)
+	authService := services.NewAuthService(userRepo, sessionRepo, hasher, sessiontoken.Generate, 24*time.Hour, 720*time.Hour)
 	sender := &recordingPasswordResetSender{}
 	resetService := services.NewPasswordResetService(userRepo, hasher, sender, sessiontoken.Generate, func() (string, error) { return "12345678", nil },
 		services.PasswordResetConfig{CodeTTL: 10 * time.Minute, AttemptTTL: 30 * time.Minute})

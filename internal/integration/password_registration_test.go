@@ -477,7 +477,7 @@ func passwordRegistrationTestRouter(pool *pgxpool.Pool, codeSender registrationA
 	resetHandler := handlers.NewPasswordResetHandler(resetService, registrationEmailLimiter, false)
 
 	sessionRepository := repositories.NewUserSessionRepository(pool)
-	authService := services.NewAuthService(userRepository, sessionRepository, passwordHasher, sessiontoken.Generate, 24*time.Hour)
+	authService := services.NewAuthService(userRepository, sessionRepository, passwordHasher, sessiontoken.Generate, 24*time.Hour, 720*time.Hour)
 	loginLimiter := middleware.NewRateLimiter(1, 5, 100, time.Minute)
 	sessionHandler := handlers.NewSessionHandler(authService, loginLimiter, false)
 	meHandler := middleware.Authenticator(authService)(http.HandlerFunc(userHandler.GetUserInfo))

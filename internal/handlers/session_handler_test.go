@@ -14,7 +14,7 @@ import (
 )
 
 type authServiceStub struct {
-	loginFunc  func(ctx context.Context, email, password string) (services.LoginResult, error)
+	loginFunc  func(ctx context.Context, email, password string, rememberMe bool) (services.LoginResult, error)
 	logoutFunc func(ctx context.Context, token string) error
 }
 
@@ -26,8 +26,8 @@ func (s loginRateLimiterStub) Allow(key string) (bool, int) {
 	return s.allowFunc(key)
 }
 
-func (s authServiceStub) LoginWithPassword(ctx context.Context, email, password string) (services.LoginResult, error) {
-	return s.loginFunc(ctx, email, password)
+func (s authServiceStub) LoginWithPassword(ctx context.Context, email, password string, rememberMe bool) (services.LoginResult, error) {
+	return s.loginFunc(ctx, email, password, rememberMe)
 }
 
 func (s authServiceStub) Logout(ctx context.Context, token string) error {
@@ -47,7 +47,7 @@ func TestSessionHandlerLogin(t *testing.T) {
 	expiresAt := time.Now().UTC().Add(24 * time.Hour).Truncate(time.Second)
 
 	service := authServiceStub{
-		loginFunc: func(gotCtx context.Context, gotEmail, gotPassword string) (services.LoginResult, error) {
+		loginFunc: func(gotCtx context.Context, gotEmail, gotPassword string, rememberMe bool) (services.LoginResult, error) {
 			if got := gotCtx.Value(contextKey{}); got != contextValue {
 				t.Errorf("Login() context value = %v, want %q", got, contextValue)
 			}
@@ -58,6 +58,9 @@ func TestSessionHandlerLogin(t *testing.T) {
 
 			if gotPassword != password {
 				t.Errorf("Login() password = %q, want %q", gotPassword, password)
+			}
+			if rememberMe {
+				t.Error("Login() rememberMe = true, want false when omitted")
 			}
 
 			return services.LoginResult{Token: token, ExpiresAt: expiresAt}, nil
@@ -116,7 +119,7 @@ func TestSessionHandlerLogin(t *testing.T) {
 func TestSessionHandlerLoginUsesCookieSecureConfiguration(t *testing.T) {
 	expiresAt := time.Now().UTC().Add(time.Hour).Truncate(time.Second)
 	service := authServiceStub{
-		loginFunc: func(context.Context, string, string) (services.LoginResult, error) {
+		loginFunc: func(context.Context, string, string, bool) (services.LoginResult, error) {
 			return services.LoginResult{Token: "raw-session-token", ExpiresAt: expiresAt}, nil
 		},
 	}
@@ -130,6 +133,26 @@ func TestSessionHandlerLoginUsesCookieSecureConfiguration(t *testing.T) {
 	cookie := findCookie(t, response.Result().Cookies(), "user_session")
 	if cookie.Secure {
 		t.Error("cookie Secure = true, want false")
+	}
+}
+
+func TestSessionHandlerLoginPassesRememberMe(t *testing.T) {
+	service := authServiceStub{
+		loginFunc: func(_ context.Context, _, _ string, rememberMe bool) (services.LoginResult, error) {
+			if !rememberMe {
+				t.Error("LoginWithPassword() rememberMe = false, want true")
+			}
+			return services.LoginResult{Token: "raw-session-token", ExpiresAt: time.Now().UTC().Add(30 * 24 * time.Hour)}, nil
+		},
+	}
+
+	handler := handlers.NewSessionHandler(service, allowAllLoginRateLimiter(), false)
+	request := httptest.NewRequest(http.MethodPost, "/sessions", strings.NewReader(`{"email":"user@example.com","password":"senha-segura","remember_me":true}`))
+	response := httptest.NewRecorder()
+	handler.LoginWithPassword(response, request)
+
+	if response.Code != http.StatusNoContent {
+		t.Errorf("status code = %d, want %d", response.Code, http.StatusNoContent)
 	}
 }
 
@@ -147,7 +170,7 @@ func TestSessionHandlerLoginRejectsInvalidJSON(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			service := authServiceStub{
-				loginFunc: func(context.Context, string, string) (services.LoginResult, error) {
+				loginFunc: func(context.Context, string, string, bool) (services.LoginResult, error) {
 					t.Fatal("Login() should not be called")
 					return services.LoginResult{}, nil
 				},
@@ -196,7 +219,7 @@ func TestSessionHandlerLoginMapsServiceErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			service := authServiceStub{
-				loginFunc: func(context.Context, string, string) (services.LoginResult, error) {
+				loginFunc: func(context.Context, string, string, bool) (services.LoginResult, error) {
 					return services.LoginResult{}, tt.serviceErr
 				},
 			}
@@ -231,7 +254,7 @@ func TestSessionHandlerLoginRateLimitsNormalizedEmail(t *testing.T) {
 	wantEmail := "user@example.com"
 
 	service := authServiceStub{
-		loginFunc: func(context.Context, string, string) (services.LoginResult, error) {
+		loginFunc: func(context.Context, string, string, bool) (services.LoginResult, error) {
 			t.Fatal("Login() should not be called after the email rate limit is reached")
 			return services.LoginResult{}, nil
 		},
