@@ -59,7 +59,7 @@ func CompositionRoot(pool db.DB, cfg config.Config, googleClient services.Google
 
 	userSessionRepository := repositories.NewUserSessionRepository(pool)
 
-	authService := services.NewAuthService(userRepository, userSessionRepository, passwordHasher, sessiontoken.Generate, cfg.Session.TTL)
+	authService := services.NewAuthService(userRepository, userSessionRepository, passwordHasher, sessiontoken.Generate, cfg.Session.TTL, cfg.Session.RememberedTTL)
 
 	googleAuthService := services.NewGoogleAuthService(userRepository, authService, googleClient)
 	googleAuthHandler := handlers.NewGoogleAuthHandler(googleAuthService, googleoidc.GenerateAuthorizationValues, cfg.Session.CookieSecure)

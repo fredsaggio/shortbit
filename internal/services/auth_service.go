@@ -34,11 +34,12 @@ type PasswordComparator interface {
 type TokenGenerator func() (string, []byte, error)
 
 type AuthService struct {
-	userRepo        PasswordCredentialRepository
-	userSessionRepo UserSessionRepository
-	hasher          PasswordComparator
-	generateToken   TokenGenerator
-	sessionTTL      time.Duration
+	userRepo             PasswordCredentialRepository
+	userSessionRepo      UserSessionRepository
+	hasher               PasswordComparator
+	generateToken        TokenGenerator
+	sessionTTL           time.Duration
+	rememberedSessionTTL time.Duration
 }
 
 type LoginResult struct {
@@ -46,17 +47,18 @@ type LoginResult struct {
 	ExpiresAt time.Time
 }
 
-func NewAuthService(userRepo PasswordCredentialRepository, userSessionRepo UserSessionRepository, hasher PasswordComparator, token TokenGenerator, sessionTTL time.Duration) *AuthService {
+func NewAuthService(userRepo PasswordCredentialRepository, userSessionRepo UserSessionRepository, hasher PasswordComparator, token TokenGenerator, sessionTTL time.Duration, rememberedSessionTTL time.Duration) *AuthService {
 	return &AuthService{
-		userRepo:        userRepo,
-		userSessionRepo: userSessionRepo,
-		hasher:          hasher,
-		generateToken:   token,
-		sessionTTL:      sessionTTL,
+		userRepo:             userRepo,
+		userSessionRepo:      userSessionRepo,
+		hasher:               hasher,
+		generateToken:        token,
+		sessionTTL:           sessionTTL,
+		rememberedSessionTTL: rememberedSessionTTL,
 	}
 }
 
-func (s *AuthService) LoginWithPassword(ctx context.Context, email, password string) (LoginResult, error) {
+func (s *AuthService) LoginWithPassword(ctx context.Context, email, password string, rememberMe bool) (LoginResult, error) {
 	normalizedEmail := normalizeEmail(email)
 
 	if normalizedEmail == "" || password == "" {
@@ -84,17 +86,21 @@ func (s *AuthService) LoginWithPassword(ctx context.Context, email, password str
 	}
 
 	// Não é preciso pegar o erro e tratar aqui porque as duas funções retornam a mesma coisa (Essa atual e essa que tá retornando), ou seja, no handler as variáveis já estão sendo passadas.
-	return s.CreateSession(ctx, user.ID)
+	return s.CreateSession(ctx, user.ID, rememberMe)
 }
 
-func (s *AuthService) CreateSession(ctx context.Context, userID uuid.UUID) (LoginResult, error) {
+func (s *AuthService) CreateSession(ctx context.Context, userID uuid.UUID, rememberMe bool) (LoginResult, error) {
+	ttl := s.sessionTTL
+	if rememberMe {
+		ttl = s.rememberedSessionTTL
+	}
 	token, tokenHash, err := s.generateToken()
 
 	if err != nil {
 		return LoginResult{}, fmt.Errorf("generate token: %w", err)
 	}
 
-	expirationTime := time.Now().UTC().Add(s.sessionTTL)
+	expirationTime := time.Now().UTC().Add(ttl)
 
 	if err = s.userSessionRepo.Create(ctx, userID, tokenHash, expirationTime); err != nil {
 		return LoginResult{}, fmt.Errorf("create session: %w", err)

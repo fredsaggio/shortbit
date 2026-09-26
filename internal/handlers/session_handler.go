@@ -14,7 +14,7 @@ import (
 )
 
 type AuthService interface {
-	LoginWithPassword(ctx context.Context, email, password string) (services.LoginResult, error)
+	LoginWithPassword(ctx context.Context, email, password string, rememberMe bool) (services.LoginResult, error)
 	Logout(ctx context.Context, token string) error
 }
 
@@ -29,8 +29,9 @@ type SessionHandler struct {
 }
 
 type createSessionRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email      string `json:"email"`
+	Password   string `json:"password"`
+	RememberMe bool   `json:"remember_me"`
 }
 
 func NewSessionHandler(authServ AuthService, emailRateLimiter LoginRateLimiter, cookieSecure bool) *SessionHandler {
@@ -67,7 +68,7 @@ func (h *SessionHandler) LoginWithPassword(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	login, err := h.authServ.LoginWithPassword(ctx, normalizedEmail, req.Password)
+	login, err := h.authServ.LoginWithPassword(ctx, normalizedEmail, req.Password, req.RememberMe)
 
 	if err != nil {
 		if errors.Is(err, services.ErrIncorrectEmailOrPassword) {

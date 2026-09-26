@@ -172,7 +172,9 @@ func Load(getEnv func(string) string) (Config, error) {
 			CodeTTL:    codeTTL,
 			AttemptTTL: attemptTTL,
 		},
-		PasswordReset: PasswordResetConfig{CodeTTL: resetCodeTTL, AttemptTTL: resetAttemptTTL},
+		PasswordReset: PasswordResetConfig{CodeTTL: resetCodeTTL,
+			AttemptTTL: resetAttemptTTL,
+		},
 	}
 
 	if cfg.DatabaseURL == "" {
