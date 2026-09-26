@@ -21,6 +21,7 @@ func TestLoad(t *testing.T) {
 				"DATABASE_URL":                      "postgres://user:password@localhost:5432/app",
 				"HTTP_ADDR":                         ":9090",
 				"USER_SESSION_TTL":                  "12h",
+				"REMEMBERED_USER_SESSION_TTL":       "336h",
 				"COOKIE_SECURE":                     "false",
 				"GOOGLE_CLIENT_ID":                  "test-client-id",
 				"GOOGLE_CLIENT_SECRET":              "test-client-secret",
@@ -43,8 +44,9 @@ func TestLoad(t *testing.T) {
 					ShutdownTimeout:   10 * time.Second,
 				},
 				Session: config.SessionConfig{
-					TTL:          12 * time.Hour,
-					CookieSecure: false,
+					TTL:           12 * time.Hour,
+					RememberedTTL: 336 * time.Hour,
+					CookieSecure:  false,
 				},
 				Google: config.GoogleConfig{
 					ClientID:     "test-client-id",
@@ -85,8 +87,9 @@ func TestLoad(t *testing.T) {
 					ShutdownTimeout:   10 * time.Second,
 				},
 				Session: config.SessionConfig{
-					TTL:          72 * time.Hour,
-					CookieSecure: true,
+					TTL:           12 * time.Hour,
+					RememberedTTL: 720 * time.Hour,
+					CookieSecure:  true,
 				},
 				Google: config.GoogleConfig{
 					ClientID:     "test-client-id",
@@ -129,6 +132,31 @@ func TestLoad(t *testing.T) {
 				"USER_SESSION_TTL": "-1h",
 			},
 			wantErrContains: "USER_SESSION_TTL must be greater than zero",
+		},
+		{
+			name:            "rejects invalid remembered session TTL",
+			env:             map[string]string{"REMEMBERED_USER_SESSION_TTL": "thirty days"},
+			wantErrContains: "REMEMBERED_USER_SESSION_TTL must be a valid duration",
+		},
+		{
+			name:            "rejects zero remembered session TTL",
+			env:             map[string]string{"REMEMBERED_USER_SESSION_TTL": "0s"},
+			wantErrContains: "REMEMBERED_USER_SESSION_TTL must be greater than zero",
+		},
+		{
+			name:            "rejects negative remembered session TTL",
+			env:             map[string]string{"REMEMBERED_USER_SESSION_TTL": "-1h"},
+			wantErrContains: "REMEMBERED_USER_SESSION_TTL must be greater than zero",
+		},
+		{
+			name:            "rejects remembered TTL equal to ordinary TTL",
+			env:             map[string]string{"USER_SESSION_TTL": "12h", "REMEMBERED_USER_SESSION_TTL": "12h"},
+			wantErrContains: "REMEMBERED_USER_SESSION_TTL must be greater than USER_SESSION_TTL",
+		},
+		{
+			name:            "rejects remembered TTL shorter than ordinary TTL",
+			env:             map[string]string{"USER_SESSION_TTL": "24h", "REMEMBERED_USER_SESSION_TTL": "12h"},
+			wantErrContains: "REMEMBERED_USER_SESSION_TTL must be greater than USER_SESSION_TTL",
 		},
 		{
 			name: "rejects invalid cookie secure value",

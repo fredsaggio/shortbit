@@ -162,7 +162,7 @@ func TestPasswordLoginIntegration(t *testing.T) {
 
 func testConfig(sessionTTL time.Duration) config.Config {
 	return config.Config{
-		Session: config.SessionConfig{TTL: sessionTTL, CookieSecure: false},
+		Session: config.SessionConfig{TTL: sessionTTL, RememberedTTL: 720 * time.Hour, CookieSecure: false},
 		Email:   config.EmailConfig{From: "noreply@example.com"},
 		Resend:  config.ResendConfig{APIKey: "re_test_api_key"},
 		PasswordRegistration: config.PasswordRegistrationConfig{

@@ -15,8 +15,9 @@ const (
 	defaultIdleTimeout       = 60 * time.Second
 	defaultShutdownTimeout   = 10 * time.Second
 
-	defaultUserSessionTTL = 72 * time.Hour
-	defaultCookieSecure   = true
+	defaultUserSessionTTL           = 12 * time.Hour
+	defaultRememberedUserSessionTTL = 720 * time.Hour
+	defaultCookieSecure             = true
 
 	defaultPasswordRegistrationCodeTTL    = 10 * time.Minute
 	defaultPasswordRegistrationAttemptTTL = 30 * time.Minute
@@ -36,8 +37,9 @@ type Config struct {
 }
 
 type SessionConfig struct {
-	TTL          time.Duration
-	CookieSecure bool
+	TTL           time.Duration
+	RememberedTTL time.Duration
+	CookieSecure  bool
 }
 
 type EmailConfig struct {
@@ -81,6 +83,17 @@ func Load(getEnv func(string) string) (Config, error) {
 
 	if sessionTTL <= 0 {
 		return Config{}, errors.New("USER_SESSION_TTL must be greater than zero")
+	}
+
+	rememberedSessionTTL, err := durationEnvOrDefault(getEnv, "REMEMBERED_USER_SESSION_TTL", defaultRememberedUserSessionTTL)
+	if err != nil {
+		return Config{}, err
+	}
+	if rememberedSessionTTL <= 0 {
+		return Config{}, errors.New("REMEMBERED_USER_SESSION_TTL must be greater than zero")
+	}
+	if rememberedSessionTTL <= sessionTTL {
+		return Config{}, errors.New("REMEMBERED_USER_SESSION_TTL must be greater than USER_SESSION_TTL")
 	}
 
 	cookieSecure, err := boolEnvOrDefault(getEnv, "COOKIE_SECURE", defaultCookieSecure)
@@ -140,8 +153,9 @@ func Load(getEnv func(string) string) (Config, error) {
 			ShutdownTimeout:   defaultShutdownTimeout,
 		},
 		Session: SessionConfig{
-			TTL:          sessionTTL,
-			CookieSecure: cookieSecure,
+			TTL:           sessionTTL,
+			RememberedTTL: rememberedSessionTTL,
+			CookieSecure:  cookieSecure,
 		},
 		Google: GoogleConfig{
 			ClientID:     getEnv("GOOGLE_CLIENT_ID"),
