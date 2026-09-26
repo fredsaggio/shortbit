@@ -124,8 +124,8 @@ func TestPasswordLoginIntegration(t *testing.T) {
 			t.Errorf("stored expiration = %v, want between %v and %v", expiresAt, beforeLogin.Add(sessionTTL), afterLogin.Add(sessionTTL))
 		}
 
-		if !cookie.Expires.Equal(expiresAt.Truncate(time.Second)) {
-			t.Errorf("cookie expiration = %v, stored expiration = %v", cookie.Expires, expiresAt)
+		if !cookie.Expires.IsZero() || cookie.MaxAge != 0 {
+			t.Errorf("default cookie should be a browser-session cookie, got Expires = %v, MaxAge = %d", cookie.Expires, cookie.MaxAge)
 		}
 
 		if got := countUserSessions(t, pool, email); got != 1 {

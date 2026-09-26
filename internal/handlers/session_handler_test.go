@@ -94,13 +94,15 @@ func TestSessionHandlerLogin(t *testing.T) {
 		t.Errorf("cookie path = %q, want %q", cookie.Path, "/")
 	}
 
-	if !cookie.Expires.Equal(expiresAt) {
-		t.Errorf("cookie expiration = %v, want %v", cookie.Expires, expiresAt)
+	if !cookie.Expires.IsZero() {
+		t.Errorf("cookie expiration = %v, want no expiration for a browser-session cookie", cookie.Expires)
 	}
 
-	maxAgeLimit := int((24 * time.Hour) / time.Second)
-	if cookie.MaxAge < maxAgeLimit-1 || cookie.MaxAge > maxAgeLimit {
-		t.Errorf("cookie MaxAge = %d, want between %d and %d", cookie.MaxAge, maxAgeLimit-1, maxAgeLimit)
+	if cookie.MaxAge != 0 {
+		t.Errorf("cookie MaxAge = %d, want 0 for a browser-session cookie", cookie.MaxAge)
+	}
+	if strings.Contains(result.Header.Get("Set-Cookie"), "Expires=") || strings.Contains(result.Header.Get("Set-Cookie"), "Max-Age=") {
+		t.Errorf("session cookie unexpectedly has a persistent expiration: %q", result.Header.Get("Set-Cookie"))
 	}
 
 	if !cookie.HttpOnly {
@@ -137,12 +139,13 @@ func TestSessionHandlerLoginUsesCookieSecureConfiguration(t *testing.T) {
 }
 
 func TestSessionHandlerLoginPassesRememberMe(t *testing.T) {
+	expiresAt := time.Now().UTC().Add(30 * 24 * time.Hour).Truncate(time.Second)
 	service := authServiceStub{
 		loginFunc: func(_ context.Context, _, _ string, rememberMe bool) (services.LoginResult, error) {
 			if !rememberMe {
 				t.Error("LoginWithPassword() rememberMe = false, want true")
 			}
-			return services.LoginResult{Token: "raw-session-token", ExpiresAt: time.Now().UTC().Add(30 * 24 * time.Hour)}, nil
+			return services.LoginResult{Token: "raw-session-token", ExpiresAt: expiresAt}, nil
 		},
 	}
 
@@ -153,6 +156,14 @@ func TestSessionHandlerLoginPassesRememberMe(t *testing.T) {
 
 	if response.Code != http.StatusNoContent {
 		t.Errorf("status code = %d, want %d", response.Code, http.StatusNoContent)
+	}
+	cookie := findCookie(t, response.Result().Cookies(), "user_session")
+	if !cookie.Expires.Equal(expiresAt) {
+		t.Errorf("remembered cookie expiration = %v, want %v", cookie.Expires, expiresAt)
+	}
+	maxAgeLimit := int((30 * 24 * time.Hour) / time.Second)
+	if cookie.MaxAge < maxAgeLimit-1 || cookie.MaxAge > maxAgeLimit {
+		t.Errorf("remembered cookie MaxAge = %d, want between %d and %d", cookie.MaxAge, maxAgeLimit-1, maxAgeLimit)
 	}
 }
 

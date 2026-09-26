@@ -81,7 +81,7 @@ func (h *SessionHandler) LoginWithPassword(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	setUserSessionCookie(w, login.Token, login.ExpiresAt, h.cookieSecure)
+	setUserSessionCookie(w, login.Token, login.ExpiresAt, req.RememberMe, h.cookieSecure)
 	w.WriteHeader(http.StatusNoContent)
 }
 

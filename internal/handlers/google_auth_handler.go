@@ -99,6 +99,7 @@ func (h *GoogleAuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setUserSessionCookie(w, login.Token, login.ExpiresAt, h.cookieSecure)
+	// RememberMe como true porque é login utilizando Google OIDC.
+	setUserSessionCookie(w, login.Token, login.ExpiresAt, true, h.cookieSecure)
 	w.WriteHeader(http.StatusNoContent)
 }
