@@ -1,7 +1,7 @@
 # Decisões arquiteturais
 
-> Status: estrutura preparada; decisões serão registradas quando necessário
-> Última atualização: 24 de setembro de 2026
+> Status: estrutura preparada; primeira decisão registrada
+> Última atualização: 26 de setembro de 2026
 
 Esta pasta recebe Architecture Decision Records (ADRs). Um ADR registra por que uma decisão importante foi tomada, quais alternativas foram consideradas e quais consequências foram aceitas.
 
@@ -42,6 +42,6 @@ Qual opção foi escolhida e por quê?
 Quais benefícios, limitações e trabalhos futuros surgem dessa escolha?
 ```
 
-## Próximo ADR provável
+## ADRs
 
-A estratégia de shortcode está deliberadamente adiada. Quando for retomada, comparar Base62 aleatório persistido e Sqids derivado do ID antes de registrar a decisão final.
+- [0001 — Shortcode de sete caracteres com ID incremental e FF1](0001-shortcode-ff1.md) — aceita; implementação pendente.

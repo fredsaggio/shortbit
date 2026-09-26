@@ -153,7 +153,9 @@ Há no máximo uma linha por usuário com senha. O token opaco fica no cookie e 
 
 ### `urls` 📋
 
-O schema está pronto, mas o fluxo HTTP ainda não foi implementado. Links privados exigem `password_hash`; links públicos exigem que esse campo seja `NULL`.
+O schema existe, mas o fluxo HTTP ainda não foi implementado. Links privados exigem `password_hash`; links públicos exigem que esse campo seja `NULL`.
+
+**Mudança planejada antes de `POST /urls`:** `id` continua sendo `BIGINT GENERATED ALWAYS AS IDENTITY`; `short_code` será derivado de `id - 1` por FF1 sobre sete posições Base62, persistido e protegido por `UNIQUE`. A migration atual ainda aceita no mínimo oito caracteres: ela precisa passar a exigir **exatamente sete**. O código do redirect consultará `short_code` diretamente, sem decodificá-lo. Consulte [Short links](short-links.md) para domínio, chave, limites e fluxo de criação.
 
 ### `link_access_sessions` 📋
 
