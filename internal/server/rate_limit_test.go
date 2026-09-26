@@ -32,12 +32,50 @@ func (allowAllLoginRateLimiterStub) Allow(string) (bool, int) {
 	return true, 0
 }
 
+type passwordResetServiceStub struct{}
+
+func (passwordResetServiceStub) Start(context.Context, string, string) (services.PasswordResetStartResult, error) {
+	return services.PasswordResetStartResult{Token: "test-token"}, nil
+}
+
+func newPasswordResetTestHandler() *handlers.PasswordResetHandler {
+	return handlers.NewPasswordResetHandler(passwordResetServiceStub{}, allowAllLoginRateLimiterStub{}, false)
+}
+
+func TestNewRouterHTTPRegistersPasswordResetRouteAndAppliesIPRateLimit(t *testing.T) {
+	applicationHandlers := &Handlers{
+		UserHandler:          &handlers.UserHandler{},
+		SessionHandler:       &handlers.SessionHandler{},
+		PasswordResetHandler: newPasswordResetTestHandler(),
+		MeHandler:            http.NotFoundHandler(),
+	}
+	srv := NewServer(applicationHandlers, nil)
+	srv.rateLimiter = middleware.NewRateLimiter(1_000, 100, 10, time.Minute)
+	srv.passwordResetStartLimiter = middleware.NewRateLimiter(0.001, 2, 10, time.Minute)
+	router := srv.NewRouterHTTP()
+
+	for requestNumber := 1; requestNumber <= 3; requestNumber++ {
+		request := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/password-resets", strings.NewReader(`{"email":"user@example.com"}`))
+		request.RemoteAddr = "192.0.2.1:1234"
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		wantStatus := http.StatusAccepted
+		if requestNumber == 3 {
+			wantStatus = http.StatusTooManyRequests
+		}
+		if response.Code != wantStatus {
+			t.Errorf("request %d status = %d, want %d", requestNumber, response.Code, wantStatus)
+		}
+	}
+}
+
 func TestNewRouterHTTPAppliesGlobalRateLimit(t *testing.T) {
 	ctx := t.Context()
 	applicationHandlers := &Handlers{
-		UserHandler:    &handlers.UserHandler{},
-		SessionHandler: &handlers.SessionHandler{},
-		MeHandler:      http.NotFoundHandler(),
+		UserHandler:          &handlers.UserHandler{},
+		SessionHandler:       &handlers.SessionHandler{},
+		PasswordResetHandler: newPasswordResetTestHandler(),
+		MeHandler:            http.NotFoundHandler(),
 	}
 
 	srv := NewServer(applicationHandlers, nil)
@@ -69,9 +107,10 @@ func TestNewRouterHTTPAppliesLoginRateLimitOnlyToSessions(t *testing.T) {
 	ctx := t.Context()
 	authService := &loginAuthServiceStub{}
 	applicationHandlers := &Handlers{
-		UserHandler:    &handlers.UserHandler{},
-		SessionHandler: handlers.NewSessionHandler(authService, allowAllLoginRateLimiterStub{}, false),
-		MeHandler:      http.NotFoundHandler(),
+		UserHandler:          &handlers.UserHandler{},
+		SessionHandler:       handlers.NewSessionHandler(authService, allowAllLoginRateLimiterStub{}, false),
+		PasswordResetHandler: newPasswordResetTestHandler(),
+		MeHandler:            http.NotFoundHandler(),
 	}
 
 	srv := NewServer(applicationHandlers, nil)
@@ -154,9 +193,10 @@ func TestNewRouterHTTPAppliesPasswordRegistrationRateLimits(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			applicationHandlers := &Handlers{
-				UserHandler:    &handlers.UserHandler{},
-				SessionHandler: &handlers.SessionHandler{},
-				MeHandler:      http.NotFoundHandler(),
+				UserHandler:          &handlers.UserHandler{},
+				SessionHandler:       &handlers.SessionHandler{},
+				PasswordResetHandler: newPasswordResetTestHandler(),
+				MeHandler:            http.NotFoundHandler(),
 			}
 
 			srv := NewServer(applicationHandlers, nil)
@@ -193,9 +233,10 @@ func TestNewRouterHTTPAppliesPasswordRegistrationRateLimits(t *testing.T) {
 
 func TestPasswordRegistrationRateLimitersAreIndependent(t *testing.T) {
 	applicationHandlers := &Handlers{
-		UserHandler:    &handlers.UserHandler{},
-		SessionHandler: &handlers.SessionHandler{},
-		MeHandler:      http.NotFoundHandler(),
+		UserHandler:          &handlers.UserHandler{},
+		SessionHandler:       &handlers.SessionHandler{},
+		PasswordResetHandler: newPasswordResetTestHandler(),
+		MeHandler:            http.NotFoundHandler(),
 	}
 
 	srv := NewServer(applicationHandlers, nil)

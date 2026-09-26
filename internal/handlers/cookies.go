@@ -19,7 +19,20 @@ const (
 
 	passwordRegistrationCookieName = "password_registration"
 	passwordRegistrationCookiePath = "/registrations/password"
+	passwordResetCookieName        = "password_reset"
+	passwordResetCookiePath        = "/password-resets"
 )
+
+func setPasswordResetCookie(w http.ResponseWriter, token string, secure bool) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     passwordResetCookieName,
+		Value:    token,
+		Path:     passwordResetCookiePath,
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteStrictMode,
+	})
+}
 
 func setPasswordRegistrationCookie(w http.ResponseWriter, token string, expiresAt time.Time, secure bool) {
 	maxAge := int(math.Ceil(time.Until(expiresAt).Seconds()))

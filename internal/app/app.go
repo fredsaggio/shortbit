@@ -29,6 +29,11 @@ const (
 	registrationEmailRateLimitBurst             = 3
 	registrationEmailRateLimitMaxEntries        = 10_000
 	registrationEmailRateLimitStaleAfter        = 30 * time.Minute
+
+	passwordResetEmailRateLimitRequestsPerSecond = 3.0 / (10.0 * 60.0)
+	passwordResetEmailRateLimitBurst             = 3
+	passwordResetEmailRateLimitMaxEntries        = 10_000
+	passwordResetEmailRateLimitStaleAfter        = 30 * time.Minute
 )
 
 func CompositionRoot(pool db.DB, cfg config.Config, googleClient services.GoogleOIDCClient) (*server.Handlers, *jobs.PasswordRegistrationCleanup) {
@@ -47,6 +52,10 @@ func CompositionRoot(pool db.DB, cfg config.Config, googleClient services.Google
 	)
 	registrationEmailRateLimiter := middleware.NewRateLimiter(registrationEmailRateLimitRequestsPerSecond, registrationEmailRateLimitBurst, registrationEmailRateLimitMaxEntries, registrationEmailRateLimitStaleAfter)
 	userHandler := handlers.NewUserHandler(userService, registrationEmailRateLimiter, cfg.Session.CookieSecure)
+	passwordResetService := services.NewPasswordResetService(userRepository, codeSender, sessiontoken.Generate, verificationcode.GeneratePasswordReset,
+		services.PasswordResetConfig{CodeTTL: cfg.PasswordReset.CodeTTL, AttemptTTL: cfg.PasswordReset.AttemptTTL})
+	passwordResetEmailRateLimiter := middleware.NewRateLimiter(passwordResetEmailRateLimitRequestsPerSecond, passwordResetEmailRateLimitBurst, passwordResetEmailRateLimitMaxEntries, passwordResetEmailRateLimitStaleAfter)
+	passwordResetHandler := handlers.NewPasswordResetHandler(passwordResetService, passwordResetEmailRateLimiter, cfg.Session.CookieSecure)
 
 	userSessionRepository := repositories.NewUserSessionRepository(pool)
 
@@ -61,9 +70,10 @@ func CompositionRoot(pool db.DB, cfg config.Config, googleClient services.Google
 	meHandler := middleware.Authenticator(authService)(http.HandlerFunc(userHandler.GetUserInfo))
 
 	return &server.Handlers{
-		UserHandler:       userHandler,
-		SessionHandler:    sessionHandler,
-		GoogleAuthHandler: googleAuthHandler,
-		MeHandler:         meHandler,
+		UserHandler:          userHandler,
+		SessionHandler:       sessionHandler,
+		GoogleAuthHandler:    googleAuthHandler,
+		PasswordResetHandler: passwordResetHandler,
+		MeHandler:            meHandler,
 	}, passwordRegisterCleanup
 }

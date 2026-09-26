@@ -29,6 +29,8 @@ func TestLoad(t *testing.T) {
 				"RESEND_API_KEY":                    "re_test_api_key",
 				"PASSWORD_REGISTRATION_CODE_TTL":    "5m",
 				"PASSWORD_REGISTRATION_ATTEMPT_TTL": "20m",
+				"PASSWORD_RESET_CODE_TTL":           "8m",
+				"PASSWORD_RESET_ATTEMPT_TTL":        "25m",
 			},
 			want: config.Config{
 				DatabaseURL: "postgres://user:password@localhost:5432/app",
@@ -59,6 +61,7 @@ func TestLoad(t *testing.T) {
 					CodeTTL:    5 * time.Minute,
 					AttemptTTL: 20 * time.Minute,
 				},
+				PasswordReset: config.PasswordResetConfig{CodeTTL: 8 * time.Minute, AttemptTTL: 25 * time.Minute},
 			},
 		},
 		{
@@ -100,6 +103,7 @@ func TestLoad(t *testing.T) {
 					CodeTTL:    10 * time.Minute,
 					AttemptTTL: 30 * time.Minute,
 				},
+				PasswordReset: config.PasswordResetConfig{CodeTTL: 10 * time.Minute, AttemptTTL: 30 * time.Minute},
 			},
 		},
 		{
@@ -170,6 +174,11 @@ func TestLoad(t *testing.T) {
 			},
 			wantErrContains: "PASSWORD_REGISTRATION_CODE_TTL must not be greater than PASSWORD_REGISTRATION_ATTEMPT_TTL",
 		},
+		{name: "rejects invalid reset code TTL", env: map[string]string{"PASSWORD_RESET_CODE_TTL": "ten minutes"}, wantErrContains: "PASSWORD_RESET_CODE_TTL must be a valid duration"},
+		{name: "rejects non-positive reset code TTL", env: map[string]string{"PASSWORD_RESET_CODE_TTL": "0s"}, wantErrContains: "PASSWORD_RESET_CODE_TTL must be greater than zero"},
+		{name: "rejects invalid reset attempt TTL", env: map[string]string{"PASSWORD_RESET_ATTEMPT_TTL": "thirty minutes"}, wantErrContains: "PASSWORD_RESET_ATTEMPT_TTL must be a valid duration"},
+		{name: "rejects non-positive reset attempt TTL", env: map[string]string{"PASSWORD_RESET_ATTEMPT_TTL": "-1m"}, wantErrContains: "PASSWORD_RESET_ATTEMPT_TTL must be greater than zero"},
+		{name: "rejects reset code TTL greater than attempt TTL", env: map[string]string{"PASSWORD_RESET_CODE_TTL": "20m", "PASSWORD_RESET_ATTEMPT_TTL": "10m"}, wantErrContains: "PASSWORD_RESET_CODE_TTL must not be greater than PASSWORD_RESET_ATTEMPT_TTL"},
 		{
 			name: "rejects missing Google client ID",
 			env: map[string]string{

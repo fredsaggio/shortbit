@@ -32,7 +32,7 @@ http://localhost:8080
 | `GET` | `/me` | Sim | ✅ |
 | `GET` | `/auth/google` | Não | ✅ |
 | `GET` | `/auth/google/callback` | Cookies temporários | ✅ |
-| `POST` | `/password-resets` | Não | 🚧 |
+| `POST` | `/password-resets` | Não | ✅ |
 | `POST` | `/password-resets/confirm` | Cookie da tentativa | 📋 |
 | `POST` | `/urls` | Sim | 📋 |
 | `GET` | `/urls` | Sim | 📋 |
@@ -211,7 +211,7 @@ Atualmente não há frontend para receber um redirect final, por isso o callback
 
 ### `POST /password-resets`
 
-Contrato planejado:
+Request:
 
 ```json
 {
@@ -219,7 +219,7 @@ Contrato planejado:
 }
 ```
 
-Email inexistente, Google-only e conta com senha devem responder igualmente:
+Email inexistente, Google-only e conta com senha respondem igualmente; a resposta também define um cookie HttpOnly `password_reset`:
 
 ```text
 202 Accepted
@@ -237,7 +237,7 @@ Contrato planejado:
 }
 ```
 
-O token opaco identifica a tentativa e fica em cookie HttpOnly. O email contém apenas o código de oito dígitos; nenhum dos endpoints acima foi implementado ainda.
+O token opaco identifica a tentativa e fica em cookie HttpOnly. O email contém apenas o código de oito dígitos. O início já está implementado; a confirmação ainda não.
 
 Sucesso planejado:
 

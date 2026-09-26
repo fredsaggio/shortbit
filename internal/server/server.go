@@ -32,6 +32,9 @@ const (
 
 	registrationRateLimitMaxClients = 10_000
 	registrationRateLimitStaleAfter = 10 * time.Minute
+
+	passwordResetStartRateLimitRequestsPerSecond = 5.0 / 60.0
+	passwordResetStartRateLimitBurst             = 3
 )
 
 type DatabasePinger interface {
@@ -39,10 +42,11 @@ type DatabasePinger interface {
 }
 
 type Handlers struct {
-	UserHandler       *handlers.UserHandler
-	SessionHandler    *handlers.SessionHandler
-	GoogleAuthHandler *handlers.GoogleAuthHandler
-	MeHandler         http.Handler
+	UserHandler          *handlers.UserHandler
+	SessionHandler       *handlers.SessionHandler
+	GoogleAuthHandler    *handlers.GoogleAuthHandler
+	PasswordResetHandler *handlers.PasswordResetHandler
+	MeHandler            http.Handler
 }
 
 type Server struct {
@@ -53,6 +57,7 @@ type Server struct {
 	registrationStartLimiter   *middleware.RateLimiter
 	registrationConfirmLimiter *middleware.RateLimiter
 	registrationResendLimiter  *middleware.RateLimiter
+	passwordResetStartLimiter  *middleware.RateLimiter
 }
 
 func NewServer(h *Handlers, database DatabasePinger) *Server {
@@ -64,6 +69,7 @@ func NewServer(h *Handlers, database DatabasePinger) *Server {
 		registrationStartLimiter:   middleware.NewRateLimiter(registrationStartRateLimitRequestsPerSecond, registrationStartRateLimitBurst, registrationRateLimitMaxClients, registrationRateLimitStaleAfter),
 		registrationConfirmLimiter: middleware.NewRateLimiter(registrationConfirmRateLimitRequestsPerSecond, registrationConfirmRateLimitBurst, registrationRateLimitMaxClients, registrationRateLimitStaleAfter),
 		registrationResendLimiter:  middleware.NewRateLimiter(registrationResendRateLimitRequestsPerSecond, registrationResendRateLimitBurst, registrationRateLimitMaxClients, registrationRateLimitStaleAfter),
+		passwordResetStartLimiter:  middleware.NewRateLimiter(passwordResetStartRateLimitRequestsPerSecond, passwordResetStartRateLimitBurst, registrationRateLimitMaxClients, registrationRateLimitStaleAfter),
 	}
 }
 
@@ -95,6 +101,8 @@ func (srv *Server) registerRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /registrations/password", startRegistrationHandler)
 	mux.Handle("POST /registrations/password/confirm", confirmRegistrationHandler)
 	mux.Handle("POST /registrations/password/resend", resendRegistrationHandler)
+	resetHandler := srv.passwordResetStartLimiter.MiddlewareByIP(http.HandlerFunc(srv.h.PasswordResetHandler.Start))
+	mux.Handle("POST /password-resets", resetHandler)
 
 	mux.Handle("GET /me", srv.h.MeHandler)
 

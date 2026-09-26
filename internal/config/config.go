@@ -20,6 +20,8 @@ const (
 
 	defaultPasswordRegistrationCodeTTL    = 10 * time.Minute
 	defaultPasswordRegistrationAttemptTTL = 30 * time.Minute
+	defaultPasswordResetCodeTTL           = 10 * time.Minute
+	defaultPasswordResetAttemptTTL        = 30 * time.Minute
 )
 
 type Config struct {
@@ -30,6 +32,7 @@ type Config struct {
 	Email                EmailConfig
 	Resend               ResendConfig
 	PasswordRegistration PasswordRegistrationConfig
+	PasswordReset        PasswordResetConfig
 }
 
 type SessionConfig struct {
@@ -46,6 +49,11 @@ type ResendConfig struct {
 }
 
 type PasswordRegistrationConfig struct {
+	CodeTTL    time.Duration
+	AttemptTTL time.Duration
+}
+
+type PasswordResetConfig struct {
 	CodeTTL    time.Duration
 	AttemptTTL time.Duration
 }
@@ -102,6 +110,25 @@ func Load(getEnv func(string) string) (Config, error) {
 		return Config{}, errors.New("PASSWORD_REGISTRATION_CODE_TTL must not be greater than PASSWORD_REGISTRATION_ATTEMPT_TTL")
 	}
 
+	resetCodeTTL, err := durationEnvOrDefault(getEnv, "PASSWORD_RESET_CODE_TTL", defaultPasswordResetCodeTTL)
+	if err != nil {
+		return Config{}, err
+	}
+	if resetCodeTTL <= 0 {
+		return Config{}, errors.New("PASSWORD_RESET_CODE_TTL must be greater than zero")
+	}
+
+	resetAttemptTTL, err := durationEnvOrDefault(getEnv, "PASSWORD_RESET_ATTEMPT_TTL", defaultPasswordResetAttemptTTL)
+	if err != nil {
+		return Config{}, err
+	}
+	if resetAttemptTTL <= 0 {
+		return Config{}, errors.New("PASSWORD_RESET_ATTEMPT_TTL must be greater than zero")
+	}
+	if resetCodeTTL > resetAttemptTTL {
+		return Config{}, errors.New("PASSWORD_RESET_CODE_TTL must not be greater than PASSWORD_RESET_ATTEMPT_TTL")
+	}
+
 	cfg := Config{
 		DatabaseURL: getEnv("DATABASE_URL"),
 		HTTP: HTTPConfig{
@@ -131,6 +158,7 @@ func Load(getEnv func(string) string) (Config, error) {
 			CodeTTL:    codeTTL,
 			AttemptTTL: attemptTTL,
 		},
+		PasswordReset: PasswordResetConfig{CodeTTL: resetCodeTTL, AttemptTTL: resetAttemptTTL},
 	}
 
 	if cfg.DatabaseURL == "" {

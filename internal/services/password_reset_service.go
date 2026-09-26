@@ -88,7 +88,7 @@ func (s *PasswordResetService) Start(ctx context.Context, email, currentToken st
 		return PasswordResetStartResult{Token: token}, nil
 	}
 
-	if err := s.sendCode.SendPasswordResetCode(ctx, email, code); err != nil {
+	if err := s.sendCode.SendPasswordResetCode(ctx, normalizedEmail, code); err != nil {
 		return PasswordResetStartResult{}, fmt.Errorf("send password reset code: %w", err)
 	}
 

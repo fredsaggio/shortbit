@@ -205,7 +205,7 @@ O logout é idempotente: sem cookie, token desconhecido ou chamada repetida cont
 
 ## Recuperação de senha 🚧
 
-Já existem migration, model e repository para a tentativa com código de oito dígitos. Service, envio do email, confirmação e endpoints ainda não existem.
+O início da recuperação já tem migration, model, repository, service, envio de email e `POST /password-resets`. A confirmação do código e a troca da senha ainda não foram implementadas.
 
 ```mermaid
 sequenceDiagram
