@@ -69,3 +69,28 @@ func TestResendSenderSendPasswordResetCodeReturnsProviderError(t *testing.T) {
 		t.Fatal("SendPasswordResetCode() error = nil, want provider error")
 	}
 }
+
+func TestResendSenderSendPasswordChangedNotice(t *testing.T) {
+	called := false
+	sender := NewResendSender("test-api-key", "noreply@example.com")
+	sender.client = resend.NewCustomClient(&http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		called = true
+		var request resend.SendEmailRequest
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatalf("decode email request: %v", err)
+		}
+		if r.Method != http.MethodPost || r.URL.Path != "/emails" || request.Subject != "Sua senha foi alterada" || request.From != "noreply@example.com" || len(request.To) != 1 || request.To[0] != "user@example.com" {
+			t.Errorf("unexpected password change notice: %+v", request)
+		}
+		if !strings.Contains(request.Text, "Se não foi você") {
+			t.Errorf("notice lacks security guidance: %q", request.Text)
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(`{"id":"notice-id"}`)), Request: r}, nil
+	})}, "test-api-key")
+	if err := sender.SendPasswordChangedNotice(t.Context(), "user@example.com"); err != nil {
+		t.Fatalf("SendPasswordChangedNotice() error = %v", err)
+	}
+	if !called {
+		t.Fatal("Resend endpoint was not called")
+	}
+}

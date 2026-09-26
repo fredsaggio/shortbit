@@ -169,6 +169,7 @@ func testConfig(sessionTTL time.Duration) config.Config {
 			CodeTTL:    10 * time.Minute,
 			AttemptTTL: 30 * time.Minute,
 		},
+		PasswordReset: config.PasswordResetConfig{CodeTTL: 10 * time.Minute, AttemptTTL: 30 * time.Minute},
 	}
 }
 

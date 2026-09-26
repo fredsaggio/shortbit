@@ -147,9 +147,9 @@ Guarda temporariamente cadastro ainda não confirmado, incluindo password hash, 
 
 Guarda o hash de tokens opacos. O token puro só fica no cookie do cliente.
 
-### `password_reset_attempts` 🚧
+### `password_reset_attempts`
 
-Há no máximo uma linha por usuário com senha. O token opaco fica no cookie e seu hash identifica a tentativa; `verification_proof_hash` guarda HMAC(token, código), nunca o código puro. O upsert respeita cooldown e bloqueio, troca o código sem estender a vida da tentativa ativa e reinicia os contadores apenas após a expiração. `used_at` permitirá impedir reutilização após a confirmação.
+Há no máximo uma linha por usuário com senha. O token opaco fica no cookie e seu hash identifica a tentativa; `verification_proof_hash` guarda HMAC(token, código), nunca o código puro. O upsert respeita cooldown e bloqueio, troca o código sem estender a vida da tentativa ativa e reinicia os contadores apenas após a expiração. `used_at` impede reutilização após a confirmação.
 
 ### `urls` 📋
 

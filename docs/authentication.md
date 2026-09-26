@@ -1,6 +1,6 @@
 # Autenticação
 
-> Status: cadastro e login concluídos; recuperação de senha em desenvolvimento
+> Status: cadastro, login e recuperação de senha concluídos; “lembrar de mim” pendente
 > Última atualização: 24 de setembro de 2026
 
 ## Visão geral
@@ -203,9 +203,9 @@ sequenceDiagram
 
 O logout é idempotente: sem cookie, token desconhecido ou chamada repetida continuam retornando `204`.
 
-## Recuperação de senha 🚧
+## Recuperação de senha ✅
 
-O início da recuperação já tem migration, model, repository, service, envio de email e `POST /password-resets`. A confirmação do código e a troca da senha ainda não foram implementadas.
+O início e a confirmação da recuperação estão implementados. A troca da senha, o consumo do código e a revogação das sessões anteriores ocorrem na mesma transação. O usuário precisa fazer login novamente.
 
 ```mermaid
 sequenceDiagram
@@ -221,10 +221,11 @@ sequenceDiagram
     Client->>API: POST /password-resets/confirm<br/>cookie + código + nova senha
     API->>DB: Valida código e troca senha em transação
     API->>DB: Marca tentativa como usada e revoga sessões
+    API->>Email: Notifica alteração da senha após o commit
     API-->>Client: 204
 ```
 
-Email inexistente, conta Google-only e conta com senha terão a mesma resposta externa no pedido de recuperação. Erros reais de infraestrutura continuam sendo `500`.
+Email inexistente, conta Google-only e conta com senha têm a mesma resposta externa no pedido de recuperação. Erros reais de infraestrutura continuam sendo `500`. Falha da notificação posterior não desfaz a senha já alterada.
 
 ## “Lembrar de mim” 📋
 
@@ -249,4 +250,4 @@ Não haverá token em `localStorage`, JWT próprio ou expiração deslizante no 
 | Authorization code | Autorizar uma troca por tokens | Query do callback | Não persistido |
 | ID token | Comprovar identidade Google | Google→backend | Validado e descartado |
 | Session token | Autenticar na ShortBit | Cookie `user_session` | SHA-256 |
-| Password reset token | Autorizar troca de senha | Link e body de confirmação | SHA-256 |
+| Password reset token | Identificar tentativa e compor a prova HMAC | Cookie HttpOnly | SHA-256 |

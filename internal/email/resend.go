@@ -52,3 +52,16 @@ func (rs *ResendSender) SendPasswordResetCode(ctx context.Context, email, code s
 
 	return nil
 }
+
+func (rs *ResendSender) SendPasswordChangedNotice(ctx context.Context, email string) error {
+	params := &resend.SendEmailRequest{
+		From:    rs.from,
+		To:      []string{email},
+		Subject: "Sua senha foi alterada",
+		Text:    "A senha da sua conta foi alterada. Se não foi você, entre em contato com o suporte.",
+	}
+	if _, err := rs.client.Emails.SendWithContext(ctx, params); err != nil {
+		return fmt.Errorf("send password changed notice with Resend: %w", err)
+	}
+	return nil
+}

@@ -360,6 +360,62 @@ func (r *UserRepository) RecordPasswordResetFailure(ctx context.Context, tokenHa
 	return failedAttempts, lockedUntil, nil
 }
 
+// CompletePasswordReset revalida a tentativa sob lock antes de alterar a
+// credencial. Consumir o código, trocar a senha e revogar sessões são uma única
+// transação: um erro em qualquer etapa desfaz todas as alterações.
+func (r *UserRepository) CompletePasswordReset(ctx context.Context, tokenHash, proofHash []byte, passwordHash string) (string, error) {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return "", fmt.Errorf("begin password reset transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	const findAttempt = `
+		SELECT a.user_id, u.email
+		FROM password_reset_attempts AS a
+		JOIN users AS u ON u.id = a.user_id
+		WHERE a.token_hash = @tokenHash
+			AND a.verification_proof_hash = @proofHash
+			AND a.used_at IS NULL
+			AND a.attempt_expires_at > clock_timestamp()
+			AND a.code_expires_at > clock_timestamp()
+			AND (a.locked_until IS NULL OR a.locked_until <= clock_timestamp())
+		FOR UPDATE OF a
+	`
+	var userID uuid.UUID
+	var email string
+	if err := tx.QueryRow(ctx, findAttempt, pgx.StrictNamedArgs{"tokenHash": tokenHash, "proofHash": proofHash}).Scan(&userID, &email); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", ErrPasswordResetAttemptNotFound
+		}
+		return "", fmt.Errorf("lock password reset attempt: %w", err)
+	}
+
+	const updatePassword = `
+		UPDATE password_credentials
+		SET password_hash = @passwordHash, updated_at = clock_timestamp()
+		WHERE user_id = @userID
+	`
+	updated, err := tx.Exec(ctx, updatePassword, pgx.StrictNamedArgs{"userID": userID, "passwordHash": passwordHash})
+	if err != nil {
+		return "", fmt.Errorf("update password credential: %w", err)
+	}
+	if updated.RowsAffected() != 1 {
+		return "", ErrPasswordAccountNotFound
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM user_sessions WHERE user_id = @userID`, pgx.StrictNamedArgs{"userID": userID}); err != nil {
+		return "", fmt.Errorf("revoke sessions after password reset: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE password_reset_attempts SET used_at = clock_timestamp(), updated_at = clock_timestamp() WHERE token_hash = @tokenHash`, pgx.StrictNamedArgs{"tokenHash": tokenHash}); err != nil {
+		return "", fmt.Errorf("consume password reset attempt: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return "", fmt.Errorf("commit password reset transaction: %w", err)
+	}
+	return email, nil
+}
+
 func (r *UserRepository) FindByID(ctx context.Context, userID uuid.UUID) (models.User, error) {
 	const q = `
 		SELECT id, email, email_verified_at, created_at, updated_at

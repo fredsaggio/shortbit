@@ -1008,6 +1008,103 @@ func TestUserRepositoryIntegration(t *testing.T) {
 		}
 	})
 
+	t.Run("completes password reset and revokes sessions atomically", func(t *testing.T) {
+		const email = "complete-reset@example.com"
+		user, err := repository.CreateWithPassword(t.Context(), email, "old-password-hash")
+		if err != nil {
+			t.Fatalf("CreateWithPassword() error = %v", err)
+		}
+		const token, code = "complete-reset-token", "00123456"
+		tokenHash := sha256.Sum256([]byte(token))
+		proofHash := verificationcode.Proof(token, code)
+		now := time.Now().UTC().Truncate(time.Microsecond)
+		attempt := models.PasswordResetAttempt{
+			TokenHash: tokenHash[:], VerificationProofHash: proofHash,
+			LastCodeSentAt: now, CodeExpiresAt: now.Add(10 * time.Minute), AttemptExpiresAt: now.Add(30 * time.Minute),
+		}
+		if created, err := repository.CreatePasswordResetAttempt(t.Context(), email, attempt, now.Add(-30*time.Second)); err != nil || !created {
+			t.Fatalf("CreatePasswordResetAttempt() = (%v, %v)", created, err)
+		}
+		for _, value := range []string{"first-existing-session", "second-existing-session"} {
+			sessionHash := sha256.Sum256([]byte(value))
+			if _, err := pool.Exec(t.Context(), `INSERT INTO user_sessions(token_hash, user_id, expires_at) VALUES($1, $2, $3)`, sessionHash[:], user.ID, now.Add(time.Hour)); err != nil {
+				t.Fatalf("insert existing session: %v", err)
+			}
+		}
+
+		wrongProof := verificationcode.Proof(token, "87654321")
+		if _, err := repository.CompletePasswordReset(t.Context(), tokenHash[:], wrongProof, "new-password-hash"); !errors.Is(err, repositories.ErrPasswordResetAttemptNotFound) {
+			t.Fatalf("CompletePasswordReset(wrong proof) error = %v, want not found", err)
+		}
+		confirmedEmail, err := repository.CompletePasswordReset(t.Context(), tokenHash[:], proofHash, "new-password-hash")
+		if err != nil {
+			t.Fatalf("CompletePasswordReset() error = %v", err)
+		}
+		if confirmedEmail != email {
+			t.Errorf("confirmed email = %q, want %q", confirmedEmail, email)
+		}
+
+		var passwordHash string
+		if err := pool.QueryRow(t.Context(), `SELECT password_hash FROM password_credentials WHERE user_id = $1`, user.ID).Scan(&passwordHash); err != nil {
+			t.Fatalf("read password credential: %v", err)
+		}
+		if passwordHash != "new-password-hash" {
+			t.Errorf("password hash = %q, want new hash", passwordHash)
+		}
+		var sessionCount int
+		if err := pool.QueryRow(t.Context(), `SELECT COUNT(*) FROM user_sessions WHERE user_id = $1`, user.ID).Scan(&sessionCount); err != nil {
+			t.Fatalf("count sessions: %v", err)
+		}
+		if sessionCount != 0 {
+			t.Errorf("session count = %d, want zero", sessionCount)
+		}
+		stored, err := repository.FindPasswordResetAttemptByTokenHash(t.Context(), tokenHash[:])
+		if err != nil || stored.UsedAt == nil {
+			t.Fatalf("used attempt = (%+v, %v), want UsedAt set", stored, err)
+		}
+		if _, err := repository.CompletePasswordReset(t.Context(), tokenHash[:], proofHash, "another-password-hash"); !errors.Is(err, repositories.ErrPasswordResetAttemptNotFound) {
+			t.Errorf("reused code error = %v, want not found", err)
+		}
+	})
+
+	t.Run("expired or locked password reset cannot change password", func(t *testing.T) {
+		const email = "unavailable-reset@example.com"
+		user, err := repository.CreateWithPassword(t.Context(), email, "old-password-hash")
+		if err != nil {
+			t.Fatalf("CreateWithPassword() error = %v", err)
+		}
+		const token, code = "unavailable-reset-token", "12345678"
+		tokenHash := sha256.Sum256([]byte(token))
+		proofHash := verificationcode.Proof(token, code)
+		now := time.Now().UTC().Truncate(time.Microsecond)
+		attempt := models.PasswordResetAttempt{
+			TokenHash: tokenHash[:], VerificationProofHash: proofHash,
+			LastCodeSentAt: now, CodeExpiresAt: now.Add(10 * time.Minute), AttemptExpiresAt: now.Add(30 * time.Minute),
+		}
+		if created, err := repository.CreatePasswordResetAttempt(t.Context(), email, attempt, now.Add(-30*time.Second)); err != nil || !created {
+			t.Fatalf("CreatePasswordResetAttempt() = (%v, %v)", created, err)
+		}
+		if _, err := pool.Exec(t.Context(), `UPDATE password_reset_attempts SET locked_until = $1 WHERE token_hash = $2`, now.Add(5*time.Minute), tokenHash[:]); err != nil {
+			t.Fatalf("lock attempt: %v", err)
+		}
+		if _, err := repository.CompletePasswordReset(t.Context(), tokenHash[:], proofHash, "new-password-hash"); !errors.Is(err, repositories.ErrPasswordResetAttemptNotFound) {
+			t.Errorf("locked attempt error = %v, want not found", err)
+		}
+		if _, err := pool.Exec(t.Context(), `UPDATE password_reset_attempts SET locked_until = NULL, created_at = $1, code_expires_at = $2 WHERE token_hash = $3`, now.Add(-20*time.Minute), now.Add(-time.Second), tokenHash[:]); err != nil {
+			t.Fatalf("expire code: %v", err)
+		}
+		if _, err := repository.CompletePasswordReset(t.Context(), tokenHash[:], proofHash, "new-password-hash"); !errors.Is(err, repositories.ErrPasswordResetAttemptNotFound) {
+			t.Errorf("expired code error = %v, want not found", err)
+		}
+		var storedHash string
+		if err := pool.QueryRow(t.Context(), `SELECT password_hash FROM password_credentials WHERE user_id = $1`, user.ID).Scan(&storedHash); err != nil {
+			t.Fatalf("read credential: %v", err)
+		}
+		if storedHash != "old-password-hash" {
+			t.Errorf("password was changed despite lock or expiry: %q", storedHash)
+		}
+	})
+
 	t.Run("finds user by ID", func(t *testing.T) {
 		createdUser, err := repository.CreateWithPassword(t.Context(), "find-by-id@example.com", "$argon2id$find-by-id-test-hash")
 		if err != nil {

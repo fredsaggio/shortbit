@@ -40,6 +40,14 @@ func (s *recordingPasswordRegistrationCodeSender) SendPasswordRegistrationCode(_
 	return nil
 }
 
+func (s *recordingPasswordRegistrationCodeSender) SendPasswordResetCode(context.Context, string, string) error {
+	return nil
+}
+
+func (s *recordingPasswordRegistrationCodeSender) SendPasswordChangedNotice(context.Context, string) error {
+	return nil
+}
+
 func TestPasswordRegistrationResendIntegration(t *testing.T) {
 	const (
 		email      = "registration-resend-integration@example.com"
@@ -446,7 +454,12 @@ func verificationCodeSequence(t *testing.T, codes ...string) services.Verificati
 	}
 }
 
-func passwordRegistrationTestRouter(pool *pgxpool.Pool, codeSender services.PasswordRegistrationCodeSender, generateCode services.VerificationCodeGenerator) http.Handler {
+type registrationAndResetCodeSender interface {
+	services.PasswordRegistrationCodeSender
+	services.PasswordResetCodeSender
+}
+
+func passwordRegistrationTestRouter(pool *pgxpool.Pool, codeSender registrationAndResetCodeSender, generateCode services.VerificationCodeGenerator) http.Handler {
 	passwordHasher := argon2.Argon2id{}
 	userRepository := repositories.NewUserRepository(pool)
 	userService := services.NewUserService(
@@ -459,6 +472,9 @@ func passwordRegistrationTestRouter(pool *pgxpool.Pool, codeSender services.Pass
 	)
 	registrationEmailLimiter := middleware.NewRateLimiter(1_000, 100, 100, time.Minute)
 	userHandler := handlers.NewUserHandler(userService, registrationEmailLimiter, false)
+	resetService := services.NewPasswordResetService(userRepository, passwordHasher, codeSender, sessiontoken.Generate, verificationcode.GeneratePasswordReset,
+		services.PasswordResetConfig{CodeTTL: 10 * time.Minute, AttemptTTL: 30 * time.Minute})
+	resetHandler := handlers.NewPasswordResetHandler(resetService, registrationEmailLimiter, false)
 
 	sessionRepository := repositories.NewUserSessionRepository(pool)
 	authService := services.NewAuthService(userRepository, sessionRepository, passwordHasher, sessiontoken.Generate, 24*time.Hour)
@@ -467,9 +483,10 @@ func passwordRegistrationTestRouter(pool *pgxpool.Pool, codeSender services.Pass
 	meHandler := middleware.Authenticator(authService)(http.HandlerFunc(userHandler.GetUserInfo))
 
 	applicationHandlers := &server.Handlers{
-		UserHandler:    userHandler,
-		SessionHandler: sessionHandler,
-		MeHandler:      meHandler,
+		UserHandler:          userHandler,
+		SessionHandler:       sessionHandler,
+		PasswordResetHandler: resetHandler,
+		MeHandler:            meHandler,
 	}
 
 	return server.NewServer(applicationHandlers, pool).NewRouterHTTP()

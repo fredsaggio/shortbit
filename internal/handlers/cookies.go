@@ -34,6 +34,19 @@ func setPasswordResetCookie(w http.ResponseWriter, token string, secure bool) {
 	})
 }
 
+func clearPasswordResetCookie(w http.ResponseWriter, secure bool) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     passwordResetCookieName,
+		Value:    "",
+		Path:     passwordResetCookiePath,
+		MaxAge:   -1,
+		Expires:  time.Unix(0, 0).UTC(),
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteStrictMode,
+	})
+}
+
 func setPasswordRegistrationCookie(w http.ResponseWriter, token string, expiresAt time.Time, secure bool) {
 	maxAge := int(math.Ceil(time.Until(expiresAt).Seconds()))
 

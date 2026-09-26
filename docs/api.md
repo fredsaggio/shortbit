@@ -33,7 +33,7 @@ http://localhost:8080
 | `GET` | `/auth/google` | Não | ✅ |
 | `GET` | `/auth/google/callback` | Cookies temporários | ✅ |
 | `POST` | `/password-resets` | Não | ✅ |
-| `POST` | `/password-resets/confirm` | Cookie da tentativa | 📋 |
+| `POST` | `/password-resets/confirm` | Cookie da tentativa | ✅ |
 | `POST` | `/urls` | Sim | 📋 |
 | `GET` | `/urls` | Sim | 📋 |
 | `GET` | `/urls/{code}` | Sim + ownership | 📋 |
@@ -207,7 +207,7 @@ Set-Cookie: user_session=...
 
 Atualmente não há frontend para receber um redirect final, por isso o callback termina em uma página vazia.
 
-## Recuperação de senha 🚧
+## Recuperação de senha ✅
 
 ### `POST /password-resets`
 
@@ -227,7 +227,7 @@ Email inexistente, Google-only e conta com senha respondem igualmente; a respost
 
 ### `POST /password-resets/confirm`
 
-Contrato planejado:
+Request:
 
 ```json
 {
@@ -237,9 +237,9 @@ Contrato planejado:
 }
 ```
 
-O token opaco identifica a tentativa e fica em cookie HttpOnly. O email contém apenas o código de oito dígitos. O início já está implementado; a confirmação ainda não.
+O token opaco identifica a tentativa e fica em cookie HttpOnly. O email contém apenas o código de oito dígitos. A confirmação consome a tentativa, troca a senha e revoga as sessões anteriores; não cria uma nova sessão.
 
-Sucesso planejado:
+Sucesso:
 
 ```text
 204 No Content

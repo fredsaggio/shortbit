@@ -38,6 +38,10 @@ func (passwordResetServiceStub) Start(context.Context, string, string) (services
 	return services.PasswordResetStartResult{Token: "test-token"}, nil
 }
 
+func (passwordResetServiceStub) Confirm(context.Context, string, string, string) error {
+	return nil
+}
+
 func newPasswordResetTestHandler() *handlers.PasswordResetHandler {
 	return handlers.NewPasswordResetHandler(passwordResetServiceStub{}, allowAllLoginRateLimiterStub{}, false)
 }
@@ -60,6 +64,30 @@ func TestNewRouterHTTPRegistersPasswordResetRouteAndAppliesIPRateLimit(t *testin
 		response := httptest.NewRecorder()
 		router.ServeHTTP(response, request)
 		wantStatus := http.StatusAccepted
+		if requestNumber == 3 {
+			wantStatus = http.StatusTooManyRequests
+		}
+		if response.Code != wantStatus {
+			t.Errorf("request %d status = %d, want %d", requestNumber, response.Code, wantStatus)
+		}
+	}
+}
+
+func TestNewRouterHTTPRegistersPasswordResetConfirmRouteAndAppliesIPRateLimit(t *testing.T) {
+	applicationHandlers := &Handlers{
+		UserHandler: &handlers.UserHandler{}, SessionHandler: &handlers.SessionHandler{},
+		PasswordResetHandler: newPasswordResetTestHandler(), MeHandler: http.NotFoundHandler(),
+	}
+	srv := NewServer(applicationHandlers, nil)
+	srv.rateLimiter = middleware.NewRateLimiter(1_000, 100, 10, time.Minute)
+	srv.passwordResetConfirmLimiter = middleware.NewRateLimiter(0.001, 2, 10, time.Minute)
+	router := srv.NewRouterHTTP()
+	for requestNumber := 1; requestNumber <= 3; requestNumber++ {
+		request := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/password-resets/confirm", strings.NewReader(`{"code":"12345678","password":"new-password","password_confirmation":"new-password"}`))
+		request.RemoteAddr = "192.0.2.1:1234"
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		wantStatus := http.StatusGone // Missing attempt cookie reaches the confirm handler.
 		if requestNumber == 3 {
 			wantStatus = http.StatusTooManyRequests
 		}
