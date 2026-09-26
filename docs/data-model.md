@@ -1,7 +1,7 @@
 # Modelo de dados
 
 > Status: migrations `00001` a `00006`
-> Última atualização: 24 de setembro de 2026
+> Última atualização: 26 de setembro de 2026
 
 PostgreSQL é a fonte da verdade. Tokens secretos são armazenados somente como hash.
 
@@ -12,7 +12,7 @@ erDiagram
     users ||--o| password_credentials : "pode possuir"
     users ||--o{ auth_identities : "pode possuir"
     users ||--o{ user_sessions : "possui"
-    users ||--o| password_reset_tokens : "pode possuir um"
+    users ||--o| password_reset_attempts : "pode possuir uma"
     users ||--o{ urls : "possui"
     urls ||--o{ link_access_sessions : "libera acesso com"
 
@@ -45,11 +45,17 @@ erDiagram
         timestamptz expires_at
     }
 
-    password_reset_tokens {
+    password_reset_attempts {
         bytea token_hash PK
         uuid user_id FK,UK
+        bytea verification_proof_hash
+        smallint failed_attempts
+        timestamptz locked_until
+        timestamptz last_code_sent_at
+        timestamptz code_expires_at
+        timestamptz attempt_expires_at
         timestamptz created_at
-        timestamptz expires_at
+        timestamptz updated_at
         timestamptz used_at
     }
 
@@ -141,9 +147,9 @@ Guarda temporariamente cadastro ainda não confirmado, incluindo password hash, 
 
 Guarda o hash de tokens opacos. O token puro só fica no cookie do cliente.
 
-### `password_reset_tokens` 🚧
+### `password_reset_attempts` 🚧
 
-Há no máximo uma linha por usuário. Um novo pedido usa upsert e substitui o token anterior atomicamente. `used_at` impede reutilização depois da confirmação.
+Há no máximo uma linha por usuário com senha. O token opaco fica no cookie e seu hash identifica a tentativa; `verification_proof_hash` guarda HMAC(token, código), nunca o código puro. O upsert respeita cooldown e bloqueio, troca o código sem estender a vida da tentativa ativa e reinicia os contadores apenas após a expiração. `used_at` permitirá impedir reutilização após a confirmação.
 
 ### `urls` 📋
 

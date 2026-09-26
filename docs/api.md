@@ -33,7 +33,7 @@ http://localhost:8080
 | `GET` | `/auth/google` | Não | ✅ |
 | `GET` | `/auth/google/callback` | Cookies temporários | ✅ |
 | `POST` | `/password-resets` | Não | 🚧 |
-| `POST` | `/password-resets/confirm` | Token de recuperação | 📋 |
+| `POST` | `/password-resets/confirm` | Cookie da tentativa | 📋 |
 | `POST` | `/urls` | Sim | 📋 |
 | `GET` | `/urls` | Sim | 📋 |
 | `GET` | `/urls/{code}` | Sim + ownership | 📋 |
@@ -231,11 +231,13 @@ Contrato planejado:
 
 ```json
 {
-  "token": "token-recebido-no-link",
+  "code": "12345678",
   "password": "nova-senha123",
   "password_confirmation": "nova-senha123"
 }
 ```
+
+O token opaco identifica a tentativa e fica em cookie HttpOnly. O email contém apenas o código de oito dígitos; nenhum dos endpoints acima foi implementado ainda.
 
 Sucesso planejado:
 

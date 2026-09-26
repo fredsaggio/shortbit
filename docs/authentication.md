@@ -205,7 +205,7 @@ O logout é idempotente: sem cookie, token desconhecido ou chamada repetida cont
 
 ## Recuperação de senha 🚧
 
-Já existem migration, model e criação atômica do token no repository. Service, envio do link, confirmação e endpoints ainda não existem.
+Já existem migration, model e repository para a tentativa com código de oito dígitos. Service, envio do email, confirmação e endpoints ainda não existem.
 
 ```mermaid
 sequenceDiagram
@@ -215,12 +215,12 @@ sequenceDiagram
     participant Email
 
     Client->>API: POST /password-resets<br/>email
-    API->>DB: Cria ou substitui token para conta com senha
-    API->>Email: Envia link com token puro
-    API-->>Client: 202 genérico
-    Client->>API: POST /password-resets/confirm<br/>token + nova senha
-    API->>DB: Valida token e troca senha em transação
-    API->>DB: Marca token como usado e revoga sessões
+    API->>DB: Salva hash do token e prova HMAC do código
+    API->>Email: Envia código de 8 dígitos
+    API-->>Client: 202 genérico + cookie HttpOnly da tentativa
+    Client->>API: POST /password-resets/confirm<br/>cookie + código + nova senha
+    API->>DB: Valida código e troca senha em transação
+    API->>DB: Marca tentativa como usada e revoga sessões
     API-->>Client: 204
 ```
 
