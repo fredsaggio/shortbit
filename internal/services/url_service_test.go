@@ -18,6 +18,7 @@ type urlRepositoryStub struct {
 	createFunc         func(context.Context, models.URL) (models.URL, error)
 	listFunc           func(context.Context, uuid.UUID, int, *repositories.URLCursor) ([]models.URL, error)
 	getByShortcodeFunc func(context.Context, uuid.UUID, string) (models.URL, error)
+	resolvePublicFunc  func(context.Context, string) (string, error)
 }
 
 func (s urlRepositoryStub) ReserveID(ctx context.Context) (int64, error) {
@@ -34,6 +35,10 @@ func (s urlRepositoryStub) List(ctx context.Context, userID uuid.UUID, limit int
 
 func (s urlRepositoryStub) GetByShortcode(ctx context.Context, userID uuid.UUID, shortCode string) (models.URL, error) {
 	return s.getByShortcodeFunc(ctx, userID, shortCode)
+}
+
+func (s urlRepositoryStub) ResolvePublicAndCountClick(ctx context.Context, shortCode string) (string, error) {
+	return s.resolvePublicFunc(ctx, shortCode)
 }
 
 type shortCodeGeneratorStub func(int64) (string, error)
@@ -441,6 +446,50 @@ func TestURLServiceGetByShortCodeWrapsRepositoryError(t *testing.T) {
 	_, err := service.GetByShortCode(t.Context(), userID, "Ab3dX9")
 	if !errors.Is(err, wantErr) {
 		t.Errorf("GetByShortCode() error = %v, want wrapped repository error", err)
+	}
+}
+
+func TestURLServiceResolvePublicReturnsOriginalURL(t *testing.T) {
+	type contextKey struct{}
+	ctx := context.WithValue(t.Context(), contextKey{}, "request-context")
+	called := false
+	repo := urlRepositoryStub{resolvePublicFunc: func(gotCtx context.Context, gotCode string) (string, error) {
+		called = true
+		if gotCtx.Value(contextKey{}) != "request-context" || gotCode != "Ab3dX9" {
+			t.Errorf("ResolvePublicAndCountClick() arguments = (%v, %q), want request context and Ab3dX9", gotCtx, gotCode)
+		}
+		return "https://example.com/article", nil
+	}}
+	service := newURLServiceForTest(t, repo, nil, nil, "https://sho.rt")
+
+	got, err := service.ResolvePublic(ctx, "Ab3dX9")
+	if err != nil || got != "https://example.com/article" || !called {
+		t.Errorf("ResolvePublic() = (%q, %v), repository called = %t; want original URL, nil, true", got, err, called)
+	}
+}
+
+func TestURLServiceResolvePublicMapsNotFound(t *testing.T) {
+	repo := urlRepositoryStub{resolvePublicFunc: func(context.Context, string) (string, error) {
+		return "", repositories.ErrURLNotFound
+	}}
+	service := newURLServiceForTest(t, repo, nil, nil, "https://sho.rt")
+
+	got, err := service.ResolvePublic(t.Context(), "missing")
+	if got != "" || !errors.Is(err, services.ErrURLNotFound) {
+		t.Errorf("ResolvePublic() = (%q, %v), want empty URL and ErrURLNotFound", got, err)
+	}
+}
+
+func TestURLServiceResolvePublicWrapsRepositoryError(t *testing.T) {
+	wantErr := errors.New("database unavailable")
+	repo := urlRepositoryStub{resolvePublicFunc: func(context.Context, string) (string, error) {
+		return "", wantErr
+	}}
+	service := newURLServiceForTest(t, repo, nil, nil, "https://sho.rt")
+
+	got, err := service.ResolvePublic(t.Context(), "Ab3dX9")
+	if got != "" || !errors.Is(err, wantErr) {
+		t.Errorf("ResolvePublic() = (%q, %v), want empty URL and wrapped repository error", got, err)
 	}
 }
 

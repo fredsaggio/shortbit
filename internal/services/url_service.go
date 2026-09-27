@@ -36,6 +36,7 @@ type URLRepository interface {
 	Create(ctx context.Context, url models.URL) (models.URL, error)
 	List(ctx context.Context, userID uuid.UUID, limit int, cursor *repositories.URLCursor) ([]models.URL, error)
 	GetByShortcode(ctx context.Context, userID uuid.UUID, shortCode string) (models.URL, error)
+	ResolvePublicAndCountClick(ctx context.Context, shortCode string) (string, error)
 }
 
 type ShortCodeGenerator interface {
@@ -211,4 +212,18 @@ func (s *URLService) GetByShortCode(ctx context.Context, userID uuid.UUID, short
 	}
 
 	return link, nil
+}
+
+func (s *URLService) ResolvePublic(ctx context.Context, shortCode string) (string, error) {
+	originalURL, err := s.repo.ResolvePublicAndCountClick(ctx, shortCode)
+
+	if err != nil {
+		if errors.Is(err, repositories.ErrURLNotFound) {
+			return "", ErrURLNotFound
+		}
+
+		return "", fmt.Errorf("get url: %w", err)
+	}
+
+	return originalURL, nil
 }
