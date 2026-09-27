@@ -49,6 +49,7 @@ type Handlers struct {
 	GoogleAuthHandler    *handlers.GoogleAuthHandler
 	PasswordResetHandler *handlers.PasswordResetHandler
 	CreateURLHandler     http.Handler
+	ListURLHandler       http.Handler
 	MeHandler            http.Handler
 }
 
@@ -122,7 +123,7 @@ func (srv *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /auth/google/callback", srv.h.GoogleAuthHandler.Callback)
 
 	mux.Handle("POST /urls", srv.h.CreateURLHandler)
-
+	mux.Handle("GET /urls", srv.h.ListURLHandler)
 }
 
 func (srv *Server) NewRouterHTTP() http.Handler {

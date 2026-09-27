@@ -52,6 +52,7 @@ func TestNewRouterHTTPRegistersPasswordResetRouteAndAppliesIPRateLimit(t *testin
 		SessionHandler:       &handlers.SessionHandler{},
 		PasswordResetHandler: newPasswordResetTestHandler(),
 		CreateURLHandler:     http.NotFoundHandler(),
+		ListURLHandler:       http.NotFoundHandler(),
 		MeHandler:            http.NotFoundHandler(),
 	}
 	srv := NewServer(applicationHandlers, nil)
@@ -77,7 +78,7 @@ func TestNewRouterHTTPRegistersPasswordResetRouteAndAppliesIPRateLimit(t *testin
 func TestNewRouterHTTPRegistersPasswordResetConfirmRouteAndAppliesIPRateLimit(t *testing.T) {
 	applicationHandlers := &Handlers{
 		UserHandler: &handlers.UserHandler{}, SessionHandler: &handlers.SessionHandler{},
-		PasswordResetHandler: newPasswordResetTestHandler(), CreateURLHandler: http.NotFoundHandler(), MeHandler: http.NotFoundHandler(),
+		PasswordResetHandler: newPasswordResetTestHandler(), CreateURLHandler: http.NotFoundHandler(), ListURLHandler: http.NotFoundHandler(), MeHandler: http.NotFoundHandler(),
 	}
 	srv := NewServer(applicationHandlers, nil)
 	srv.rateLimiter = middleware.NewRateLimiter(1_000, 100, 10, time.Minute)
@@ -105,6 +106,7 @@ func TestNewRouterHTTPAppliesGlobalRateLimit(t *testing.T) {
 		SessionHandler:       &handlers.SessionHandler{},
 		PasswordResetHandler: newPasswordResetTestHandler(),
 		CreateURLHandler:     http.NotFoundHandler(),
+		ListURLHandler:       http.NotFoundHandler(),
 		MeHandler:            http.NotFoundHandler(),
 	}
 
@@ -141,6 +143,7 @@ func TestNewRouterHTTPAppliesLoginRateLimitOnlyToSessions(t *testing.T) {
 		SessionHandler:       handlers.NewSessionHandler(authService, allowAllLoginRateLimiterStub{}, false),
 		PasswordResetHandler: newPasswordResetTestHandler(),
 		CreateURLHandler:     http.NotFoundHandler(),
+		ListURLHandler:       http.NotFoundHandler(),
 		MeHandler:            http.NotFoundHandler(),
 	}
 
@@ -228,6 +231,7 @@ func TestNewRouterHTTPAppliesPasswordRegistrationRateLimits(t *testing.T) {
 				SessionHandler:       &handlers.SessionHandler{},
 				PasswordResetHandler: newPasswordResetTestHandler(),
 				CreateURLHandler:     http.NotFoundHandler(),
+				ListURLHandler:       http.NotFoundHandler(),
 				MeHandler:            http.NotFoundHandler(),
 			}
 
@@ -269,6 +273,7 @@ func TestPasswordRegistrationRateLimitersAreIndependent(t *testing.T) {
 		SessionHandler:       &handlers.SessionHandler{},
 		PasswordResetHandler: newPasswordResetTestHandler(),
 		CreateURLHandler:     http.NotFoundHandler(),
+		ListURLHandler:       http.NotFoundHandler(),
 		MeHandler:            http.NotFoundHandler(),
 	}
 
