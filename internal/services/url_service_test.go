@@ -14,9 +14,10 @@ import (
 )
 
 type urlRepositoryStub struct {
-	reserveIDFunc func(context.Context) (int64, error)
-	createFunc    func(context.Context, models.URL) (models.URL, error)
-	listFunc      func(context.Context, uuid.UUID, int, *repositories.URLCursor) ([]models.URL, error)
+	reserveIDFunc      func(context.Context) (int64, error)
+	createFunc         func(context.Context, models.URL) (models.URL, error)
+	listFunc           func(context.Context, uuid.UUID, int, *repositories.URLCursor) ([]models.URL, error)
+	getByShortcodeFunc func(context.Context, uuid.UUID, string) (models.URL, error)
 }
 
 func (s urlRepositoryStub) ReserveID(ctx context.Context) (int64, error) {
@@ -29,6 +30,10 @@ func (s urlRepositoryStub) Create(ctx context.Context, url models.URL) (models.U
 
 func (s urlRepositoryStub) List(ctx context.Context, userID uuid.UUID, limit int, cursor *repositories.URLCursor) ([]models.URL, error) {
 	return s.listFunc(ctx, userID, limit, cursor)
+}
+
+func (s urlRepositoryStub) GetByShortcode(ctx context.Context, userID uuid.UUID, shortCode string) (models.URL, error) {
+	return s.getByShortcodeFunc(ctx, userID, shortCode)
 }
 
 type shortCodeGeneratorStub func(int64) (string, error)
@@ -378,6 +383,64 @@ func TestURLServiceListWrapsRepositoryError(t *testing.T) {
 	_, err := service.List(t.Context(), uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c408"), 2, nil)
 	if !errors.Is(err, wantErr) {
 		t.Errorf("List() error = %v, want wrapped repository error", err)
+	}
+}
+
+func TestURLServiceGetByShortCodeReturnsOwnedLink(t *testing.T) {
+	userID := uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c410")
+	want := models.URL{ID: 42, UserID: userID, ShortCode: "Ab3dX9", OriginalURL: "https://example.com", Visibility: models.VisibilityPrivate, ClickCount: 7}
+	type contextKey struct{}
+	ctx := context.WithValue(t.Context(), contextKey{}, "request-context")
+	repo := urlRepositoryStub{getByShortcodeFunc: func(gotCtx context.Context, gotUserID uuid.UUID, gotCode string) (models.URL, error) {
+		if gotCtx.Value(contextKey{}) != "request-context" || gotUserID != userID || gotCode != want.ShortCode {
+			t.Errorf("GetByShortcode() arguments = (%v, %v, %q), want request context, %v, %q", gotCtx, gotUserID, gotCode, userID, want.ShortCode)
+		}
+		return want, nil
+	}}
+	service := newURLServiceForTest(t, repo, nil, nil, "https://sho.rt")
+
+	got, err := service.GetByShortCode(ctx, userID, want.ShortCode)
+	if err != nil {
+		t.Fatalf("GetByShortCode() error = %v", err)
+	}
+	if got != want {
+		t.Errorf("GetByShortCode() = %+v, want %+v", got, want)
+	}
+}
+
+func TestURLServiceGetByShortCodeRejectsUnauthenticatedUser(t *testing.T) {
+	service := newURLServiceForTest(t, urlRepositoryStub{}, nil, nil, "https://sho.rt")
+
+	_, err := service.GetByShortCode(t.Context(), uuid.Nil(), "Ab3dX9")
+	if !errors.Is(err, services.ErrUnauthenticated) {
+		t.Errorf("GetByShortCode() error = %v, want ErrUnauthenticated", err)
+	}
+}
+
+func TestURLServiceGetByShortCodeMapsNotFound(t *testing.T) {
+	userID := uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c411")
+	repo := urlRepositoryStub{getByShortcodeFunc: func(context.Context, uuid.UUID, string) (models.URL, error) {
+		return models.URL{}, repositories.ErrURLNotFound
+	}}
+	service := newURLServiceForTest(t, repo, nil, nil, "https://sho.rt")
+
+	_, err := service.GetByShortCode(t.Context(), userID, "missing")
+	if !errors.Is(err, services.ErrURLNotFound) {
+		t.Errorf("GetByShortCode() error = %v, want ErrURLNotFound", err)
+	}
+}
+
+func TestURLServiceGetByShortCodeWrapsRepositoryError(t *testing.T) {
+	userID := uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c412")
+	wantErr := errors.New("database unavailable")
+	repo := urlRepositoryStub{getByShortcodeFunc: func(context.Context, uuid.UUID, string) (models.URL, error) {
+		return models.URL{}, wantErr
+	}}
+	service := newURLServiceForTest(t, repo, nil, nil, "https://sho.rt")
+
+	_, err := service.GetByShortCode(t.Context(), userID, "Ab3dX9")
+	if !errors.Is(err, wantErr) {
+		t.Errorf("GetByShortCode() error = %v, want wrapped repository error", err)
 	}
 }
 

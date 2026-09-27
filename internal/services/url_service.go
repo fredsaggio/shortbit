@@ -28,12 +28,14 @@ var (
 	ErrLinkPasswordTooShort   = errors.New("password too short")
 	ErrLinkPasswordTooLong    = errors.New("password too long")
 	ErrInvalidURLListLimit    = errors.New("invalid URL list limit")
+	ErrURLNotFound            = errors.New("url not found")
 )
 
 type URLRepository interface {
 	ReserveID(ctx context.Context) (int64, error)
 	Create(ctx context.Context, url models.URL) (models.URL, error)
 	List(ctx context.Context, userID uuid.UUID, limit int, cursor *repositories.URLCursor) ([]models.URL, error)
+	GetByShortcode(ctx context.Context, userID uuid.UUID, shortCode string) (models.URL, error)
 }
 
 type ShortCodeGenerator interface {
@@ -191,4 +193,22 @@ func (s *URLService) List(ctx context.Context, userID uuid.UUID, limit int, curs
 	}
 
 	return result, nil
+}
+
+func (s *URLService) GetByShortCode(ctx context.Context, userID uuid.UUID, shortCode string) (models.URL, error) {
+	if userID == uuid.Nil() {
+		return models.URL{}, ErrUnauthenticated
+	}
+
+	link, err := s.repo.GetByShortcode(ctx, userID, shortCode)
+
+	if err != nil {
+		if errors.Is(err, repositories.ErrURLNotFound) {
+			return models.URL{}, ErrURLNotFound
+		}
+
+		return models.URL{}, fmt.Errorf("get url by shortcode: %w", err)
+	}
+
+	return link, nil
 }
