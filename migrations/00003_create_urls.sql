@@ -18,7 +18,7 @@ CREATE TABLE urls (
         UNIQUE (short_code),
 
     CONSTRAINT chk_urls_short_code_min_length
-        CHECK (CHAR_LENGTH(short_code) >= 8),
+        CHECK (CHAR_LENGTH(short_code) >= 6),
 
     CONSTRAINT chk_urls_short_code_base62
         CHECK (short_code ~ '^[0-9A-Za-z]+$'),

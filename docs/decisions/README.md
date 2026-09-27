@@ -44,4 +44,4 @@ Quais benefícios, limitações e trabalhos futuros surgem dessa escolha?
 
 ## ADRs
 
-- [0001 — Shortcode de sete caracteres com ID incremental e FF1](0001-shortcode-ff1.md) — aceita; implementação pendente.
+- [0001 — Shortcodes com ID incremental e Sqids](0001-shortcode-sqids.md) — aceita; implementação pendente.

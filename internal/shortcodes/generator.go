@@ -1,50 +1,39 @@
 package shortcodes
 
 import (
-	"crypto/rand"
+	"errors"
 	"fmt"
+
+	"github.com/sqids/sqids-go"
 )
 
-const (
-	alphabet   = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-	codeLength = 10
+type Generator struct {
+	encoder *sqids.Sqids
+}
 
-	// Tem que ser 248, números após isso dariam vantagem para cair em letras específicas. Necessário para criação de shortcodes imprevisíveis.
-	maxUnbiasedByte = 256 - (256 % len(alphabet))
-)
-
-type Generator struct{}
-
-func (Generator) Generate() (string, error) {
-	code := make([]byte, codeLength)
-
-	var randomBytes [codeLength]byte
-
-	position := 0
-
-	for position < codeLength {
-		remaining := codeLength - position
-
-		// Gera bytes aleatórios e aloca no array randomBytes.
-		if _, err := rand.Read(randomBytes[:remaining]); err != nil {
-			return "", fmt.Errorf("generate random short code: %w", err)
-		}
-
-		// Verifica cada byte, transforma em um número entre 0 e 61 que é o index de alphabet e aloca em code para criar o shortcode.
-		for _, randomByte := range randomBytes[:remaining] {
-			if int(randomByte) >= maxUnbiasedByte {
-				continue
-			}
-
-			index := int(randomByte) % len(alphabet)
-			code[position] = alphabet[index]
-			position++
-
-			if position == codeLength {
-				break
-			}
-		}
+func NewGenerator() (*Generator, error) {
+	encoder, err := sqids.New(sqids.Options{MinLength: 6})
+	if err != nil {
+		return nil, fmt.Errorf("configure shortcode generator: %w", err)
 	}
 
-	return string(code), nil
+	return &Generator{encoder: encoder}, nil
+}
+
+func (g *Generator) Generate(id int64) (string, error) {
+	if g == nil || g.encoder == nil {
+		return "", errors.New("shortcode generator is not initialized")
+	}
+
+	if id <= 0 {
+		return "", fmt.Errorf("invalid URL id: %d", id)
+	}
+
+	code, err := g.encoder.Encode([]uint64{uint64(id)})
+
+	if err != nil {
+		return "", fmt.Errorf("encode URL id %d: %w", id, err)
+	}
+
+	return code, nil
 }

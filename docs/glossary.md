@@ -137,7 +137,7 @@ Ataque em que respostas diferentes revelam se um email está cadastrado. Login e
 
 ## Shortcode
 
-Identificador curto usado na URL pública. O gerador atual de dez caracteres Base62 aleatórios é legado e ainda não é usado por uma rota de criação de URL. A decisão para `POST /urls` é um código de **exatamente sete caracteres Base62**, derivado do ID incremental por FF1 e persistido em `urls.short_code`. Ver [Links e shortcodes](short-links.md).
+Identificador curto usado na URL pública. O gerador atual de dez caracteres Base62 aleatórios é legado e ainda não é usado por uma rota de criação de URL. A decisão para `POST /urls` é codificar o ID incremental com Sqids e `MinLength: 6`, persistindo o resultado em `urls.short_code`. O código terá **pelo menos seis caracteres**, sem máximo fixo, e não é um segredo criptográfico. Ver [Links e shortcodes](short-links.md).
 
 ## Base62
 

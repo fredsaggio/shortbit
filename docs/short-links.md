@@ -1,7 +1,7 @@
 # Links e shortcodes
 
-> Status: estratégia FF1 de sete caracteres decidida; schema e gerador antigos ainda precisam ser adaptados; endpoints planejados
-> Última atualização: 26 de setembro de 2026
+> Status: ID incremental + Sqids com comprimento mínimo de seis caracteres decidido; schema e gerador antigos ainda precisam ser adaptados; endpoints planejados
+> Última atualização: 27 de setembro de 2026
 
 ## Objetivo do domínio
 
@@ -22,41 +22,36 @@ Cada URL curta pertence a um usuário autenticado e possui:
 | Tabela `urls` | ✅ Implementada; constraint de comprimento ainda precisa mudar |
 | Model `URL` | ✅ Implementado |
 | Gerador Base62 aleatório de 10 caracteres | ✅ Existe, mas será substituído antes de `POST /urls` |
-| Codec FF1 de sete caracteres | 📋 Decidido, ainda não implementado |
+| Gerador Sqids com `MinLength: 6` | 📋 Decidido, ainda não implementado |
 | Repository de URLs | 📋 Planejado |
 | Service e handlers | 📋 Planejados |
 | Rotas HTTP | 📋 Planejadas |
 | Redis seletivo | 📋 Planejado para depois da versão PostgreSQL |
-| Estratégia final de shortcode | ✅ Decidida: ID incremental + FF1 + Base62 fixo |
+| Estratégia final de shortcode | ✅ Decidida: ID incremental + Sqids |
 
 ## Decisão para o shortcode
 
-Todo shortcode terá **exatamente sete caracteres**, nem menos nem mais, usando o alfabeto canônico:
-
-```text
-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz
-```
-
-O PostgreSQL fornece `urls.id` incremental e único. Para um ID `id` começando em 1, converter `id - 1` para uma representação Base62 de sete posições; aplicar **FF1** (criptografia de formato preservado) com uma chave secreta estável; persistir os sete caracteres resultantes em `urls.short_code`. O preenchimento inicial da representação não aparece como prefixo fixo no resultado criptografado. Não truncar a saída e não usar Sqids: `MinLength: 7` do Sqids não garante máximo de sete caracteres.
+O PostgreSQL fornece `urls.id` incremental e único. O gerador usará a [implementação oficial de Sqids em Go](https://github.com/sqids/sqids-go) para codificar **um único número**, o ID positivo da URL, com `MinLength: 6`. Assim, todo código terá **pelo menos seis caracteres**, mas poderá ter sete ou mais; não há máximo configurável nem um ponto de crescimento definido por `62^6`. Usaremos inicialmente o alfabeto e a blocklist padrão da versão fixada da biblioteca, sem alfabeto secreto ou chave. O código resultante será persistido em `urls.short_code`.
 
 ```mermaid
 flowchart LR
     Sequence[Sequence do PostgreSQL] --> ID[ID único]
-    ID --> Base62[ID - 1 em sete posições Base62]
-    Base62 --> FF1[FF1 com chave secreta]
-    FF1 --> Code[Exatamente sete caracteres]
+    ID --> Sqids[Sqids Encode de um ID com MinLength 6]
+    Sqids --> Code[Shortcode alfanumérico de 6 ou mais caracteres]
     Code --> Insert[Persistir em urls.short_code UNIQUE]
 ```
 
-`62^7 = 3.521.614.606.208` é o tamanho do domínio. Aceitar somente IDs de 1 até esse valor, inclusive. Se a sequence avançar além do domínio, **recusar a criação**; nunca reutilizar ID, cortar código ou emitir oito caracteres. Deletar links antigos não reinicia a sequence, e inserções abortadas podem deixar lacunas. O limite é de IDs emitidos ao longo da vida da instalação, não de links ativos.
+Sqids garante códigos diferentes para entradas numéricas diferentes **sob a mesma configuração**. A biblioteca pode retornar erro de geração, por exemplo se uma blocklist excessivamente restritiva esgotar as tentativas; o service deverá propagá-lo, não ignorá-lo. `MinLength` acrescenta caracteres de preenchimento definidos pelo algoritmo, não zeros à esquerda como na conversão direta do número. O tamanho poderá crescer antes de se ocupar toda a combinação matemática de seis caracteres; não usar `62^6` como limite ou capacidade prometida por Sqids.
 
-Com chave, parâmetros e versão do algoritmo fixos, FF1 é uma permutação do domínio: IDs distintos não geram o mesmo código. O objetivo criptográfico é impedir que alguém derive todos os outros códigos a partir de um código observado e da natureza incremental dos IDs. Não é uma garantia de que ninguém adivinhará um código de sete caracteres por força bruta, nem substitui senha de link privado, ownership ou rate limit. Uma chave ou banco vazados também expõem os links. A implementação deverá usar uma biblioteca FF1 confiável e testada; **não criar criptografia própria**.
+Sqids **não é criptografia** nem impede enumeração por alguém determinado. Um alfabeto customizado também não seria uma chave segura. Link privado depende de senha; ações administrativas dependem de autenticação e ownership. Rate limit no redirect limita abuso online, mas não transforma o shortcode em segredo. [FAQ oficial](https://sqids.org/faq).
 
-Guardar `short_code` em coluna própria, com `UNIQUE` e imutável no MVP. O redirect consulta o valor exato (`WHERE short_code = ...`), sem fazer decode do código para buscar pelo ID. Isso preserva links antigos se o codec mudar e rejeita naturalmente strings alternativas. A constraint `UNIQUE` permanece como defesa contra bugs e conflitos entre versões de chave/configuração; colisão não é parte esperada do fluxo normal, e não haverá retry aleatório.
+Guardar `short_code` em coluna própria, com `UNIQUE` e imutável no MVP. O redirect consulta o valor exato (`WHERE short_code = ...`), sem decodificar o código para buscar pelo ID. Isso preserva links antigos se a biblioteca mudar e rejeita variantes não armazenadas; o `Decode` de Sqids não é canônico por si só. `UNIQUE` permanece como defesa contra bugs e mudanças incompatíveis de configuração; colisão não é parte esperada do fluxo normal, e não haverá retry aleatório.
 
-Chave, alfabeto, parâmetros de FF1 e eventual tweak precisam ser consistentes entre instâncias e deploys. A chave será fornecida por configuração externa, nunca commitada ou registrada em log, e terá backup seguro. Rotacioná-la exige um plano explícito para novos links e checagem de conflito com códigos existentes; **não** basta trocar a variável de ambiente. O nome/formato da configuração e a biblioteca Go serão fechados na implementação. O alfabeto não é secreto; a chave é.
+Fixar a versão da dependência e manter alfabeto, `MinLength` e blocklist iguais entre instâncias. Uma atualização da biblioteca ou da blocklist pode alterar o código gerado para o mesmo ID; códigos antigos continuam resolvíveis por lookup exato, mas a geração de novos códigos pode conflitar com eles. Antes de atualizar a dependência/configuração, comparar vetores de regressão e planejar qualquer incompatibilidade. No primeiro passo da implementação, registrar explicitamente a configuração efetiva e os vetores da versão escolhida. Não há chave criptográfica.
 
-Antes de codificar o codec, alterar `migrations/00003_create_urls.sql`: substituir `CHAR_LENGTH(short_code) >= 8` por `CHAR_LENGTH(short_code) = 7` e renomear a constraint `chk_urls_short_code_min_length` para refletir a nova regra, mantendo a validação Base62 e `UNIQUE`. O gerador atual em `internal/shortcodes/generator.go` ainda produz dez caracteres aleatórios e seus testes refletem a estratégia antiga; ambos devem ser substituídos. Ainda não há repository/service/handler de criação de URLs para migrar.
+O ID interno continua `BIGINT` positivo; não há corte em seis caracteres. Deletar links não recupera IDs da sequence, e rollbacks podem deixar lacunas. Validar a conversão do ID SQL para o `uint64` exigido pela API Go de Sqids e tratar erros de codificação explicitamente.
+
+Quando autorizada a implementação, mudar `migrations/00003_create_urls.sql`: substituir o mínimo atual de oito caracteres por **mínimo seis, sem máximo fixo**, mantendo validação alfanumérica e `UNIQUE`. O gerador atual em `internal/shortcodes/generator.go` ainda produz dez caracteres aleatórios e seus testes refletem a estratégia antiga; ambos devem ser substituídos. Ainda não há repository/service/handler de criação de URLs para migrar. **Nenhuma migration ou código foi alterado nesta etapa documental.**
 
 ## Criação de URL 📋
 
@@ -66,12 +61,12 @@ flowchart TD
     Auth -- Não --> Unauthorized[401]
     Auth -- Sim --> Validate[Valida URL, visibilidade,<br/>senha e expiração]
     Validate --> Allocate[Reserva ID único no PostgreSQL]
-    Allocate --> Encode[FF1 gera shortcode de sete caracteres]
+    Allocate --> Encode[Sqids gera código com no mínimo 6 caracteres]
     Encode --> Insert[INSERT com ID e shortcode]
     Insert --> Created[201 Created]
 ```
 
-Como `short_code` é `NOT NULL` e depende do ID, o repository precisará obter o próximo ID da sequence **antes** do `INSERT`. Uma solução a validar por teste de integração é reservar o ID com `nextval(pg_get_serial_sequence('urls', 'id'))` e inserir o ID explícito usando `OVERRIDING SYSTEM VALUE`; isso preserva o `NOT NULL`. Lacunas na sequence após falhas são normais. Validar também concorrência, limite do domínio e erros inesperados de `UNIQUE`.
+Como `short_code` é `NOT NULL` e depende do ID, o repository precisará obter o próximo ID da sequence **antes** do `INSERT`. Uma solução a validar por teste de integração é reservar o ID com `nextval(pg_get_serial_sequence('urls', 'id'))` e inserir o ID explícito usando `OVERRIDING SYSTEM VALUE`; isso preserva o `NOT NULL`. Lacunas na sequence após falhas são normais. Validar concorrência, ID positivo, falhas de `Encode` e erros inesperados de `UNIQUE`.
 
 ## Ownership
 
