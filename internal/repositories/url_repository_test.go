@@ -278,3 +278,83 @@ func TestURLRepositoryListIntegration(t *testing.T) {
 		t.Fatalf("other user page = %+v, error = %v, want one owned URL", page, err)
 	}
 }
+
+func TestURLRepositoryGetByShortcodeIntegration(t *testing.T) {
+	pool := dbtest.Open(t)
+	users := repositories.NewUserRepository(pool)
+	urls := repositories.NewURLRepository(pool)
+	generator, err := shortcodes.NewGenerator()
+	if err != nil {
+		t.Fatalf("NewGenerator() error = %v", err)
+	}
+
+	owner, err := users.CreateWithPassword(t.Context(), "get-url-owner@example.com", "$argon2id$integration-test-hash")
+	if err != nil {
+		t.Fatalf("create owner: %v", err)
+	}
+	other, err := users.CreateWithPassword(t.Context(), "get-url-other@example.com", "$argon2id$integration-test-hash")
+	if err != nil {
+		t.Fatalf("create other user: %v", err)
+	}
+
+	id, err := urls.ReserveID(t.Context())
+	if err != nil {
+		t.Fatalf("ReserveID() error = %v", err)
+	}
+	code, err := generator.Generate(id)
+	if err != nil {
+		t.Fatalf("Generate(%d) error = %v", id, err)
+	}
+	passwordHash := "$argon2id$private-link-test-hash"
+	created, err := urls.Create(t.Context(), models.URL{
+		ID: id, ShortCode: code, UserID: owner.ID,
+		OriginalURL: "https://example.com/private", Visibility: models.VisibilityPrivate,
+		PasswordHash: &passwordHash,
+	})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if _, err := pool.Exec(t.Context(), "UPDATE urls SET click_count = 7 WHERE id = $1", created.ID); err != nil {
+		t.Fatalf("set click count: %v", err)
+	}
+	created.ClickCount = 7
+
+	missingID, err := urls.ReserveID(t.Context())
+	if err != nil {
+		t.Fatalf("ReserveID() for missing link error = %v", err)
+	}
+	missingCode, err := generator.Generate(missingID)
+	if err != nil {
+		t.Fatalf("Generate(%d) for missing link error = %v", missingID, err)
+	}
+
+	t.Run("owner finds link metadata without password hash", func(t *testing.T) {
+		got, err := urls.GetByShortcode(t.Context(), owner.ID, code)
+		if err != nil {
+			t.Fatalf("GetByShortcode() error = %v", err)
+		}
+		if got.ID != created.ID || got.ShortCode != created.ShortCode || got.UserID != owner.ID ||
+			got.OriginalURL != created.OriginalURL || got.Visibility != created.Visibility ||
+			got.ClickCount != created.ClickCount || !got.CreatedAt.Equal(created.CreatedAt) ||
+			!got.UpdatedAt.Equal(created.UpdatedAt) {
+			t.Errorf("GetByShortcode() = %+v, want metadata from %+v", got, created)
+		}
+		if got.PasswordHash != nil {
+			t.Errorf("GetByShortcode() password hash = %q, want nil", *got.PasswordHash)
+		}
+	})
+
+	t.Run("another user cannot find the link", func(t *testing.T) {
+		_, err := urls.GetByShortcode(t.Context(), other.ID, code)
+		if !errors.Is(err, repositories.ErrURLNotFound) {
+			t.Errorf("GetByShortcode() error = %v, want ErrURLNotFound", err)
+		}
+	})
+
+	t.Run("unknown shortcode is not found", func(t *testing.T) {
+		_, err := urls.GetByShortcode(t.Context(), owner.ID, missingCode)
+		if !errors.Is(err, repositories.ErrURLNotFound) {
+			t.Errorf("GetByShortcode() error = %v, want ErrURLNotFound", err)
+		}
+	})
+}

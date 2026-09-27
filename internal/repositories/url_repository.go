@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 	"uuid"
@@ -10,6 +11,8 @@ import (
 	"github.com/fredsaggio/url-shortener/internal/models"
 	"github.com/jackc/pgx/v5"
 )
+
+var ErrURLNotFound = errors.New("url not found")
 
 type URLRepository struct {
 	db db.DB
@@ -125,4 +128,37 @@ func (r *URLRepository) List(ctx context.Context, userID uuid.UUID, limit int, c
 	}
 
 	return urls, nil
+}
+
+func (r *URLRepository) GetByShortcode(ctx context.Context, userID uuid.UUID, shortCode string) (models.URL, error) {
+	const q = `
+		SELECT
+			id,
+			short_code,
+			user_id,
+			original_url,
+			visibility,
+			click_count,
+			created_at,
+			updated_at
+		FROM urls
+		WHERE user_id = @userID AND short_code = @shortCode
+	`
+
+	args := pgx.StrictNamedArgs{
+		"userID":    userID,
+		"shortCode": shortCode,
+	}
+
+	var url models.URL
+
+	if err := r.db.QueryRow(ctx, q, args).Scan(&url.ID, &url.ShortCode, &url.UserID, &url.OriginalURL, &url.Visibility, &url.ClickCount, &url.CreatedAt, &url.UpdatedAt); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.URL{}, ErrURLNotFound
+		}
+
+		return models.URL{}, fmt.Errorf("find url with shortcode: %w", err)
+	}
+
+	return url, nil
 }

@@ -162,6 +162,7 @@ func (h *URLHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	var cursor *repositories.URLCursor
 	if values, present := query["cursor"]; present {
+		// O parâmetro pode vir mais de uma vez, tipo: /urls?cursor=abc&cursor=def
 		if len(values) != 1 {
 			http.Error(w, "cursor inválido", http.StatusBadRequest)
 			return
@@ -188,10 +189,11 @@ func (h *URLHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-
-	response := listURLResponse{URLs: make([]listedURLResponse, 0, len(result.URLs))}
+	// O valor é 0 no make porque a lista tem que começar vazia. Se começasse preenchia, os appends não iriam para os índices certos (iriam para depois dos zeros).
+	resp := listURLResponse{URLs: make([]listedURLResponse, 0, len(result.URLs))}
 	for _, url := range result.URLs {
-		response.URLs = append(response.URLs, listedURLResponse{
+		// result.URLs devolve models.URL, ou seja, podemos ter acesso aos campos do model e jogá-los na response criada.
+		resp.URLs = append(resp.URLs, listedURLResponse{
 			ShortCode: url.ShortCode, OriginalURL: url.OriginalURL, Visibility: url.Visibility,
 			ClickCount: url.ClickCount, CreatedAt: url.CreatedAt, UpdatedAt: url.UpdatedAt,
 		})
@@ -203,12 +205,14 @@ func (h *URLHandler) List(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "erro interno do servidor", http.StatusInternalServerError)
 			return
 		}
+
+		// Estou transformando um payload json em uma string para comportar na resposta.
 		value := base64.RawURLEncoding.EncodeToString(encoded)
-		response.NextCursor = &value
+		resp.NextCursor = &value
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response); err != nil {
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		slog.ErrorContext(ctx, "encode listed URLs response failed", "error", err)
 	}
 }
