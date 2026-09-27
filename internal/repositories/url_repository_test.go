@@ -358,3 +358,102 @@ func TestURLRepositoryGetByShortcodeIntegration(t *testing.T) {
 		}
 	})
 }
+
+func TestURLRepositoryResolvePublicAndCountClickIntegration(t *testing.T) {
+	pool := dbtest.Open(t)
+	users := repositories.NewUserRepository(pool)
+	urls := repositories.NewURLRepository(pool)
+	generator, err := shortcodes.NewGenerator()
+	if err != nil {
+		t.Fatalf("NewGenerator() error = %v", err)
+	}
+	owner, err := users.CreateWithPassword(t.Context(), "redirect-owner@example.com", "$argon2id$integration-test-hash")
+	if err != nil {
+		t.Fatalf("create owner: %v", err)
+	}
+
+	createURL := func(originalURL string, visibility models.Visibility) models.URL {
+		t.Helper()
+		id, err := urls.ReserveID(t.Context())
+		if err != nil {
+			t.Fatalf("ReserveID() error = %v", err)
+		}
+		code, err := generator.Generate(id)
+		if err != nil {
+			t.Fatalf("Generate(%d) error = %v", id, err)
+		}
+		link := models.URL{ID: id, ShortCode: code, UserID: owner.ID, OriginalURL: originalURL, Visibility: visibility}
+		if visibility == models.VisibilityPrivate {
+			hash := "$argon2id$private-link-test-hash"
+			link.PasswordHash = &hash
+		}
+		created, err := urls.Create(t.Context(), link)
+		if err != nil {
+			t.Fatalf("Create() error = %v", err)
+		}
+		return created
+	}
+	public := createURL("https://example.com/public", models.VisibilityPublic)
+	private := createURL("https://example.com/private", models.VisibilityPrivate)
+	clickCount := func(code string) int64 {
+		t.Helper()
+		var count int64
+		if err := pool.QueryRow(t.Context(), "SELECT click_count FROM urls WHERE short_code = $1", code).Scan(&count); err != nil {
+			t.Fatalf("query click count for %q: %v", code, err)
+		}
+		return count
+	}
+
+	for wantCount := int64(1); wantCount <= 2; wantCount++ {
+		got, err := urls.ResolvePublicAndCountClick(t.Context(), public.ShortCode)
+		if err != nil || got != public.OriginalURL || clickCount(public.ShortCode) != wantCount {
+			t.Fatalf("public resolution %d = (%q, %v), count = %d; want URL %q and count %d",
+				wantCount, got, err, clickCount(public.ShortCode), public.OriginalURL, wantCount)
+		}
+	}
+
+	if got, err := urls.ResolvePublicAndCountClick(t.Context(), private.ShortCode); got != "" || !errors.Is(err, repositories.ErrURLNotFound) {
+		t.Errorf("private resolution = (%q, %v), want empty URL and ErrURLNotFound", got, err)
+	}
+	if got := clickCount(private.ShortCode); got != 0 {
+		t.Errorf("private click count = %d, want 0", got)
+	}
+
+	missingID, err := urls.ReserveID(t.Context())
+	if err != nil {
+		t.Fatalf("ReserveID() for missing link error = %v", err)
+	}
+	missingCode, err := generator.Generate(missingID)
+	if err != nil {
+		t.Fatalf("Generate(%d) for missing link error = %v", missingID, err)
+	}
+	if got, err := urls.ResolvePublicAndCountClick(t.Context(), missingCode); got != "" || !errors.Is(err, repositories.ErrURLNotFound) {
+		t.Errorf("missing resolution = (%q, %v), want empty URL and ErrURLNotFound", got, err)
+	}
+
+	const workers = 20
+	type result struct {
+		originalURL string
+		err         error
+	}
+	results := make(chan result, workers)
+	var group sync.WaitGroup
+	for range workers {
+		group.Add(1)
+		go func() {
+			defer group.Done()
+			originalURL, err := urls.ResolvePublicAndCountClick(t.Context(), public.ShortCode)
+			results <- result{originalURL: originalURL, err: err}
+		}()
+	}
+	group.Wait()
+	close(results)
+	for got := range results {
+		if got.err != nil || got.originalURL != public.OriginalURL {
+			t.Errorf("concurrent resolution = (%q, %v), want %q", got.originalURL, got.err, public.OriginalURL)
+		}
+	}
+	if got := clickCount(public.ShortCode); got != 2+workers {
+		t.Errorf("click count after concurrent resolutions = %d, want %d", got, 2+workers)
+	}
+}

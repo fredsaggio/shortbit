@@ -162,3 +162,28 @@ func (r *URLRepository) GetByShortcode(ctx context.Context, userID uuid.UUID, sh
 
 	return url, nil
 }
+
+func (r *URLRepository) ResolvePublicAndCountClick(ctx context.Context, shortCode string) (string, error) {
+	const q = `
+		UPDATE urls
+		SET click_count = click_count + 1
+		WHERE short_code = @shortCode AND visibility = 'public'
+		RETURNING original_url
+	`
+
+	args := pgx.StrictNamedArgs{
+		"shortCode": shortCode,
+	}
+
+	var originalURL string
+
+	if err := r.db.QueryRow(ctx, q, args).Scan(&originalURL); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", ErrURLNotFound
+		}
+
+		return "", fmt.Errorf("resolve public URL and count click: %w", err)
+	}
+
+	return originalURL, nil
+}
