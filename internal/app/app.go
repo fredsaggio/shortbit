@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/fredsaggio/url-shortener/internal/server"
 	"github.com/fredsaggio/url-shortener/internal/services"
 	"github.com/fredsaggio/url-shortener/internal/sessiontoken"
+	"github.com/fredsaggio/url-shortener/internal/shortcodes"
 	"github.com/fredsaggio/url-shortener/internal/verificationcode"
 )
 
@@ -36,7 +38,7 @@ const (
 	passwordResetEmailRateLimitStaleAfter        = 30 * time.Minute
 )
 
-func CompositionRoot(pool db.DB, cfg config.Config, googleClient services.GoogleOIDCClient) (*server.Handlers, *jobs.PasswordRegistrationCleanup) {
+func CompositionRoot(pool db.DB, cfg config.Config, googleClient services.GoogleOIDCClient) (*server.Handlers, *jobs.PasswordRegistrationCleanup, error) {
 	passwordHasher := argon2.Argon2id{}
 	userRepository := repositories.NewUserRepository(pool)
 	passwordRegisterCleanup := jobs.NewPasswordRegistrationCleanup(userRepository)
@@ -67,6 +69,20 @@ func CompositionRoot(pool db.DB, cfg config.Config, googleClient services.Google
 	loginEmailRateLimiter := middleware.NewRateLimiter(loginEmailRateLimitRequestsPerSecond, loginEmailRateLimitBurst, loginEmailRateLimitMaxEntries, loginEmailRateLimitStaleAfter)
 	sessionHandler := handlers.NewSessionHandler(authService, loginEmailRateLimiter, cfg.Session.CookieSecure)
 
+	shortCodeGenerator, err := shortcodes.NewGenerator()
+	if err != nil {
+		return nil, nil, fmt.Errorf("initialize shortcode generator: %w", err)
+	}
+	urlRepository := repositories.NewURLRepository(pool)
+	urlService, err := services.NewURLService(urlRepository, shortCodeGenerator, passwordHasher, services.URLServiceConfig{
+		PublicBaseURL:       cfg.URL.BaseURL,
+		MaxOriginalURLBytes: cfg.URL.MaxOriginalURLBytes,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("initialize URL service: %w", err)
+	}
+	urlHandler := handlers.NewURLHandler(urlService)
+
 	meHandler := middleware.Authenticator(authService)(http.HandlerFunc(userHandler.GetUserInfo))
 
 	return &server.Handlers{
@@ -74,6 +90,7 @@ func CompositionRoot(pool db.DB, cfg config.Config, googleClient services.Google
 		SessionHandler:       sessionHandler,
 		GoogleAuthHandler:    googleAuthHandler,
 		PasswordResetHandler: passwordResetHandler,
+		URLHandler:           urlHandler,
 		MeHandler:            meHandler,
-	}, passwordRegisterCleanup
+	}, passwordRegisterCleanup, nil
 }

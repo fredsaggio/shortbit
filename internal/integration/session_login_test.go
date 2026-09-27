@@ -29,7 +29,10 @@ func TestPasswordLoginIntegration(t *testing.T) {
 	)
 
 	pool := dbtest.Open(t)
-	applicationHandlers, _ := app.CompositionRoot(pool, testConfig(sessionTTL), unusedGoogleOIDCClient{})
+	applicationHandlers, _, err := app.CompositionRoot(pool, testConfig(sessionTTL), unusedGoogleOIDCClient{})
+	if err != nil {
+		t.Fatalf("CompositionRoot() error = %v", err)
+	}
 	router := server.NewServer(applicationHandlers, pool).NewRouterHTTP()
 
 	createConfirmedPasswordUser(t, pool, email, password)
@@ -194,6 +197,7 @@ func testConfig(sessionTTL time.Duration) config.Config {
 			AttemptTTL: 30 * time.Minute,
 		},
 		PasswordReset: config.PasswordResetConfig{CodeTTL: 10 * time.Minute, AttemptTTL: 30 * time.Minute},
+		URL:           config.URLConfig{BaseURL: "http://localhost:8080", MaxOriginalURLBytes: 8192},
 	}
 }
 

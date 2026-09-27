@@ -93,7 +93,10 @@ func TestGoogleLoginIntegration(t *testing.T) {
 			},
 		},
 	}
-	applicationHandlers, _ := app.CompositionRoot(pool, testConfig(sessionTTL), googleClient)
+	applicationHandlers, _, err := app.CompositionRoot(pool, testConfig(sessionTTL), googleClient)
+	if err != nil {
+		t.Fatalf("CompositionRoot() error = %v", err)
+	}
 	router := server.NewServer(applicationHandlers, pool).NewRouterHTTP()
 
 	var (

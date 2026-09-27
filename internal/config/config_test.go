@@ -67,7 +67,7 @@ func TestLoad(t *testing.T) {
 				PasswordReset: config.PasswordResetConfig{CodeTTL: 8 * time.Minute, AttemptTTL: 25 * time.Minute},
 				URL: config.URLConfig{
 					BaseURL:             "https://shortbit.com.br",
-					MaxOriginalURLBytes: 1024,
+					MaxOriginalURLBytes: 8192,
 				},
 			},
 		},
@@ -114,7 +114,7 @@ func TestLoad(t *testing.T) {
 				PasswordReset: config.PasswordResetConfig{CodeTTL: 10 * time.Minute, AttemptTTL: 30 * time.Minute},
 				URL: config.URLConfig{
 					BaseURL:             "http://localhost:8080",
-					MaxOriginalURLBytes: 1024,
+					MaxOriginalURLBytes: 8192,
 				},
 			},
 		},

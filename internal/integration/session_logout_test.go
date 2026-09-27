@@ -17,7 +17,10 @@ func TestLogoutIntegration(t *testing.T) {
 	const sessionTTL = 24 * time.Hour
 
 	pool := dbtest.Open(t)
-	applicationHandlers, _ := app.CompositionRoot(pool, testConfig(sessionTTL), unusedGoogleOIDCClient{})
+	applicationHandlers, _, err := app.CompositionRoot(pool, testConfig(sessionTTL), unusedGoogleOIDCClient{})
+	if err != nil {
+		t.Fatalf("CompositionRoot() error = %v", err)
+	}
 	router := server.NewServer(applicationHandlers, pool).NewRouterHTTP()
 
 	createConfirmedPasswordUser(t, pool, "logout-integration@example.com", "senha12345")

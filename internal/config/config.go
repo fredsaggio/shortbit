@@ -25,7 +25,7 @@ const (
 	defaultPasswordResetAttemptTTL        = 30 * time.Minute
 
 	defaultBaseURL             = "http://localhost:8080"
-	defaultMaxOriginalURLBytes = 1024
+	defaultMaxOriginalURLBytes = 8192
 )
 
 type Config struct {
