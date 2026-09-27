@@ -49,6 +49,7 @@ type Handlers struct {
 	SessionHandler       *handlers.SessionHandler
 	GoogleAuthHandler    *handlers.GoogleAuthHandler
 	PasswordResetHandler *handlers.PasswordResetHandler
+	URLHandler           *handlers.URLHandler
 	CreateURLHandler     http.Handler
 	ListURLHandler       http.Handler
 	GetURLHandler        http.Handler
@@ -137,6 +138,7 @@ func (srv *Server) registerRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /urls", srv.h.CreateURLHandler)
 	mux.Handle("GET /urls", srv.h.ListURLHandler)
 	mux.Handle("GET /urls/{code}", srv.h.GetURLHandler)
+	mux.HandleFunc("GET /{code}", srv.h.URLHandler.Redirect)
 }
 
 func (srv *Server) NewRouterHTTP() http.Handler {

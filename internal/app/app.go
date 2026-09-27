@@ -100,6 +100,7 @@ func CompositionRoot(pool db.DB, cfg config.Config, googleClient services.Google
 		SessionHandler:       sessionHandler,
 		GoogleAuthHandler:    googleAuthHandler,
 		PasswordResetHandler: passwordResetHandler,
+		URLHandler:           urlHandler,
 		CreateURLHandler:     createURLHandler,
 		ListURLHandler:       listURLHandler,
 		GetURLHandler:        getURLHandler,
