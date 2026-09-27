@@ -1,7 +1,7 @@
 # Desenvolvimento local
 
 > Status: atual
-> Última atualização: 24 de setembro de 2026
+> Última atualização: 27 de setembro de 2026
 
 ## Requisitos
 
@@ -37,9 +37,11 @@ RESEND_API_KEY=...
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 GOOGLE_REDIRECT_URL=http://localhost:8080/auth/google/callback
+
+PUBLIC_BASE_URL=http://localhost:8080
 ```
 
-Em produção, `COOKIE_SECURE` deve ser `true` e a URL do callback deve usar HTTPS.
+`PUBLIC_BASE_URL` é opcional e assume `http://localhost:8080` no desenvolvimento; é usado para compor o `short_url` devolvido por `POST /urls`. Em produção, configure o domínio público, `COOKIE_SECURE=true` e callback Google com HTTPS.
 
 ## Subir o PostgreSQL
 

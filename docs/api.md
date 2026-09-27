@@ -250,13 +250,44 @@ Sucesso:
 204 No Content
 ```
 
-## Links 📋
+## Links
 
-Os contratos exatos serão fechados durante a implementação vertical do domínio. As rotas reservadas são:
+### `POST /urls` ✅
+
+Exige sessão autenticada. Recebe `url`, `visibility` (`public` ou `private`) e, para link privado, `password`. Retorna `201 Created` com `short_code` e `short_url`. Senha e hash nunca entram na resposta.
+
+```json
+{
+  "short_code": "Ab3dX9",
+  "short_url": "https://sho.rt/Ab3dX9"
+}
+```
+
+### `GET /urls` ✅
+
+Exige sessão autenticada. Aceita `limit` opcional (padrão 20; intervalo permitido de 1 a 20) e `cursor` opcional. Sem cursor, retorna a primeira página. Para a próxima página, o cliente copia `next_cursor` da resposta anterior para `?cursor=...`; não precisa interpretá-lo. O cursor é Base64URL sem padding de `created_at` e `id`, não um segredo ou autorização. Cursor ou limite inválido retorna `400`; sem sessão, `401`.
+
+```json
+{
+  "urls": [
+    {
+      "short_code": "Ab3dX9",
+      "original_url": "https://example.com",
+      "visibility": "public",
+      "click_count": 0,
+      "created_at": "2026-09-27T12:00:00Z",
+      "updated_at": "2026-09-27T12:00:00Z"
+    }
+  ],
+  "next_cursor": "<cursor-da-proxima-pagina>"
+}
+```
+
+`next_cursor` é `null` quando não há outra página. `urls` é `[]` quando não há links. A listagem nunca devolve senha nem hash de link privado.
+
+### Próximas rotas 📋
 
 ```text
-POST /urls
-GET  /urls?limit=...&cursor=...
 GET  /urls/{code}
 GET  /{code}
 POST /{code}/unlock

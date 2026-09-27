@@ -12,7 +12,9 @@ ShortBit is a URL shortener for public or password-protected links. It tracks cl
 - autenticação, `/me` e logout;
 - rate limiting e limpeza de cadastros pendentes;
 - recuperação de senha por código enviado por email;
-- domínio HTTP de URLs curtas ainda planejado.
+- criação autenticada de links públicos e privados com Sqids;
+- listagem autenticada de links com paginação por cursor (até 20 por página);
+- consulta individual, redirect, desbloqueio e analytics ainda planejados.
 
 ## Documentação
 

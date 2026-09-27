@@ -150,9 +150,9 @@ Guarda o hash de tokens opacos. O token puro só fica no cookie do cliente.
 
 Há no máximo uma linha por usuário com senha. O token opaco fica no cookie e seu hash identifica a tentativa; `verification_proof_hash` guarda HMAC(token, código), nunca o código puro. O upsert respeita cooldown e bloqueio, troca o código sem estender a vida da tentativa ativa e reinicia os contadores apenas após a expiração. `used_at` impede reutilização após a confirmação.
 
-### `urls` 📋
+### `urls` ✅
 
-O schema existe, mas o fluxo HTTP ainda não foi implementado. Links privados exigem `password_hash`; links públicos exigem que esse campo seja `NULL`. URLs criadas não expiram automaticamente; a expiração de `link_access_sessions` limita apenas o acesso temporário a um link privado.
+O schema e os fluxos HTTP de criação e listagem estão implementados; consulta individual, redirect e desbloqueio ainda estão planejados. Links privados exigem `password_hash`; links públicos exigem que esse campo seja `NULL`. URLs criadas não expiram automaticamente; a expiração de `link_access_sessions` limita apenas o acesso temporário a um link privado.
 
 `id` é `BIGINT GENERATED ALWAYS AS IDENTITY`; `short_code` é derivado do ID com Sqids e `MinLength: 6`, persistido e protegido por `UNIQUE`. A migration exige **no mínimo seis caracteres, sem máximo fixo**. O redirect consultará `short_code` diretamente, sem decodificá-lo. Consulte [Links e shortcodes](short-links.md) para configuração, limites reais e fluxo de criação.
 

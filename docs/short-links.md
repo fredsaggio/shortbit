@@ -1,6 +1,6 @@
 # Links e shortcodes
 
-> Status: ID incremental + Sqids com comprimento mínimo de seis caracteres implementados; endpoints planejados
+> Status: geração Sqids, criação e listagem autenticadas implementadas; metadados individuais, redirect e desbloqueio planejados
 > Última atualização: 27 de setembro de 2026
 
 ## Objetivo do domínio
@@ -21,15 +21,15 @@ Cada URL curta pertence a um usuário autenticado e possui:
 | Tabela `urls` | ✅ Implementada, com mínimo de seis caracteres e sem expiração |
 | Model `URL` | ✅ Implementado |
 | Gerador Sqids com `MinLength: 6` | ✅ Implementado |
-| Repository de URLs | 📋 Planejado |
-| Service e handlers | 📋 Planejados |
-| Rotas HTTP | 📋 Planejadas |
+| Repository de URLs | ✅ Reserva ID, cria e lista por owner/cursor |
+| Service e handlers | ✅ Criação e listagem |
+| Rotas HTTP | ✅ `POST /urls` e `GET /urls` autenticadas; demais planejadas |
 | Redis seletivo | 📋 Planejado para depois da versão PostgreSQL |
 | Estratégia final de shortcode | ✅ Decidida: ID incremental + Sqids |
 
 ## Decisão para o shortcode
 
-O PostgreSQL fornece `urls.id` incremental e único. O gerador usará a [implementação oficial de Sqids em Go](https://github.com/sqids/sqids-go) para codificar **um único número**, o ID positivo da URL, com `MinLength: 6`. Assim, todo código terá **pelo menos seis caracteres**, mas poderá ter sete ou mais; não há máximo configurável nem um ponto de crescimento definido por `62^6`. Usaremos inicialmente o alfabeto e a blocklist padrão da versão fixada da biblioteca, sem alfabeto secreto ou chave. O código resultante será persistido em `urls.short_code`.
+O PostgreSQL fornece `urls.id` incremental e único. O gerador usa a [implementação oficial de Sqids em Go](https://github.com/sqids/sqids-go) para codificar **um único número**, o ID positivo da URL, com `MinLength: 6`. Assim, todo código tem **pelo menos seis caracteres**, mas poderá ter sete ou mais; não há máximo configurável nem um ponto de crescimento definido por `62^6`. Usamos o alfabeto e a blocklist padrão da versão fixada da biblioteca, sem alfabeto secreto ou chave. O código resultante é persistido em `urls.short_code`.
 
 ```mermaid
 flowchart LR
@@ -39,19 +39,19 @@ flowchart LR
     Code --> Insert[Persistir em urls.short_code UNIQUE]
 ```
 
-Sqids garante códigos diferentes para entradas numéricas diferentes **sob a mesma configuração**. A biblioteca pode retornar erro de geração, por exemplo se uma blocklist excessivamente restritiva esgotar as tentativas; o service deverá propagá-lo, não ignorá-lo. `MinLength` acrescenta caracteres de preenchimento definidos pelo algoritmo, não zeros à esquerda como na conversão direta do número. O tamanho poderá crescer antes de se ocupar toda a combinação matemática de seis caracteres; não usar `62^6` como limite ou capacidade prometida por Sqids.
+Sqids garante códigos diferentes para entradas numéricas diferentes **sob a mesma configuração**. A biblioteca pode retornar erro de geração, por exemplo se uma blocklist excessivamente restritiva esgotar as tentativas; o service propaga esse erro. `MinLength` acrescenta caracteres de preenchimento definidos pelo algoritmo, não zeros à esquerda como na conversão direta do número. O tamanho poderá crescer antes de se ocupar toda a combinação matemática de seis caracteres; não usar `62^6` como limite ou capacidade prometida por Sqids.
 
 Sqids **não é criptografia** nem impede enumeração por alguém determinado. Um alfabeto customizado também não seria uma chave segura. Link privado depende de senha; ações administrativas dependem de autenticação e ownership. Rate limit no redirect limita abuso online, mas não transforma o shortcode em segredo. [FAQ oficial](https://sqids.org/faq).
 
 Guardar `short_code` em coluna própria, com `UNIQUE` e imutável no MVP. O redirect consulta o valor exato (`WHERE short_code = ...`), sem decodificar o código para buscar pelo ID. Isso preserva links antigos se a biblioteca mudar e rejeita variantes não armazenadas; o `Decode` de Sqids não é canônico por si só. `UNIQUE` permanece como defesa contra bugs e mudanças incompatíveis de configuração; colisão não é parte esperada do fluxo normal, e não haverá retry aleatório.
 
-Fixar a versão da dependência e manter alfabeto, `MinLength` e blocklist iguais entre instâncias. Uma atualização da biblioteca ou da blocklist pode alterar o código gerado para o mesmo ID; códigos antigos continuam resolvíveis por lookup exato, mas a geração de novos códigos pode conflitar com eles. Antes de atualizar a dependência/configuração, comparar vetores de regressão e planejar qualquer incompatibilidade. No primeiro passo da implementação, registrar explicitamente a configuração efetiva e os vetores da versão escolhida. Não há chave criptográfica.
+A versão da dependência está fixada, e alfabeto, `MinLength` e blocklist devem permanecer iguais entre instâncias. Uma atualização da biblioteca ou da blocklist pode alterar o código gerado para o mesmo ID; códigos antigos continuam resolvíveis por lookup exato, mas a geração de novos códigos pode conflitar com eles. Antes de atualizar a dependência/configuração, comparar os vetores de regressão já testados e planejar qualquer incompatibilidade. Não há chave criptográfica.
 
 O ID interno continua `BIGINT` positivo; não há corte em seis caracteres. Deletar links não recupera IDs da sequence, e rollbacks podem deixar lacunas. Validar a conversão do ID SQL para o `uint64` exigido pela API Go de Sqids e tratar erros de codificação explicitamente.
 
-`migrations/00003_create_urls.sql` aceita códigos com **mínimo seis, sem máximo fixo**, mantendo validação alfanumérica e `UNIQUE`. `internal/shortcodes/generator.go` já codifica IDs com Sqids. Ainda não há repository/service/handler de criação de URLs.
+`migrations/00003_create_urls.sql` aceita códigos com **mínimo seis, sem máximo fixo**, mantendo validação alfanumérica e `UNIQUE`. `internal/shortcodes/generator.go` codifica IDs com Sqids. Repository, service, handler e rota autenticada de criação já estão implementados.
 
-## Criação de URL 📋
+## Criação de URL ✅
 
 ```mermaid
 flowchart TD
@@ -64,7 +64,7 @@ flowchart TD
     Insert --> Created[201 Created]
 ```
 
-Como `short_code` é `NOT NULL` e depende do ID, o repository precisará obter o próximo ID da sequence **antes** do `INSERT`. Uma solução a validar por teste de integração é reservar o ID com `nextval(pg_get_serial_sequence('urls', 'id'))` e inserir o ID explícito usando `OVERRIDING SYSTEM VALUE`; isso preserva o `NOT NULL`. Lacunas na sequence após falhas são normais. Validar concorrência, ID positivo, falhas de `Encode` e erros inesperados de `UNIQUE`.
+Como `short_code` é `NOT NULL` e depende do ID, o repository obtém o próximo ID da sequence **antes** do `INSERT` com `nextval(pg_get_serial_sequence('urls', 'id'))` e insere o ID explícito usando `OVERRIDING SYSTEM VALUE`; a sintaxe foi validada em teste de integração. Lacunas na sequence após falhas são normais. O gerador valida ID positivo; erros inesperados de `UNIQUE` são propagados, sem retry aleatório.
 
 ## Ownership
 
@@ -81,15 +81,15 @@ flowchart LR
 
 Endpoints administrativos nunca confiarão em um `user_id` enviado pelo cliente.
 
-## Endpoints administrativos planejados
+## Endpoints administrativos
 
 | Endpoint | Função |
 |---|---|
-| `POST /urls` | Criar link público ou privado |
-| `GET /urls?limit=...&cursor=...` | Listar somente links do usuário |
-| `GET /urls/{code}` | Consultar metadados e analytics com ownership |
+| `POST /urls` | ✅ Criar link público ou privado |
+| `GET /urls?limit=...&cursor=...` | ✅ Listar somente links do usuário |
+| `GET /urls/{code}` | 📋 Consultar metadados e analytics com ownership |
 
-A listagem usará paginação por cursor baseada em `(created_at, id)`, evitando paginação instável por offset.
+A listagem usa paginação keyset por `(created_at DESC, id DESC)`, evitando `OFFSET`. `limit` assume 20 quando omitido e aceita de 1 a 20. A consulta pede `limit+1` para detectar a próxima página; o item extra não é enviado. `next_cursor` é uma string Base64URL sem padding que codifica `created_at` e `id` do último link entregue, ou `null` no fim. É apenas posição, não autenticação nem criptografia. A query sempre filtra `user_id` da sessão; a resposta não contém senha nem hash. O contrato JSON está em [API HTTP](api.md).
 
 ## Redirect público 📋
 
@@ -148,7 +148,7 @@ Analytics por evento, localização, dispositivo ou série temporal ficam fora d
 
 ## Cache seletivo futuro
 
-O PostgreSQL será implementado e medido antes do Redis.
+O redirect e o contador serão implementados primeiro com PostgreSQL; o Redis virá depois de medir esse fluxo.
 
 ```mermaid
 flowchart TD
