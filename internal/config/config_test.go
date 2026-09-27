@@ -32,6 +32,7 @@ func TestLoad(t *testing.T) {
 				"PASSWORD_REGISTRATION_ATTEMPT_TTL": "20m",
 				"PASSWORD_RESET_CODE_TTL":           "8m",
 				"PASSWORD_RESET_ATTEMPT_TTL":        "25m",
+				"PUBLIC_BASE_URL":                   "https://shortbit.com.br",
 			},
 			want: config.Config{
 				DatabaseURL: "postgres://user:password@localhost:5432/app",
@@ -64,6 +65,10 @@ func TestLoad(t *testing.T) {
 					AttemptTTL: 20 * time.Minute,
 				},
 				PasswordReset: config.PasswordResetConfig{CodeTTL: 8 * time.Minute, AttemptTTL: 25 * time.Minute},
+				URL: config.URLConfig{
+					BaseURL:             "https://shortbit.com.br",
+					MaxOriginalURLBytes: 1024,
+				},
 			},
 		},
 		{
@@ -107,6 +112,10 @@ func TestLoad(t *testing.T) {
 					AttemptTTL: 30 * time.Minute,
 				},
 				PasswordReset: config.PasswordResetConfig{CodeTTL: 10 * time.Minute, AttemptTTL: 30 * time.Minute},
+				URL: config.URLConfig{
+					BaseURL:             "http://localhost:8080",
+					MaxOriginalURLBytes: 1024,
+				},
 			},
 		},
 		{

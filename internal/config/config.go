@@ -23,6 +23,9 @@ const (
 	defaultPasswordRegistrationAttemptTTL = 30 * time.Minute
 	defaultPasswordResetCodeTTL           = 10 * time.Minute
 	defaultPasswordResetAttemptTTL        = 30 * time.Minute
+
+	defaultBaseURL             = "http://localhost:8080"
+	defaultMaxOriginalURLBytes = 1024
 )
 
 type Config struct {
@@ -34,6 +37,7 @@ type Config struct {
 	Resend               ResendConfig
 	PasswordRegistration PasswordRegistrationConfig
 	PasswordReset        PasswordResetConfig
+	URL                  URLConfig
 }
 
 type SessionConfig struct {
@@ -44,6 +48,11 @@ type SessionConfig struct {
 
 type EmailConfig struct {
 	From string
+}
+
+type URLConfig struct {
+	BaseURL             string
+	MaxOriginalURLBytes int
 }
 
 type ResendConfig struct {
@@ -174,6 +183,10 @@ func Load(getEnv func(string) string) (Config, error) {
 		},
 		PasswordReset: PasswordResetConfig{CodeTTL: resetCodeTTL,
 			AttemptTTL: resetAttemptTTL,
+		},
+		URL: URLConfig{
+			BaseURL:             envOrDefault(getEnv, "PUBLIC_BASE_URL", defaultBaseURL),
+			MaxOriginalURLBytes: defaultMaxOriginalURLBytes,
 		},
 	}
 

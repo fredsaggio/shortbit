@@ -48,6 +48,7 @@ type Handlers struct {
 	SessionHandler       *handlers.SessionHandler
 	GoogleAuthHandler    *handlers.GoogleAuthHandler
 	PasswordResetHandler *handlers.PasswordResetHandler
+	URLHandler           *handlers.URLHandler
 	MeHandler            http.Handler
 }
 
