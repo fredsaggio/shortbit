@@ -40,7 +40,7 @@ e em [`docs/openapi.yaml`](openapi.yaml). Esta página Markdown também registra
 | `POST` | `/password-resets/confirm` | Cookie da tentativa | ✅ |
 | `POST` | `/urls` | Sim | ✅ |
 | `GET` | `/urls` | Sim | ✅ |
-| `GET` | `/urls/{code}` | Sim + ownership | 📋 |
+| `GET` | `/urls/{code}` | Sim + ownership | ✅ |
 | `GET` | `/{code}` | Não | 📋 |
 | `POST` | `/{code}/unlock` | Não | 📋 |
 
@@ -289,10 +289,28 @@ Exige sessão autenticada. Aceita `limit` opcional (padrão 20; intervalo permit
 
 `next_cursor` é `null` quando não há outra página. `urls` é `[]` quando não há links. A listagem nunca devolve senha nem hash de link privado.
 
+### `GET /urls/{code}` ✅
+
+Exige a sessão do dono do link. Retorna os metadados e o contador de cliques em
+JSON, com os mesmos campos de um item de `GET /urls`. Não devolve a senha nem o
+hash de um link privado. Código inexistente **e** link de outro usuário retornam
+o mesmo `404`, sem revelar a existência do link. Sem sessão, retorna `401`.
+Este endpoint não redireciona nem desbloqueia o link.
+
+```json
+{
+  "short_code": "Ab3dX9",
+  "original_url": "https://example.com",
+  "visibility": "private",
+  "click_count": 7,
+  "created_at": "2026-09-27T12:00:00Z",
+  "updated_at": "2026-09-27T12:00:00Z"
+}
+```
+
 ### Próximas rotas 📋
 
 ```text
-GET  /urls/{code}
 GET  /{code}
 POST /{code}/unlock
 ```

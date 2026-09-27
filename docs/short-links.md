@@ -1,6 +1,6 @@
 # Links e shortcodes
 
-> Status: geração Sqids, criação e listagem autenticadas implementadas; metadados individuais, redirect e desbloqueio planejados
+> Status: geração Sqids, criação, listagem e metadados individuais autenticados implementados; redirect e desbloqueio planejados
 > Última atualização: 27 de setembro de 2026
 
 ## Objetivo do domínio
@@ -87,9 +87,13 @@ Endpoints administrativos nunca confiarão em um `user_id` enviado pelo cliente.
 |---|---|
 | `POST /urls` | ✅ Criar link público ou privado |
 | `GET /urls?limit=...&cursor=...` | ✅ Listar somente links do usuário |
-| `GET /urls/{code}` | 📋 Consultar metadados e analytics com ownership |
+| `GET /urls/{code}` | ✅ Consultar metadados e contador de cliques com ownership |
 
 A listagem usa paginação keyset por `(created_at DESC, id DESC)`, evitando `OFFSET`. `limit` assume 20 quando omitido e aceita de 1 a 20. A consulta pede `limit+1` para detectar a próxima página; o item extra não é enviado. `next_cursor` é uma string Base64URL sem padding que codifica `created_at` e `id` do último link entregue, ou `null` no fim. É apenas posição, não autenticação nem criptografia. A query sempre filtra `user_id` da sessão; a resposta não contém senha nem hash. O contrato JSON está em [API HTTP](api.md).
+
+A consulta individual usa `short_code` e `user_id` na mesma query. Assim,
+um código inexistente e um link de outro usuário resultam no mesmo `404`.
+Ela retorna os metadados e o contador de cliques ao dono, sem hash da senha.
 
 ## Redirect público 📋
 

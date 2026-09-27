@@ -25,7 +25,7 @@ tags:
   - name: Google
     description: Fluxo OAuth com Google.
   - name: Links
-    description: Criação e listagem dos links do usuário autenticado.
+    description: Criação e consulta dos links do usuário autenticado.
 paths:
   /docs:
     get:
@@ -453,6 +453,46 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /urls/{code}:
+    get:
+      tags: [Links]
+      operationId: getOwnedURL
+      summary: Consultar metadados de um link meu
+      description: |
+        Retorna os metadados e o contador de cliques de um link pertencente ao
+        usuário da sessão. Código inexistente e link de outro usuário retornam
+        o mesmo 404. Este endpoint não abre nem desbloqueia o link curto.
+      security:
+        - userSession: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          description: Shortcode do link.
+          schema:
+            type: string
+            minLength: 6
+            pattern: '^[0-9A-Za-z]+$'
+          example: Ab3dX9
+      responses:
+        '200':
+          description: Metadados do link pertencente ao usuário.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListedURL'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Código inexistente ou link pertencente a outro usuário.
+          content:
+            text/plain:
+              schema:
+                type: string
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
