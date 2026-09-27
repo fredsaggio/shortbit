@@ -13,7 +13,6 @@ type URL struct {
 	Visibility   Visibility
 	PasswordHash *string
 	ClickCount   int64
-	ExpiresAt    *time.Time
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }

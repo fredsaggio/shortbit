@@ -1,6 +1,6 @@
 # ShortBit
 
-ShortBit is a URL shortener for public or password-protected links with optional expiration. It tracks clicks, provides analytics, and supports password or Google sign-in.
+ShortBit is a URL shortener for public or password-protected links. It tracks clicks, provides analytics, and supports password or Google sign-in.
 
 > Projeto em desenvolvimento, construído em Go e PostgreSQL para estudo de backend, segurança, concorrência e evolução de uma API até produção.
 

@@ -1,12 +1,12 @@
 # 0001 — Shortcodes com ID incremental e Sqids
 
-Status: Accepted (implementação pendente)
+Status: Accepted (migration e gerador implementados; criação de URLs pendente)
 Data: 2026-09-26
 Revisão: 2026-09-27 — substitui as propostas anteriores de FF1 e permutação aritmética própria por Sqids com comprimento mínimo de seis caracteres.
 
 ## Contexto
 
-O projeto precisa de códigos públicos curtos, não sequenciais à primeira vista e derivados do ID incremental de cada URL. O gerador atual de dez caracteres aleatórios é legado; ainda não existe `POST /urls`. O shortcode identifica o link, mas não concede acesso administrativo nem substitui a senha de um link privado.
+O projeto precisa de códigos públicos curtos, não sequenciais à primeira vista e derivados do ID incremental de cada URL. O gerador Sqids já existe; ainda não existe `POST /urls`. O shortcode identifica o link, mas não concede acesso administrativo nem substitui a senha de um link privado.
 
 ## Alternativas consideradas
 
@@ -27,7 +27,7 @@ Persistir o resultado em `urls.short_code` com `UNIQUE`. O redirect buscará pel
 - Sqids não é criptografia nem defesa contra enumeração. Senha de link privado, autenticação, ownership e rate limit continuam independentes do shortcode.
 - Fixar a versão da dependência e manter alfabeto, `MinLength` e blocklist consistentes em todas as instâncias. Antes de atualizá-los, conferir vetores de regressão; uma mudança pode produzir códigos diferentes para IDs novos e até conflitar com códigos já persistidos.
 - `Encode` retorna erro e ele deve ser tratado. A blocklist pode exigir novas tentativas e, se excessivamente restritiva, fazer a codificação falhar.
-- Antes de `POST /urls`, adaptar migration e gerador legados, testar mínimo de seis, ausência de máximo artificial, determinismo, entradas inválidas, concorrência e integração HTTP–PostgreSQL. A migration atual ainda exige no mínimo oito caracteres; ela **não foi alterada nesta etapa documental**.
+- A migration e o gerador já usam o mínimo de seis caracteres, sem máximo artificial. Antes de `POST /urls`, validar concorrência e integração HTTP–PostgreSQL. URLs criadas não possuem expiração automática.
 
 Detalhes e estado atual: [Links e shortcodes](../short-links.md). O arquivo local `IMPLEMENTATION_PLAN.md` também descreve a ordem da Fase 8, mas está ignorado pelo Git; este documento versionado é a referência para um clone novo.
 

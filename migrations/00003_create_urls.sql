@@ -10,7 +10,6 @@ CREATE TABLE urls (
     visibility url_visibility NOT NULL,
     password_hash TEXT,
     click_count BIGINT NOT NULL DEFAULT 0,
-    expires_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
@@ -38,23 +37,16 @@ CREATE TABLE urls (
                 AND password_hash IS NOT NULL
                 AND BTRIM(password_hash) <> ''
             )
-        ),
-
-    CONSTRAINT chk_urls_expires_at_after_created
-        CHECK (expires_at IS NULL OR expires_at > created_at)
+        )
 );
 
 CREATE TRIGGER set_updated_at_urls
-    BEFORE UPDATE OF short_code, user_id, original_url, visibility, password_hash, expires_at ON urls
+    BEFORE UPDATE OF short_code, user_id, original_url, visibility, password_hash ON urls
     FOR EACH ROW
     EXECUTE FUNCTION trigger_set_updated_at();
 
 CREATE INDEX idx_urls_user_created
     ON urls (user_id, created_at DESC, id DESC);
-
-CREATE INDEX idx_urls_expires_at
-    ON urls (expires_at)
-    WHERE expires_at IS NOT NULL;
 -- +goose StatementEnd
 
 -- +goose Down

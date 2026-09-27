@@ -1,6 +1,6 @@
 # Links e shortcodes
 
-> Status: ID incremental + Sqids com comprimento mínimo de seis caracteres decidido; schema e gerador antigos ainda precisam ser adaptados; endpoints planejados
+> Status: ID incremental + Sqids com comprimento mínimo de seis caracteres implementados; endpoints planejados
 > Última atualização: 27 de setembro de 2026
 
 ## Objetivo do domínio
@@ -11,7 +11,6 @@ Cada URL curta pertence a um usuário autenticado e possui:
 - URL original;
 - visibilidade pública ou privada;
 - senha opcional para links privados;
-- expiração opcional;
 - contador total de cliques;
 - timestamps de criação e alteração.
 
@@ -19,10 +18,9 @@ Cada URL curta pertence a um usuário autenticado e possui:
 
 | Componente | Estado |
 |---|---|
-| Tabela `urls` | ✅ Implementada; constraint de comprimento ainda precisa mudar |
+| Tabela `urls` | ✅ Implementada, com mínimo de seis caracteres e sem expiração |
 | Model `URL` | ✅ Implementado |
-| Gerador Base62 aleatório de 10 caracteres | ✅ Existe, mas será substituído antes de `POST /urls` |
-| Gerador Sqids com `MinLength: 6` | 📋 Decidido, ainda não implementado |
+| Gerador Sqids com `MinLength: 6` | ✅ Implementado |
 | Repository de URLs | 📋 Planejado |
 | Service e handlers | 📋 Planejados |
 | Rotas HTTP | 📋 Planejadas |
@@ -51,7 +49,7 @@ Fixar a versão da dependência e manter alfabeto, `MinLength` e blocklist iguai
 
 O ID interno continua `BIGINT` positivo; não há corte em seis caracteres. Deletar links não recupera IDs da sequence, e rollbacks podem deixar lacunas. Validar a conversão do ID SQL para o `uint64` exigido pela API Go de Sqids e tratar erros de codificação explicitamente.
 
-Quando autorizada a implementação, mudar `migrations/00003_create_urls.sql`: substituir o mínimo atual de oito caracteres por **mínimo seis, sem máximo fixo**, mantendo validação alfanumérica e `UNIQUE`. O gerador atual em `internal/shortcodes/generator.go` ainda produz dez caracteres aleatórios e seus testes refletem a estratégia antiga; ambos devem ser substituídos. Ainda não há repository/service/handler de criação de URLs para migrar. **Nenhuma migration ou código foi alterado nesta etapa documental.**
+`migrations/00003_create_urls.sql` aceita códigos com **mínimo seis, sem máximo fixo**, mantendo validação alfanumérica e `UNIQUE`. `internal/shortcodes/generator.go` já codifica IDs com Sqids. Ainda não há repository/service/handler de criação de URLs.
 
 ## Criação de URL 📋
 
@@ -59,7 +57,7 @@ Quando autorizada a implementação, mudar `migrations/00003_create_urls.sql`: s
 flowchart TD
     Request[POST /urls] --> Auth{Sessão válida?}
     Auth -- Não --> Unauthorized[401]
-    Auth -- Sim --> Validate[Valida URL, visibilidade,<br/>senha e expiração]
+    Auth -- Sim --> Validate[Valida URL, visibilidade e senha]
     Validate --> Allocate[Reserva ID único no PostgreSQL]
     Allocate --> Encode[Sqids gera código com no mínimo 6 caracteres]
     Encode --> Insert[INSERT com ID e shortcode]
@@ -99,9 +97,7 @@ A listagem usará paginação por cursor baseada em `(created_at, id)`, evitando
 flowchart TD
     Request[GET /code] --> Find{Shortcode existe?}
     Find -- Não --> NotFound[404]
-    Find -- Sim --> Expired{Está expirado?}
-    Expired -- Sim --> Gone[410]
-    Expired -- Não --> Visibility{É público?}
+    Find -- Sim --> Visibility{É público?}
     Visibility -- Não --> PasswordPage[Exibe página de senha]
     Visibility -- Sim --> Increment[Incrementa click_count atomicamente]
     Increment --> Redirect[302 para original_url]
@@ -140,9 +136,9 @@ sequenceDiagram
 
 O cookie de acesso a link privado não autentica a conta e só libera o link ao qual foi associado.
 
-## Expiração
+## Duração dos links
 
-`expires_at = NULL` representa link sem expiração. Quando preenchido, precisa ser posterior à criação. Um link expirado não redireciona nem incrementa `click_count`.
+URLs criadas não expiram automaticamente. A sessão temporária usada para desbloquear um link privado continua tendo expiração própria, mas isso não remove nem desativa a URL.
 
 ## Analytics
 
