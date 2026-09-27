@@ -6,6 +6,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"uuid"
 
 	"github.com/fredsaggio/url-shortener/internal/db/dbtest"
 	"github.com/fredsaggio/url-shortener/internal/models"
@@ -195,4 +196,85 @@ func TestURLRepositoryIntegration(t *testing.T) {
 			t.Errorf("unique reserved IDs = %d, want %d", len(seen), workers)
 		}
 	})
+}
+
+func TestURLRepositoryListIntegration(t *testing.T) {
+	pool := dbtest.Open(t)
+	users := repositories.NewUserRepository(pool)
+	urls := repositories.NewURLRepository(pool)
+	generator, err := shortcodes.NewGenerator()
+	if err != nil {
+		t.Fatalf("NewGenerator() error = %v", err)
+	}
+
+	owner, err := users.CreateWithPassword(t.Context(), "list-owner@example.com", "$argon2id$integration-test-hash")
+	if err != nil {
+		t.Fatalf("create owner: %v", err)
+	}
+	other, err := users.CreateWithPassword(t.Context(), "list-other@example.com", "$argon2id$integration-test-hash")
+	if err != nil {
+		t.Fatalf("create other user: %v", err)
+	}
+
+	createURL := func(userID uuid.UUID, visibility models.Visibility) models.URL {
+		t.Helper()
+		id, err := urls.ReserveID(t.Context())
+		if err != nil {
+			t.Fatalf("ReserveID() error = %v", err)
+		}
+		code, err := generator.Generate(id)
+		if err != nil {
+			t.Fatalf("Generate(%d) error = %v", id, err)
+		}
+		url := models.URL{ID: id, ShortCode: code, UserID: userID, OriginalURL: "https://example.com", Visibility: visibility}
+		if visibility == models.VisibilityPrivate {
+			hash := "$argon2id$private-link-test-hash"
+			url.PasswordHash = &hash
+		}
+		created, err := urls.Create(t.Context(), url)
+		if err != nil {
+			t.Fatalf("Create() error = %v", err)
+		}
+		return created
+	}
+
+	first := createURL(owner.ID, models.VisibilityPublic)
+	second := createURL(owner.ID, models.VisibilityPrivate)
+	third := createURL(owner.ID, models.VisibilityPublic)
+	createURL(other.ID, models.VisibilityPublic)
+
+	// Same timestamps make the ID the decisive part of the keyset order.
+	if _, err := pool.Exec(t.Context(), "UPDATE urls SET created_at = TIMESTAMPTZ '2026-01-01 00:00:00+00' WHERE user_id = $1", owner.ID); err != nil {
+		t.Fatalf("set owner timestamps: %v", err)
+	}
+
+	page, err := urls.List(t.Context(), owner.ID, 2, nil)
+	if err != nil {
+		t.Fatalf("first List() error = %v", err)
+	}
+	if len(page) != 2 || page[0].ID != third.ID || page[1].ID != second.ID {
+		t.Fatalf("first page = %+v, want IDs %d, %d", page, third.ID, second.ID)
+	}
+	for _, url := range page {
+		if url.UserID != owner.ID || url.PasswordHash != nil {
+			t.Errorf("listed URL = %+v, want owner and no password hash", url)
+		}
+	}
+
+	cursor := &repositories.URLCursor{CreatedAt: page[1].CreatedAt, ID: page[1].ID}
+	page, err = urls.List(t.Context(), owner.ID, 2, cursor)
+	if err != nil {
+		t.Fatalf("second List() error = %v", err)
+	}
+	if len(page) != 1 || page[0].ID != first.ID {
+		t.Fatalf("second page = %+v, want ID %d", page, first.ID)
+	}
+	if page[0].UserID != owner.ID || page[0].PasswordHash != nil {
+		t.Errorf("listed URL = %+v, want owner and no password hash", page[0])
+	}
+
+	page, err = urls.List(t.Context(), other.ID, 2, nil)
+	if err != nil || len(page) != 1 || page[0].UserID != other.ID {
+		t.Fatalf("other user page = %+v, error = %v, want one owned URL", page, err)
+	}
 }

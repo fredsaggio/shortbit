@@ -3,6 +3,8 @@ package repositories
 import (
 	"context"
 	"fmt"
+	"time"
+	"uuid"
 
 	"github.com/fredsaggio/url-shortener/internal/db"
 	"github.com/fredsaggio/url-shortener/internal/models"
@@ -72,4 +74,55 @@ func (r *URLRepository) Create(ctx context.Context, url models.URL) (models.URL,
 	}
 
 	return urlCreated, nil
+}
+
+type URLCursor struct {
+	CreatedAt time.Time
+	ID        int64
+}
+
+func (r *URLRepository) List(ctx context.Context, userID uuid.UUID, limit int, cursor *URLCursor) ([]models.URL, error) {
+	const q = `
+		SELECT id, short_code, user_id, original_url, visibility, click_count, created_at, updated_at
+		FROM urls
+		WHERE user_id = @userID
+			AND (CAST(@cursorCreatedAt AS timestamptz) IS NULL
+				OR (created_at, id) < (CAST(@cursorCreatedAt AS timestamptz), CAST(@cursorID AS bigint)))
+		ORDER BY created_at DESC, id DESC
+		LIMIT @limit
+	`
+
+	var cursorCreatedAt any
+	var cursorID any
+	if cursor != nil {
+		cursorCreatedAt = cursor.CreatedAt
+		cursorID = cursor.ID
+	}
+
+	args := pgx.StrictNamedArgs{
+		"userID":          userID,
+		"cursorCreatedAt": cursorCreatedAt,
+		"cursorID":        cursorID,
+		"limit":           limit,
+	}
+	rows, err := r.db.Query(ctx, q, args)
+	if err != nil {
+		return nil, fmt.Errorf("list URLs: %w", err)
+	}
+	defer rows.Close()
+
+	urls := make([]models.URL, 0)
+	for rows.Next() {
+		var url models.URL
+		if err := rows.Scan(&url.ID, &url.ShortCode, &url.UserID, &url.OriginalURL, &url.Visibility,
+			&url.ClickCount, &url.CreatedAt, &url.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan listed URL: %w", err)
+		}
+		urls = append(urls, url)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate listed URLs: %w", err)
+	}
+
+	return urls, nil
 }
