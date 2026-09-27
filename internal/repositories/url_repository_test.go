@@ -12,6 +12,7 @@ import (
 	"github.com/fredsaggio/url-shortener/internal/models"
 	"github.com/fredsaggio/url-shortener/internal/repositories"
 	"github.com/fredsaggio/url-shortener/internal/shortcodes"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -357,6 +358,77 @@ func TestURLRepositoryGetByShortcodeIntegration(t *testing.T) {
 			t.Errorf("GetByShortcode() error = %v, want ErrURLNotFound", err)
 		}
 	})
+}
+
+func TestURLRepositoryFindPrivateByShortCodeIntegration(t *testing.T) {
+	pool := dbtest.Open(t)
+	users := repositories.NewUserRepository(pool)
+	urls := repositories.NewURLRepository(pool)
+	generator, err := shortcodes.NewGenerator()
+	if err != nil {
+		t.Fatalf("NewGenerator() error = %v", err)
+	}
+	owner, err := users.CreateWithPassword(t.Context(), "private-lookup-owner@example.com", "$argon2id$integration-test-hash")
+	if err != nil {
+		t.Fatalf("create owner: %v", err)
+	}
+
+	createURL := func(visibility models.Visibility, passwordHash *string) models.URL {
+		t.Helper()
+		id, err := urls.ReserveID(t.Context())
+		if err != nil {
+			t.Fatalf("ReserveID() error = %v", err)
+		}
+		code, err := generator.Generate(id)
+		if err != nil {
+			t.Fatalf("Generate(%d) error = %v", id, err)
+		}
+		created, err := urls.Create(t.Context(), models.URL{
+			ID: id, ShortCode: code, UserID: owner.ID, OriginalURL: "https://example.com/" + string(visibility),
+			Visibility: visibility, PasswordHash: passwordHash,
+		})
+		if err != nil {
+			t.Fatalf("Create() error = %v", err)
+		}
+		return created
+	}
+
+	passwordHash := "$argon2id$private-link-test-hash"
+	private := createURL(models.VisibilityPrivate, &passwordHash)
+	public := createURL(models.VisibilityPublic, nil)
+
+	t.Run("returns private link ID and password hash", func(t *testing.T) {
+		gotID, gotHash, err := urls.FindPrivateByShortCode(t.Context(), private.ShortCode)
+		if err != nil {
+			t.Fatalf("FindPrivateByShortCode() error = %v", err)
+		}
+		if gotID != private.ID || gotHash != passwordHash {
+			t.Errorf("FindPrivateByShortCode() = (%d, %q), want (%d, %q)", gotID, gotHash, private.ID, passwordHash)
+		}
+	})
+
+	for _, tt := range []struct {
+		name string
+		code string
+	}{
+		{name: "public link", code: public.ShortCode},
+		{name: "missing code", code: "NoSuchCode123"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			gotID, gotHash, err := urls.FindPrivateByShortCode(t.Context(), tt.code)
+			if gotID != 0 || gotHash != "" || !errors.Is(err, repositories.ErrURLNotFound) {
+				t.Errorf("FindPrivateByShortCode(%q) = (%d, %q, %v), want (0, empty, ErrURLNotFound)", tt.code, gotID, gotHash, err)
+			}
+		})
+	}
+
+	var clickCount int64
+	if err := pool.QueryRow(t.Context(), "SELECT click_count FROM urls WHERE id = @id", pgx.StrictNamedArgs{"id": private.ID}).Scan(&clickCount); err != nil {
+		t.Fatalf("query private link click count: %v", err)
+	}
+	if clickCount != 0 {
+		t.Errorf("private link click count after password hash lookup = %d, want 0", clickCount)
+	}
 }
 
 func TestURLRepositoryResolvePublicAndCountClickIntegration(t *testing.T) {

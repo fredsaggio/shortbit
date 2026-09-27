@@ -187,3 +187,30 @@ func (r *URLRepository) ResolvePublicAndCountClick(ctx context.Context, shortCod
 
 	return originalURL, nil
 }
+
+func (r *URLRepository) FindPrivateByShortCode(ctx context.Context, shortCode string) (int64, string, error) {
+	const q = `
+		SELECT id, password_hash
+		FROM urls
+		WHERE short_code = @shortCode AND visibility = 'private'
+	`
+
+	var linkID int64
+	var passwordHash string
+
+	args := pgx.StrictNamedArgs{
+		"shortCode": shortCode,
+	}
+
+	err := r.db.QueryRow(ctx, q, args).Scan(&linkID, &passwordHash)
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, "", ErrURLNotFound
+		}
+
+		return 0, "", fmt.Errorf("find private URL by shortcode: %w", err)
+	}
+
+	return linkID, passwordHash, nil
+}
