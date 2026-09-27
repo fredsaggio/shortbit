@@ -25,7 +25,7 @@ tags:
   - name: Google
     description: Fluxo OAuth com Google.
   - name: Links
-    description: Criação e consulta dos links do usuário autenticado.
+    description: Criação e consulta dos links do usuário autenticado e redirect público.
 paths:
   /docs:
     get:
@@ -489,6 +489,52 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           description: Código inexistente ou link pertencente a outro usuário.
+          content:
+            text/plain:
+              schema:
+                type: string
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /{code}:
+    get:
+      tags: [Links]
+      operationId: redirectPublicURL
+      summary: Abrir um link público curto
+      description: |
+        Não exige sessão. Resolve o shortcode exato e incrementa `click_count`
+        atomicamente no PostgreSQL antes de redirecionar. Código inexistente
+        e link privado retornam o mesmo 404, sem contar clique. A resposta de
+        redirect não deve ser armazenada pelo navegador; acessos posteriores
+        precisam voltar à API para serem contabilizados.
+      security: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          description: Shortcode de um link público.
+          schema:
+            type: string
+            minLength: 6
+            pattern: '^[0-9A-Za-z]+$'
+          example: Ab3dX9
+      responses:
+        '302':
+          description: Link público encontrado e clique registrado.
+          headers:
+            Location:
+              description: URL original de destino.
+              schema:
+                type: string
+                format: uri
+            Cache-Control:
+              description: Impede o armazenamento do redirect.
+              schema:
+                type: string
+                example: no-store
+        '404':
+          description: Código inexistente ou link privado.
           content:
             text/plain:
               schema:

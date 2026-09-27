@@ -308,9 +308,12 @@ Este endpoint não redireciona nem desbloqueia o link.
 }
 ```
 
-### Próximas rotas 📋
+### `GET /{code}` ✅
+
+Não exige sessão. Para um link público existente, incrementa `click_count` no PostgreSQL e retorna `302 Found`, com `Location` apontando para a URL original e `Cache-Control: no-store`. Cada novo acesso deve voltar à API para poder ser contabilizado. Código inexistente ou link privado retorna `404`, sem incrementar o contador; falha ao registrar o clique retorna `500`, sem redirect. O rate limit global pode retornar `429`.
+
+### Próxima rota 📋
 
 ```text
-GET  /{code}
 POST /{code}/unlock
 ```

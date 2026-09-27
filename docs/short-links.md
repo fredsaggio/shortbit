@@ -1,6 +1,6 @@
 # Links e shortcodes
 
-> Status: geração Sqids, criação, listagem e metadados individuais autenticados implementados; redirect e desbloqueio planejados
+> Status: geração Sqids, criação, listagem, metadados individuais e redirect público com contador implementados; desbloqueio privado planejado
 > Última atualização: 27 de setembro de 2026
 
 ## Objetivo do domínio
@@ -21,9 +21,9 @@ Cada URL curta pertence a um usuário autenticado e possui:
 | Tabela `urls` | ✅ Implementada, com mínimo de seis caracteres e sem expiração |
 | Model `URL` | ✅ Implementado |
 | Gerador Sqids com `MinLength: 6` | ✅ Implementado |
-| Repository de URLs | ✅ Reserva ID, cria e lista por owner/cursor |
-| Service e handlers | ✅ Criação e listagem |
-| Rotas HTTP | ✅ `POST /urls` e `GET /urls` autenticadas; demais planejadas |
+| Repository de URLs | ✅ Reserva ID, cria, consulta e lista por owner/cursor; resolve link público e conta clique |
+| Service e handlers | ✅ Criação, listagem, consulta individual e redirect público |
+| Rotas HTTP | ✅ `POST /urls`, `GET /urls` e `GET /urls/{code}` autenticadas; `GET /{code}` pública |
 | Redis seletivo | 📋 Planejado para depois da versão PostgreSQL |
 | Estratégia final de shortcode | ✅ Decidida: ID incremental + Sqids |
 
@@ -95,29 +95,30 @@ A consulta individual usa `short_code` e `user_id` na mesma query. Assim,
 um código inexistente e um link de outro usuário resultam no mesmo `404`.
 Ela retorna os metadados e o contador de cliques ao dono, sem hash da senha.
 
-## Redirect público 📋
+## Redirect público ✅
 
 ```mermaid
 flowchart TD
     Request[GET /code] --> Find{Shortcode existe?}
     Find -- Não --> NotFound[404]
     Find -- Sim --> Visibility{É público?}
-    Visibility -- Não --> PasswordPage[Exibe página de senha]
+    Visibility -- Não --> NotFound
     Visibility -- Sim --> Increment[Incrementa click_count atomicamente]
     Increment --> Redirect[302 para original_url]
 ```
 
-O clique só será contado quando o sistema realmente realizar o redirect.
+`GET /{code}` não exige login. Por enquanto, link privado e código inexistente retornam o mesmo `404`; a página de senha e o desbloqueio pertencem à próxima fase. O clique só é contado quando o link público é resolvido e o servidor consegue persistir o incremento antes de responder com o redirect.
 
-O incremento deve ser atômico no PostgreSQL:
+O repository faz a resolução e o incremento em uma operação atômica no PostgreSQL:
 
 ```sql
 UPDATE urls
 SET click_count = click_count + 1
-WHERE id = $1;
+WHERE short_code = @shortCode AND visibility = 'public'
+RETURNING original_url;
 ```
 
-Não será usado o fluxo vulnerável `SELECT → incrementar em Go → UPDATE`.
+Não há o fluxo vulnerável `SELECT → incrementar em Go → UPDATE`. A resposta usa `302 Found` com `Location` apontando para a URL original e `Cache-Control: no-store`, para que o navegador não guarde o redirect e os acessos seguintes voltem à API. O rate limit global continua aplicado. Testes cobrem redirecionamento HTTP sem login, contador após acessos repetidos, `404` para links privados/inexistentes e incrementos concorrentes.
 
 ## Link privado e desbloqueio 📋
 
@@ -152,7 +153,7 @@ Analytics por evento, localização, dispositivo ou série temporal ficam fora d
 
 ## Cache seletivo futuro
 
-O redirect e o contador serão implementados primeiro com PostgreSQL; o Redis virá depois de medir esse fluxo.
+O redirect e o contador já usam PostgreSQL; o Redis virá depois de medir esse fluxo.
 
 ```mermaid
 flowchart TD
