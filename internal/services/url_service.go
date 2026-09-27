@@ -10,11 +10,13 @@ import (
 	"uuid"
 
 	"github.com/fredsaggio/url-shortener/internal/models"
+	"github.com/fredsaggio/url-shortener/internal/repositories"
 )
 
 const (
 	minLinkPasswordCharacters = 8
 	maxLinkPasswordBytes      = 1024
+	maxURLListLimit           = 20
 )
 
 var (
@@ -25,11 +27,13 @@ var (
 	ErrUnexpectedLinkPassword = errors.New("unexpected link password")
 	ErrLinkPasswordTooShort   = errors.New("password too short")
 	ErrLinkPasswordTooLong    = errors.New("password too long")
+	ErrInvalidURLListLimit    = errors.New("invalid URL list limit")
 )
 
 type URLRepository interface {
 	ReserveID(ctx context.Context) (int64, error)
 	Create(ctx context.Context, url models.URL) (models.URL, error)
+	List(ctx context.Context, userID uuid.UUID, limit int, cursor *repositories.URLCursor) ([]models.URL, error)
 }
 
 type ShortCodeGenerator interface {
@@ -44,6 +48,11 @@ type URLServiceConfig struct {
 type CreateURLResult struct {
 	ShortCode string
 	ShortURL  string
+}
+
+type ListURLResult struct {
+	URLs       []models.URL
+	NextCursor *repositories.URLCursor
 }
 
 type URLService struct {
@@ -157,4 +166,29 @@ func (s *URLService) Create(ctx context.Context, userID uuid.UUID, originalURL s
 		ShortCode: created.ShortCode,
 		ShortURL:  s.publicBaseURL + "/" + created.ShortCode,
 	}, nil
+}
+
+func (s *URLService) List(ctx context.Context, userID uuid.UUID, limit int, cursor *repositories.URLCursor) (ListURLResult, error) {
+	if userID == uuid.Nil() {
+		return ListURLResult{}, ErrUnauthenticated
+	}
+	if limit <= 0 || limit > maxURLListLimit {
+		return ListURLResult{}, ErrInvalidURLListLimit
+	}
+
+	urls, err := s.repo.List(ctx, userID, limit+1, cursor)
+
+	if err != nil {
+		return ListURLResult{}, fmt.Errorf("list URLs: %w", err)
+	}
+
+	result := ListURLResult{URLs: urls}
+
+	if len(urls) > limit {
+		result.URLs = urls[:limit]
+		last := result.URLs[len(result.URLs)-1]
+		result.NextCursor = &repositories.URLCursor{CreatedAt: last.CreatedAt, ID: last.ID}
+	}
+
+	return result, nil
 }

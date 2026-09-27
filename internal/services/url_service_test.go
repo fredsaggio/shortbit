@@ -5,15 +5,18 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 	"uuid"
 
 	"github.com/fredsaggio/url-shortener/internal/models"
+	"github.com/fredsaggio/url-shortener/internal/repositories"
 	"github.com/fredsaggio/url-shortener/internal/services"
 )
 
 type urlRepositoryStub struct {
 	reserveIDFunc func(context.Context) (int64, error)
 	createFunc    func(context.Context, models.URL) (models.URL, error)
+	listFunc      func(context.Context, uuid.UUID, int, *repositories.URLCursor) ([]models.URL, error)
 }
 
 func (s urlRepositoryStub) ReserveID(ctx context.Context) (int64, error) {
@@ -22,6 +25,10 @@ func (s urlRepositoryStub) ReserveID(ctx context.Context) (int64, error) {
 
 func (s urlRepositoryStub) Create(ctx context.Context, url models.URL) (models.URL, error) {
 	return s.createFunc(ctx, url)
+}
+
+func (s urlRepositoryStub) List(ctx context.Context, userID uuid.UUID, limit int, cursor *repositories.URLCursor) ([]models.URL, error) {
+	return s.listFunc(ctx, userID, limit, cursor)
 }
 
 type shortCodeGeneratorStub func(int64) (string, error)
@@ -270,6 +277,107 @@ func TestURLServiceCreatePropagatesDependencyErrors(t *testing.T) {
 				t.Errorf("Create() error = %v, want wrapped %v", err, wantErr)
 			}
 		})
+	}
+}
+
+func TestURLServiceListReturnsNextCursor(t *testing.T) {
+	userID := uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c405")
+	createdAt := time.Date(2026, 9, 27, 12, 0, 0, 0, time.UTC)
+	first := models.URL{ID: 3, UserID: userID, ShortCode: "first1", CreatedAt: createdAt}
+	second := models.URL{ID: 2, UserID: userID, ShortCode: "second", CreatedAt: createdAt}
+	third := models.URL{ID: 1, UserID: userID, ShortCode: "third1", CreatedAt: createdAt}
+	type contextKey struct{}
+	ctx := context.WithValue(t.Context(), contextKey{}, "request-context")
+	inputCursor := &repositories.URLCursor{CreatedAt: createdAt.Add(time.Hour), ID: 4}
+
+	repo := urlRepositoryStub{listFunc: func(gotCtx context.Context, gotUserID uuid.UUID, gotLimit int, gotCursor *repositories.URLCursor) ([]models.URL, error) {
+		if gotCtx.Value(contextKey{}) != "request-context" || gotUserID != userID || gotLimit != 3 || gotCursor != inputCursor {
+			t.Errorf("List() arguments = (%v, %v, %d, %v), want request context, owner, 3, input cursor", gotCtx, gotUserID, gotLimit, gotCursor)
+		}
+		return []models.URL{first, second, third}, nil
+	}}
+	service := newURLServiceForTest(t, repo, nil, nil, "https://sho.rt")
+
+	result, err := service.List(ctx, userID, 2, inputCursor)
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(result.URLs) != 2 || result.URLs[0].ID != first.ID || result.URLs[1].ID != second.ID {
+		t.Errorf("List() URLs = %+v, want first two URLs", result.URLs)
+	}
+	if result.NextCursor == nil || result.NextCursor.ID != second.ID || !result.NextCursor.CreatedAt.Equal(second.CreatedAt) {
+		t.Errorf("List() next cursor = %+v, want cursor for second URL", result.NextCursor)
+	}
+}
+
+func TestURLServiceListLastPageHasNoCursor(t *testing.T) {
+	userID := uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c406")
+	repo := urlRepositoryStub{listFunc: func(_ context.Context, gotUserID uuid.UUID, gotLimit int, gotCursor *repositories.URLCursor) ([]models.URL, error) {
+		if gotUserID != userID || gotLimit != 3 || gotCursor != nil {
+			t.Errorf("List() arguments = (%v, %d, %v), want owner, 3, nil", gotUserID, gotLimit, gotCursor)
+		}
+		return []models.URL{{ID: 2}, {ID: 1}}, nil
+	}}
+	service := newURLServiceForTest(t, repo, nil, nil, "https://sho.rt")
+
+	result, err := service.List(t.Context(), userID, 2, nil)
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(result.URLs) != 2 || result.NextCursor != nil {
+		t.Errorf("List() = %+v, want two URLs and no next cursor", result)
+	}
+}
+
+func TestURLServiceListRejectsInvalidInput(t *testing.T) {
+	userID := uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c407")
+	service := newURLServiceForTest(t, urlRepositoryStub{}, nil, nil, "https://sho.rt")
+	tests := []struct {
+		name    string
+		userID  uuid.UUID
+		limit   int
+		wantErr error
+	}{
+		{name: "missing user", userID: uuid.Nil(), limit: 1, wantErr: services.ErrUnauthenticated},
+		{name: "zero limit", userID: userID, limit: 0, wantErr: services.ErrInvalidURLListLimit},
+		{name: "negative limit", userID: userID, limit: -1, wantErr: services.ErrInvalidURLListLimit},
+		{name: "above maximum", userID: userID, limit: 21, wantErr: services.ErrInvalidURLListLimit},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := service.List(t.Context(), tt.userID, tt.limit, nil)
+			if !errors.Is(err, tt.wantErr) {
+				t.Errorf("List() error = %v, want %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestURLServiceListAcceptsMaximumLimit(t *testing.T) {
+	userID := uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c409")
+	repo := urlRepositoryStub{listFunc: func(_ context.Context, gotUserID uuid.UUID, gotLimit int, gotCursor *repositories.URLCursor) ([]models.URL, error) {
+		if gotUserID != userID || gotLimit != 21 || gotCursor != nil {
+			t.Errorf("List() arguments = (%v, %d, %v), want owner, 21, nil", gotUserID, gotLimit, gotCursor)
+		}
+		return nil, nil
+	}}
+	service := newURLServiceForTest(t, repo, nil, nil, "https://sho.rt")
+
+	if _, err := service.List(t.Context(), userID, 20, nil); err != nil {
+		t.Errorf("List() with limit 20 error = %v, want nil", err)
+	}
+}
+
+func TestURLServiceListWrapsRepositoryError(t *testing.T) {
+	wantErr := errors.New("database unavailable")
+	repo := urlRepositoryStub{listFunc: func(context.Context, uuid.UUID, int, *repositories.URLCursor) ([]models.URL, error) {
+		return nil, wantErr
+	}}
+	service := newURLServiceForTest(t, repo, nil, nil, "https://sho.rt")
+
+	_, err := service.List(t.Context(), uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c408"), 2, nil)
+	if !errors.Is(err, wantErr) {
+		t.Errorf("List() error = %v, want wrapped repository error", err)
 	}
 }
 
