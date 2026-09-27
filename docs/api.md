@@ -1,13 +1,17 @@
 # API HTTP
 
 > Status: contratos implementados e planejados
-> Última atualização: 26 de setembro de 2026
+> Última atualização: 27 de setembro de 2026
 
 Base local:
 
 ```text
 http://localhost:8080
 ```
+
+Referência interativa de leitura: [`GET /docs`](http://localhost:8080/docs). A especificação
+OpenAPI também está disponível em [`GET /docs/openapi.yaml`](http://localhost:8080/docs/openapi.yaml)
+e em [`docs/openapi.yaml`](openapi.yaml). Esta página Markdown também registra rotas planejadas.
 
 ## Convenções
 
@@ -34,8 +38,8 @@ http://localhost:8080
 | `GET` | `/auth/google/callback` | Cookies temporários | ✅ |
 | `POST` | `/password-resets` | Não | ✅ |
 | `POST` | `/password-resets/confirm` | Cookie da tentativa | ✅ |
-| `POST` | `/urls` | Sim | 📋 |
-| `GET` | `/urls` | Sim | 📋 |
+| `POST` | `/urls` | Sim | ✅ |
+| `GET` | `/urls` | Sim | ✅ |
 | `GET` | `/urls/{code}` | Sim + ownership | 📋 |
 | `GET` | `/{code}` | Não | 📋 |
 | `POST` | `/{code}/unlock` | Não | 📋 |

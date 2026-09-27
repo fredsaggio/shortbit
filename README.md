@@ -23,6 +23,7 @@ O índice completo está em [`docs/README.md`](docs/README.md).
 - [Autenticação](docs/authentication.md)
 - [Links e shortcodes](docs/short-links.md)
 - [API HTTP](docs/api.md)
+- [OpenAPI](docs/openapi.yaml) — disponível em `/docs` quando a API estiver rodando
 - [Modelo de dados](docs/data-model.md)
 - [Glossário](docs/glossary.md)
 - [Desenvolvimento local](docs/development.md)

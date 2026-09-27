@@ -1,0 +1,687 @@
+openapi: 3.1.0
+info:
+  title: ShortBit API
+  version: 0.1.0
+  description: |
+    Referência das rotas atualmente implementadas. A autenticação da conta usa
+    uma sessão opaca no cookie HttpOnly `user_session`. Os cookies temporários
+    de cadastro, recuperação e Google fazem parte dos respectivos fluxos.
+    Erros são retornados como texto simples em português.
+servers:
+  - url: /
+    description: Mesmo domínio da página de documentação
+security: []
+tags:
+  - name: Documentação
+    description: Página de referência e arquivo OpenAPI.
+  - name: Saúde
+    description: Estado do processo e da conexão com o banco.
+  - name: Cadastro
+    description: Cadastro com senha e verificação por e-mail.
+  - name: Recuperação
+    description: Recuperação de senha por código enviado por e-mail.
+  - name: Sessões
+    description: Login, logout e dados da conta autenticada.
+  - name: Google
+    description: Fluxo OAuth com Google.
+  - name: Links
+    description: Criação e listagem dos links do usuário autenticado.
+paths:
+  /docs:
+    get:
+      tags: [Documentação]
+      operationId: getAPIDocumentation
+      summary: Abrir a documentação da API
+      responses:
+        '200':
+          description: Página HTML renderizada com ReDoc.
+          content:
+            text/html:
+              schema:
+                type: string
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /docs/openapi.yaml:
+    get:
+      tags: [Documentação]
+      operationId: getOpenAPISpecification
+      summary: Baixar a especificação OpenAPI
+      responses:
+        '200':
+          description: Especificação OpenAPI em YAML.
+          content:
+            application/yaml:
+              schema:
+                type: string
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /health/live:
+    get:
+      tags: [Saúde]
+      operationId: getLiveness
+      summary: Verificar se o processo está ativo
+      responses:
+        '200':
+          description: Processo ativo; resposta sem corpo.
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /health/ready:
+    get:
+      tags: [Saúde]
+      operationId: getReadiness
+      summary: Verificar se o banco está acessível
+      responses:
+        '200':
+          description: Banco acessível; resposta sem corpo.
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          description: Banco indisponível.
+          content:
+            text/plain:
+              schema:
+                type: string
+  /registrations/password:
+    post:
+      tags: [Cadastro]
+      operationId: startPasswordRegistration
+      summary: Iniciar cadastro com senha
+      description: |
+        Cria uma tentativa temporária e envia um código por e-mail. O cookie
+        `password_registration` identifica a tentativa nas próximas etapas.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailPasswordRequest'
+      responses:
+        '202':
+          description: Tentativa iniciada e código enviado; sem corpo.
+          headers:
+            Set-Cookie:
+              description: Cookie HttpOnly `password_registration` da tentativa.
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/BodyTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /registrations/password/confirm:
+    post:
+      tags: [Cadastro]
+      operationId: confirmPasswordRegistration
+      summary: Confirmar cadastro com código
+      description: O navegador deve reenviar o cookie `password_registration`.
+      security:
+        - passwordRegistration: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CodeRequest'
+      responses:
+        '201':
+          description: Conta criada; o cookie da tentativa é removido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '413':
+          $ref: '#/components/responses/BodyTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /registrations/password/resend:
+    post:
+      tags: [Cadastro]
+      operationId: resendPasswordRegistrationCode
+      summary: Reenviar código de cadastro
+      description: |
+        Requer o cookie da tentativa. Um novo código substitui o anterior;
+        existe um intervalo mínimo de 30 segundos entre envios.
+      security:
+        - passwordRegistration: []
+      responses:
+        '202':
+          description: Novo código enviado; sem corpo.
+        '410':
+          $ref: '#/components/responses/Gone'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /password-resets:
+    post:
+      tags: [Recuperação]
+      operationId: startPasswordReset
+      summary: Solicitar recuperação de senha
+      description: |
+        Retorna 202 sem revelar se o e-mail possui uma conta. Quando aplicável,
+        envia o código por e-mail e cria o cookie `password_reset`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailRequest'
+      responses:
+        '202':
+          description: Solicitação aceita; sem corpo.
+          headers:
+            Set-Cookie:
+              description: Cookie HttpOnly `password_reset` da tentativa, quando aplicável.
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '413':
+          $ref: '#/components/responses/BodyTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /password-resets/confirm:
+    post:
+      tags: [Recuperação]
+      operationId: confirmPasswordReset
+      summary: Confirmar código e alterar senha
+      description: Requer o cookie `password_reset` da solicitação anterior.
+      security:
+        - passwordReset: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetConfirmRequest'
+      responses:
+        '204':
+          description: Senha alterada; cookie da tentativa removido.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '413':
+          $ref: '#/components/responses/BodyTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /sessions:
+    post:
+      tags: [Sessões]
+      operationId: createSession
+      summary: Entrar com e-mail e senha
+      description: |
+        Define o cookie HttpOnly `user_session`. Com `remember_me: true`,
+        a sessão e o cookie persistem por mais tempo; sem ele, o cookie é de sessão.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '204':
+          description: Login realizado; sem corpo.
+          headers:
+            Set-Cookie:
+              description: Cookie HttpOnly `user_session`.
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: E-mail ou senha incorretos.
+          content:
+            text/plain:
+              schema:
+                type: string
+        '413':
+          $ref: '#/components/responses/BodyTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /sessions/current:
+    delete:
+      tags: [Sessões]
+      operationId: deleteCurrentSession
+      summary: Sair da conta
+      description: |
+        Revoga a sessão se o cookie existir. Sem cookie, também retorna 204.
+        O navegador recebe uma instrução para apagar o cookie.
+      security:
+        - userSession: []
+        - {}
+      responses:
+        '204':
+          description: Logout concluído; sem corpo.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /me:
+    get:
+      tags: [Sessões]
+      operationId: getCurrentUser
+      summary: Consultar conta autenticada
+      security:
+        - userSession: []
+      responses:
+        '200':
+          description: Dados básicos da conta.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /auth/google:
+    get:
+      tags: [Google]
+      operationId: startGoogleAuth
+      summary: Iniciar autenticação com Google
+      description: |
+        Redireciona o navegador para o Google e define cookies temporários
+        usados na validação do callback.
+      responses:
+        '302':
+          description: Redirecionamento para a página de autorização do Google.
+          headers:
+            Location:
+              description: URL de autorização do Google.
+              schema:
+                type: string
+                format: uri
+            Set-Cookie:
+              description: Cookies temporários de segurança do fluxo OAuth.
+              schema:
+                type: string
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /auth/google/callback:
+    get:
+      tags: [Google]
+      operationId: finishGoogleAuth
+      summary: Finalizar autenticação com Google
+      description: |
+        Callback chamado pelo Google. O navegador deve trazer os cookies
+        temporários definidos por `/auth/google`. `code` e `state` são enviados
+        pelo Google; não são valores criados manualmente pelo cliente.
+      security:
+        - googleState: []
+          googleNonce: []
+          googleCodeVerifier: []
+      parameters:
+        - name: code
+          in: query
+          description: Código de autorização, presente quando o usuário autoriza.
+          schema:
+            type: string
+        - name: state
+          in: query
+          description: Estado retornado pelo Google, presente no sucesso.
+          schema:
+            type: string
+        - name: error
+          in: query
+          description: Erro retornado pelo Google, caso o usuário recuse ou cancele.
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Login concluído; cookie `user_session` definido; sem corpo.
+          headers:
+            Set-Cookie:
+              description: Cookie de sessão e remoção dos cookies temporários.
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /urls:
+    post:
+      tags: [Links]
+      operationId: createURL
+      summary: Criar link curto
+      description: |
+        Cria um link público ou protegido por senha para o usuário autenticado.
+        URLs originais aceitam apenas HTTP ou HTTPS e não podem apontar para o
+        próprio domínio curto. Links privados exigem uma senha de pelo menos
+        oito caracteres; ela é armazenada como hash Argon2id.
+      security:
+        - userSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/PublicURLRequest'
+                - $ref: '#/components/schemas/PrivateURLRequest'
+            examples:
+              public:
+                summary: Link público
+                value:
+                  url: https://example.com/artigo
+                  visibility: public
+              private:
+                summary: Link privado
+                value:
+                  url: https://example.com/privado
+                  visibility: private
+                  password: senha-segura
+      responses:
+        '201':
+          description: Link criado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateURLResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          $ref: '#/components/responses/BodyTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    get:
+      tags: [Links]
+      operationId: listURLs
+      summary: Listar meus links
+      description: |
+        Retorna somente links pertencentes ao usuário da sessão. A ordenação é
+        por `created_at` e `id`, ambos decrescentes. Para continuar, copie
+        `next_cursor` da resposta anterior para o parâmetro `cursor`; ele é
+        apenas uma posição de paginação, não uma credencial.
+      security:
+        - userSession: []
+      parameters:
+        - name: limit
+          in: query
+          description: Quantidade máxima de links por página.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+            default: 20
+        - name: cursor
+          in: query
+          description: Cursor Base64URL sem padding recebido em `next_cursor`.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Página dos links do usuário.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListURLsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+components:
+  securitySchemes:
+    userSession:
+      type: apiKey
+      in: cookie
+      name: user_session
+      description: Cookie HttpOnly emitido após login com senha ou Google.
+    passwordRegistration:
+      type: apiKey
+      in: cookie
+      name: password_registration
+      description: Cookie HttpOnly da tentativa temporária de cadastro.
+    passwordReset:
+      type: apiKey
+      in: cookie
+      name: password_reset
+      description: Cookie HttpOnly da tentativa temporária de recuperação.
+    googleState:
+      type: apiKey
+      in: cookie
+      name: google_auth_state
+    googleNonce:
+      type: apiKey
+      in: cookie
+      name: google_auth_nonce
+    googleCodeVerifier:
+      type: apiKey
+      in: cookie
+      name: google_auth_code_verifier
+  schemas:
+    EmailRequest:
+      type: object
+      additionalProperties: false
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+          example: pessoa@example.com
+    EmailPasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          example: pessoa@example.com
+        password:
+          type: string
+          writeOnly: true
+          minLength: 8
+          example: senha-forte
+    CodeRequest:
+      type: object
+      additionalProperties: false
+      required: [code]
+      properties:
+        code:
+          type: string
+          description: Código recebido por e-mail.
+          example: '123456'
+    PasswordResetConfirmRequest:
+      type: object
+      additionalProperties: false
+      required: [code, password, password_confirmation]
+      properties:
+        code:
+          type: string
+          description: Código recebido por e-mail.
+          example: '12345678'
+        password:
+          type: string
+          writeOnly: true
+          minLength: 8
+        password_confirmation:
+          type: string
+          writeOnly: true
+          description: Deve ser igual a `password`.
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          writeOnly: true
+        remember_me:
+          type: boolean
+          default: false
+          description: Quando verdadeiro, mantém a sessão persistente.
+    UserResponse:
+      type: object
+      additionalProperties: false
+      required: [id, email]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+    PublicURLRequest:
+      type: object
+      additionalProperties: false
+      required: [url, visibility]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: URL absoluta HTTP ou HTTPS.
+        visibility:
+          type: string
+          const: public
+    PrivateURLRequest:
+      type: object
+      additionalProperties: false
+      required: [url, visibility, password]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: URL absoluta HTTP ou HTTPS.
+        visibility:
+          type: string
+          const: private
+        password:
+          type: string
+          minLength: 8
+          writeOnly: true
+          description: Senha do link; nunca retornada pela API.
+    CreateURLResponse:
+      type: object
+      additionalProperties: false
+      required: [short_code, short_url]
+      properties:
+        short_code:
+          type: string
+          minLength: 6
+          pattern: '^[0-9A-Za-z]+$'
+          example: Ab3dX9
+        short_url:
+          type: string
+          format: uri
+          example: https://shortbit.com.br/Ab3dX9
+    ListedURL:
+      type: object
+      additionalProperties: false
+      required: [short_code, original_url, visibility, click_count, created_at, updated_at]
+      properties:
+        short_code:
+          type: string
+          minLength: 6
+          pattern: '^[0-9A-Za-z]+$'
+        original_url:
+          type: string
+          format: uri
+        visibility:
+          type: string
+          enum: [public, private]
+        click_count:
+          type: integer
+          format: int64
+          minimum: 0
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    ListURLsResponse:
+      type: object
+      additionalProperties: false
+      required: [urls, next_cursor]
+      properties:
+        urls:
+          type: array
+          items:
+            $ref: '#/components/schemas/ListedURL'
+        next_cursor:
+          type: [string, 'null']
+          description: 'null quando não há mais links.'
+  responses:
+    BadRequest:
+      description: Corpo JSON, URL, limite ou cursor inválido.
+      content:
+        text/plain:
+          schema:
+            type: string
+    Unauthorized:
+      description: Sessão ausente, inválida ou expirada.
+      content:
+        text/plain:
+          schema:
+            type: string
+    Conflict:
+      description: O e-mail já está em uso ou o cadastro não pode ser concluído por conflito.
+      content:
+        text/plain:
+          schema:
+            type: string
+    Gone:
+      description: Tentativa temporária ausente ou expirada.
+      content:
+        text/plain:
+          schema:
+            type: string
+    BodyTooLarge:
+      description: Corpo da requisição acima do limite global.
+      content:
+        text/plain:
+          schema:
+            type: string
+    TooManyRequests:
+      description: Limite global de requisições por IP excedido.
+      content:
+        text/plain:
+          schema:
+            type: string
+    InternalError:
+      description: Falha interna do servidor.
+      content:
+        text/plain:
+          schema:
+            type: string

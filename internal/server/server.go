@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/fredsaggio/url-shortener/docs"
 	"github.com/fredsaggio/url-shortener/internal/handlers"
 	"github.com/fredsaggio/url-shortener/internal/middleware"
 )
@@ -80,6 +81,16 @@ func NewServer(h *Handlers, database DatabasePinger) *Server {
 }
 
 func (srv *Server) registerRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /docs", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write(docs.ReDocHTML)
+	})
+
+	mux.HandleFunc("GET /docs/openapi.yaml", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/yaml; charset=utf-8")
+		_, _ = w.Write(docs.OpenAPI)
+	})
+
 	mux.HandleFunc("GET /health/live", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})

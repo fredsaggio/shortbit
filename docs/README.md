@@ -1,7 +1,7 @@
 # Documentação da ShortBit
 
 > Status: atual
-> Última atualização: 24 de setembro de 2026
+> Última atualização: 27 de setembro de 2026
 
 Esta pasta explica como o sistema funciona. Ela complementa os documentos da raiz:
 
@@ -16,6 +16,7 @@ Esta pasta explica como o sistema funciona. Ela complementa os documentos da rai
 | [Autenticação](authentication.md) | Como cadastro, login, Google, cookies e sessões funcionam? |
 | [Links e shortcodes](short-links.md) | Como criação, resolução, privacidade e analytics devem funcionar? |
 | [API HTTP](api.md) | Quais endpoints existem, o que recebem e o que devolvem? |
+| [OpenAPI](openapi.yaml) | Contrato de todas as rotas implementadas, renderizado em `/docs` pela API. |
 | [Modelo de dados](data-model.md) | Quais tabelas existem e como se relacionam? |
 | [Glossário](glossary.md) | O que significam os códigos, tokens e termos usados no projeto? |
 | [Desenvolvimento](development.md) | Como executar, migrar e testar o projeto localmente? |

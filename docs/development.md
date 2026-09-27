@@ -85,6 +85,17 @@ Servidor padrão:
 http://localhost:8080
 ```
 
+A documentação HTTP renderizada fica em `http://localhost:8080/docs`, e o
+OpenAPI bruto em `http://localhost:8080/docs/openapi.yaml`. Depois de editar
+`docs/openapi.yaml`, gere novamente o HTML embarcado no binário:
+
+```bash
+npx --yes @redocly/cli@2.36.0 build-docs docs/openapi.yaml --output docs/redoc.html --title 'ShortBit API' --disableGoogleFont
+```
+
+O HTML já contém o conteúdo da especificação, mas usa o script do ReDoc via CDN
+para a navegação dinâmica; o navegador precisa de internet para essa parte.
+
 ## Testes
 
 Unitários:
