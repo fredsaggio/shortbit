@@ -20,8 +20,9 @@ import (
 )
 
 type urlServiceStub struct {
-	createFunc func(context.Context, uuid.UUID, string, models.Visibility, string) (services.CreateURLResult, error)
-	listFunc   func(context.Context, uuid.UUID, int, *repositories.URLCursor) (services.ListURLResult, error)
+	createFunc         func(context.Context, uuid.UUID, string, models.Visibility, string) (services.CreateURLResult, error)
+	listFunc           func(context.Context, uuid.UUID, int, *repositories.URLCursor) (services.ListURLResult, error)
+	getByShortCodeFunc func(context.Context, uuid.UUID, string) (models.URL, error)
 }
 
 func (s urlServiceStub) Create(ctx context.Context, userID uuid.UUID, originalURL string, visibility models.Visibility, password string) (services.CreateURLResult, error) {
@@ -30,6 +31,10 @@ func (s urlServiceStub) Create(ctx context.Context, userID uuid.UUID, originalUR
 
 func (s urlServiceStub) List(ctx context.Context, userID uuid.UUID, limit int, cursor *repositories.URLCursor) (services.ListURLResult, error) {
 	return s.listFunc(ctx, userID, limit, cursor)
+}
+
+func (s urlServiceStub) GetByShortCode(ctx context.Context, userID uuid.UUID, shortCode string) (models.URL, error) {
+	return s.getByShortCodeFunc(ctx, userID, shortCode)
 }
 
 func TestURLHandlerCreate(t *testing.T) {
@@ -318,6 +323,92 @@ func TestURLHandlerListMapsServiceErrors(t *testing.T) {
 			req = req.WithContext(ctxval.ContextWithUserID(req.Context(), uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c410")))
 			response := httptest.NewRecorder()
 			handler.List(response, req)
+			if response.Code != tt.wantStatus || response.Body.String() != tt.wantBody {
+				t.Errorf("response = (%d, %q), want (%d, %q)", response.Code, response.Body.String(), tt.wantStatus, tt.wantBody)
+			}
+		})
+	}
+}
+
+func TestURLHandlerGetByShortCodeReturnsMetadataWithoutPasswordHash(t *testing.T) {
+	userID := uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c411")
+	createdAt := time.Date(2026, 9, 27, 12, 30, 0, 0, time.UTC)
+	passwordHash := "private-hash-must-not-appear"
+	type contextKey struct{}
+	ctx := context.WithValue(t.Context(), contextKey{}, "request-context")
+	ctx = ctxval.ContextWithUserID(ctx, userID)
+	called := false
+	handler := handlers.NewURLHandler(urlServiceStub{getByShortCodeFunc: func(gotCtx context.Context, gotUserID uuid.UUID, gotCode string) (models.URL, error) {
+		called = true
+		if gotCtx.Value(contextKey{}) != "request-context" || gotUserID != userID || gotCode != "Ab3dX9" {
+			t.Errorf("GetByShortCode() arguments = (%v, %v, %q), want request context, owner and Ab3dX9", gotCtx, gotUserID, gotCode)
+		}
+		return models.URL{ID: 42, UserID: userID, ShortCode: gotCode, OriginalURL: "https://example.com/private",
+			Visibility: models.VisibilityPrivate, PasswordHash: &passwordHash, ClickCount: 7,
+			CreatedAt: createdAt, UpdatedAt: createdAt}, nil
+	}})
+
+	request := httptest.NewRequestWithContext(ctx, http.MethodGet, "/urls/Ab3dX9", nil)
+	request.SetPathValue("code", "Ab3dX9")
+	response := httptest.NewRecorder()
+	handler.GetByShortCode(response, request)
+
+	if !called {
+		t.Fatal("GetByShortCode() was not called")
+	}
+	if response.Code != http.StatusOK || response.Header().Get("Content-Type") != "application/json" {
+		t.Fatalf("response status/content type = (%d, %q), want (200, application/json)", response.Code, response.Header().Get("Content-Type"))
+	}
+	if strings.Contains(response.Body.String(), passwordHash) || strings.Contains(response.Body.String(), "password_hash") {
+		t.Fatalf("response exposed password hash: %s", response.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body["short_code"] != "Ab3dX9" || body["original_url"] != "https://example.com/private" ||
+		body["visibility"] != "private" || body["click_count"] != float64(7) ||
+		body["created_at"] != createdAt.Format(time.RFC3339Nano) || body["updated_at"] != createdAt.Format(time.RFC3339Nano) || len(body) != 6 {
+		t.Errorf("response = %v, want only owned link metadata", body)
+	}
+}
+
+func TestURLHandlerGetByShortCodeRejectsMissingAuthentication(t *testing.T) {
+	handler := handlers.NewURLHandler(urlServiceStub{getByShortCodeFunc: func(context.Context, uuid.UUID, string) (models.URL, error) {
+		t.Fatal("GetByShortCode() called without authentication")
+		return models.URL{}, nil
+	}})
+	request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/urls/Ab3dX9", nil)
+	request.SetPathValue("code", "Ab3dX9")
+	response := httptest.NewRecorder()
+	handler.GetByShortCode(response, request)
+
+	if response.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401", response.Code)
+	}
+}
+
+func TestURLHandlerGetByShortCodeMapsServiceErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		serviceErr error
+		wantStatus int
+		wantBody   string
+	}{
+		{name: "not found", serviceErr: services.ErrURLNotFound, wantStatus: http.StatusNotFound, wantBody: "url não encontrada\n"},
+		{name: "wrapped not found", serviceErr: errors.Join(errors.New("context"), services.ErrURLNotFound), wantStatus: http.StatusNotFound, wantBody: "url não encontrada\n"},
+		{name: "internal", serviceErr: errors.New("secret database details"), wantStatus: http.StatusInternalServerError, wantBody: "erro interno do servidor\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := handlers.NewURLHandler(urlServiceStub{getByShortCodeFunc: func(context.Context, uuid.UUID, string) (models.URL, error) {
+				return models.URL{}, tt.serviceErr
+			}})
+			request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/urls/Ab3dX9", nil)
+			request.SetPathValue("code", "Ab3dX9")
+			request = request.WithContext(ctxval.ContextWithUserID(request.Context(), uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c412")))
+			response := httptest.NewRecorder()
+			handler.GetByShortCode(response, request)
 			if response.Code != tt.wantStatus || response.Body.String() != tt.wantBody {
 				t.Errorf("response = (%d, %q), want (%d, %q)", response.Code, response.Body.String(), tt.wantStatus, tt.wantBody)
 			}

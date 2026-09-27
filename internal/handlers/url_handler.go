@@ -24,6 +24,7 @@ const defaultURLListLimit = 20
 type URLService interface {
 	Create(ctx context.Context, userID uuid.UUID, originalURL string, visibility models.Visibility, password string) (services.CreateURLResult, error)
 	List(ctx context.Context, userID uuid.UUID, limit int, cursor *repositories.URLCursor) (services.ListURLResult, error)
+	GetByShortCode(ctx context.Context, userID uuid.UUID, shortCode string) (models.URL, error)
 }
 
 type createURLRequest struct {
@@ -214,5 +215,43 @@ func (h *URLHandler) List(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		slog.ErrorContext(ctx, "encode listed URLs response failed", "error", err)
+	}
+}
+
+func (h *URLHandler) GetByShortCode(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	shortCode := r.PathValue("code")
+	userID, ok := ctxval.UserIDFromContext(ctx)
+
+	if !ok {
+		http.Error(w, "usuário não autenticado", http.StatusUnauthorized)
+		return
+	}
+
+	url, err := h.serv.GetByShortCode(ctx, userID, shortCode)
+
+	if err != nil {
+		if errors.Is(err, services.ErrURLNotFound) {
+			http.Error(w, "url não encontrada", http.StatusNotFound)
+			return
+		}
+		slog.ErrorContext(ctx, "get url by shortcode", "error", err)
+		http.Error(w, "erro interno do servidor", http.StatusInternalServerError)
+		return
+	}
+
+	resp := listedURLResponse{
+		ShortCode:   url.ShortCode,
+		OriginalURL: url.OriginalURL,
+		Visibility:  url.Visibility,
+		ClickCount:  url.ClickCount,
+		CreatedAt:   url.CreatedAt,
+		UpdatedAt:   url.UpdatedAt,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(&resp); err != nil {
+		slog.ErrorContext(ctx, "encode url failed", "error", err)
 	}
 }
