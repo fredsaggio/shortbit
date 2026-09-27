@@ -25,6 +25,7 @@ type URLService interface {
 	Create(ctx context.Context, userID uuid.UUID, originalURL string, visibility models.Visibility, password string) (services.CreateURLResult, error)
 	List(ctx context.Context, userID uuid.UUID, limit int, cursor *repositories.URLCursor) (services.ListURLResult, error)
 	GetByShortCode(ctx context.Context, userID uuid.UUID, shortCode string) (models.URL, error)
+	ResolvePublic(ctx context.Context, shortCode string) (string, error)
 }
 
 type createURLRequest struct {
@@ -254,4 +255,25 @@ func (h *URLHandler) GetByShortCode(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(&resp); err != nil {
 		slog.ErrorContext(ctx, "encode url failed", "error", err)
 	}
+}
+
+func (h *URLHandler) Redirect(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	shortCode := r.PathValue("code")
+
+	originalURL, err := h.serv.ResolvePublic(ctx, shortCode)
+
+	if err != nil {
+		if errors.Is(err, services.ErrURLNotFound) {
+			http.Error(w, "url não encontrada", http.StatusNotFound)
+			return
+		}
+		slog.ErrorContext(ctx, "resolve public url", "error", err)
+		http.Error(w, "erro interno do servidor", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Cache-Control", "no-store")
+	http.Redirect(w, r, originalURL, http.StatusFound)
 }

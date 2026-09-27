@@ -23,6 +23,7 @@ type urlServiceStub struct {
 	createFunc         func(context.Context, uuid.UUID, string, models.Visibility, string) (services.CreateURLResult, error)
 	listFunc           func(context.Context, uuid.UUID, int, *repositories.URLCursor) (services.ListURLResult, error)
 	getByShortCodeFunc func(context.Context, uuid.UUID, string) (models.URL, error)
+	resolvePublicFunc  func(context.Context, string) (string, error)
 }
 
 func (s urlServiceStub) Create(ctx context.Context, userID uuid.UUID, originalURL string, visibility models.Visibility, password string) (services.CreateURLResult, error) {
@@ -35,6 +36,10 @@ func (s urlServiceStub) List(ctx context.Context, userID uuid.UUID, limit int, c
 
 func (s urlServiceStub) GetByShortCode(ctx context.Context, userID uuid.UUID, shortCode string) (models.URL, error) {
 	return s.getByShortCodeFunc(ctx, userID, shortCode)
+}
+
+func (s urlServiceStub) ResolvePublic(ctx context.Context, shortCode string) (string, error) {
+	return s.resolvePublicFunc(ctx, shortCode)
 }
 
 func TestURLHandlerCreate(t *testing.T) {
@@ -411,6 +416,71 @@ func TestURLHandlerGetByShortCodeMapsServiceErrors(t *testing.T) {
 			handler.GetByShortCode(response, request)
 			if response.Code != tt.wantStatus || response.Body.String() != tt.wantBody {
 				t.Errorf("response = (%d, %q), want (%d, %q)", response.Code, response.Body.String(), tt.wantStatus, tt.wantBody)
+			}
+		})
+	}
+}
+
+func TestURLHandlerRedirectPublicURL(t *testing.T) {
+	type contextKey struct{}
+	ctx := context.WithValue(t.Context(), contextKey{}, "request-context")
+	called := false
+	handler := handlers.NewURLHandler(urlServiceStub{resolvePublicFunc: func(gotCtx context.Context, gotCode string) (string, error) {
+		called = true
+		if gotCtx.Value(contextKey{}) != "request-context" || gotCode != "Ab3dX9" {
+			t.Errorf("ResolvePublic() arguments = (%v, %q), want request context and Ab3dX9", gotCtx, gotCode)
+		}
+		return "https://example.com/article", nil
+	}})
+
+	request := httptest.NewRequestWithContext(ctx, http.MethodGet, "/Ab3dX9", nil)
+	request.SetPathValue("code", "Ab3dX9")
+	response := httptest.NewRecorder()
+	handler.Redirect(response, request)
+
+	if !called {
+		t.Fatal("ResolvePublic() was not called")
+	}
+	if response.Code != http.StatusFound {
+		t.Errorf("status = %d, want 302", response.Code)
+	}
+	if got := response.Header().Get("Location"); got != "https://example.com/article" {
+		t.Errorf("Location = %q, want destination URL", got)
+	}
+	if got := response.Header().Get("Cache-Control"); got != "no-store" {
+		t.Errorf("Cache-Control = %q, want no-store", got)
+	}
+}
+
+func TestURLHandlerRedirectMapsServiceErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		serviceErr error
+		wantStatus int
+		wantBody   string
+	}{
+		{name: "not found", serviceErr: services.ErrURLNotFound, wantStatus: http.StatusNotFound, wantBody: "url não encontrada\n"},
+		{name: "wrapped not found", serviceErr: errors.Join(errors.New("context"), services.ErrURLNotFound), wantStatus: http.StatusNotFound, wantBody: "url não encontrada\n"},
+		{name: "internal", serviceErr: errors.New("secret database details"), wantStatus: http.StatusInternalServerError, wantBody: "erro interno do servidor\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := handlers.NewURLHandler(urlServiceStub{resolvePublicFunc: func(_ context.Context, gotCode string) (string, error) {
+				if gotCode != "Ab3dX9" {
+					t.Errorf("short code = %q, want Ab3dX9", gotCode)
+				}
+				return "", tt.serviceErr
+			}})
+			request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/Ab3dX9", nil)
+			request.SetPathValue("code", "Ab3dX9")
+			response := httptest.NewRecorder()
+			handler.Redirect(response, request)
+
+			if response.Code != tt.wantStatus || response.Body.String() != tt.wantBody {
+				t.Errorf("response = (%d, %q), want (%d, %q)", response.Code, response.Body.String(), tt.wantStatus, tt.wantBody)
+			}
+			if got := response.Header().Get("Location"); got != "" {
+				t.Errorf("Location = %q, want no redirect on error", got)
 			}
 		})
 	}
