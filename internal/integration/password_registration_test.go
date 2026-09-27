@@ -486,6 +486,7 @@ func passwordRegistrationTestRouter(pool *pgxpool.Pool, codeSender registrationA
 		UserHandler:          userHandler,
 		SessionHandler:       sessionHandler,
 		PasswordResetHandler: resetHandler,
+		CreateURLHandler:     http.NotFoundHandler(),
 		MeHandler:            meHandler,
 	}
 

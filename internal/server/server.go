@@ -48,7 +48,7 @@ type Handlers struct {
 	SessionHandler       *handlers.SessionHandler
 	GoogleAuthHandler    *handlers.GoogleAuthHandler
 	PasswordResetHandler *handlers.PasswordResetHandler
-	URLHandler           *handlers.URLHandler
+	CreateURLHandler     http.Handler
 	MeHandler            http.Handler
 }
 
@@ -120,6 +120,8 @@ func (srv *Server) registerRoutes(mux *http.ServeMux) {
 	googleStartHandler := srv.loginRateLimiter.MiddlewareByIP(http.HandlerFunc(srv.h.GoogleAuthHandler.Start))
 	mux.Handle("GET /auth/google", googleStartHandler)
 	mux.HandleFunc("GET /auth/google/callback", srv.h.GoogleAuthHandler.Callback)
+
+	mux.Handle("POST /urls", srv.h.CreateURLHandler)
 
 }
 

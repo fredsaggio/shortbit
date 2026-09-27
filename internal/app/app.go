@@ -83,6 +83,10 @@ func CompositionRoot(pool db.DB, cfg config.Config, googleClient services.Google
 	}
 	urlHandler := handlers.NewURLHandler(urlService)
 
+	createURLHandler := middleware.Authenticator(authService)(
+		http.HandlerFunc(urlHandler.Create),
+	)
+
 	meHandler := middleware.Authenticator(authService)(http.HandlerFunc(userHandler.GetUserInfo))
 
 	return &server.Handlers{
@@ -90,7 +94,7 @@ func CompositionRoot(pool db.DB, cfg config.Config, googleClient services.Google
 		SessionHandler:       sessionHandler,
 		GoogleAuthHandler:    googleAuthHandler,
 		PasswordResetHandler: passwordResetHandler,
-		URLHandler:           urlHandler,
+		CreateURLHandler:     createURLHandler,
 		MeHandler:            meHandler,
 	}, passwordRegisterCleanup, nil
 }
