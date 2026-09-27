@@ -7,7 +7,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"uuid"
 
+	"github.com/fredsaggio/url-shortener/internal/ctxval"
 	"github.com/fredsaggio/url-shortener/internal/handlers"
 	"github.com/fredsaggio/url-shortener/internal/middleware"
 	"github.com/fredsaggio/url-shortener/internal/services"
@@ -32,6 +34,17 @@ func (allowAllLoginRateLimiterStub) Allow(string) (bool, int) {
 	return true, 0
 }
 
+type URLRouteAuthStub struct {
+	userID uuid.UUID
+}
+
+func (s URLRouteAuthStub) Authenticate(_ context.Context, token string) (uuid.UUID, error) {
+	if token != "valid-session-token" {
+		return uuid.Nil(), services.ErrUnauthenticated
+	}
+	return s.userID, nil
+}
+
 type passwordResetServiceStub struct{}
 
 func (passwordResetServiceStub) Start(context.Context, string, string) (services.PasswordResetStartResult, error) {
@@ -53,6 +66,7 @@ func TestNewRouterHTTPRegistersPasswordResetRouteAndAppliesIPRateLimit(t *testin
 		PasswordResetHandler: newPasswordResetTestHandler(),
 		CreateURLHandler:     http.NotFoundHandler(),
 		ListURLHandler:       http.NotFoundHandler(),
+		GetURLHandler:        http.NotFoundHandler(),
 		MeHandler:            http.NotFoundHandler(),
 	}
 	srv := NewServer(applicationHandlers, nil)
@@ -78,7 +92,7 @@ func TestNewRouterHTTPRegistersPasswordResetRouteAndAppliesIPRateLimit(t *testin
 func TestNewRouterHTTPRegistersPasswordResetConfirmRouteAndAppliesIPRateLimit(t *testing.T) {
 	applicationHandlers := &Handlers{
 		UserHandler: &handlers.UserHandler{}, SessionHandler: &handlers.SessionHandler{},
-		PasswordResetHandler: newPasswordResetTestHandler(), CreateURLHandler: http.NotFoundHandler(), ListURLHandler: http.NotFoundHandler(), MeHandler: http.NotFoundHandler(),
+		PasswordResetHandler: newPasswordResetTestHandler(), CreateURLHandler: http.NotFoundHandler(), ListURLHandler: http.NotFoundHandler(), GetURLHandler: http.NotFoundHandler(), MeHandler: http.NotFoundHandler(),
 	}
 	srv := NewServer(applicationHandlers, nil)
 	srv.rateLimiter = middleware.NewRateLimiter(1_000, 100, 10, time.Minute)
@@ -107,6 +121,7 @@ func TestNewRouterHTTPAppliesGlobalRateLimit(t *testing.T) {
 		PasswordResetHandler: newPasswordResetTestHandler(),
 		CreateURLHandler:     http.NotFoundHandler(),
 		ListURLHandler:       http.NotFoundHandler(),
+		GetURLHandler:        http.NotFoundHandler(),
 		MeHandler:            http.NotFoundHandler(),
 	}
 
@@ -144,6 +159,7 @@ func TestNewRouterHTTPAppliesLoginRateLimitOnlyToSessions(t *testing.T) {
 		PasswordResetHandler: newPasswordResetTestHandler(),
 		CreateURLHandler:     http.NotFoundHandler(),
 		ListURLHandler:       http.NotFoundHandler(),
+		GetURLHandler:        http.NotFoundHandler(),
 		MeHandler:            http.NotFoundHandler(),
 	}
 
@@ -232,6 +248,7 @@ func TestNewRouterHTTPAppliesPasswordRegistrationRateLimits(t *testing.T) {
 				PasswordResetHandler: newPasswordResetTestHandler(),
 				CreateURLHandler:     http.NotFoundHandler(),
 				ListURLHandler:       http.NotFoundHandler(),
+				GetURLHandler:        http.NotFoundHandler(),
 				MeHandler:            http.NotFoundHandler(),
 			}
 
@@ -274,6 +291,7 @@ func TestPasswordRegistrationRateLimitersAreIndependent(t *testing.T) {
 		PasswordResetHandler: newPasswordResetTestHandler(),
 		CreateURLHandler:     http.NotFoundHandler(),
 		ListURLHandler:       http.NotFoundHandler(),
+		GetURLHandler:        http.NotFoundHandler(),
 		MeHandler:            http.NotFoundHandler(),
 	}
 
@@ -314,5 +332,43 @@ func TestPasswordRegistrationRateLimitersAreIndependent(t *testing.T) {
 		if response.Code != http.StatusTooManyRequests {
 			t.Errorf("second request to %s status code = %d, want %d", requestData.path, response.Code, http.StatusTooManyRequests)
 		}
+	}
+}
+
+func TestGetURLRouteRequiresAuthenticationAndPassesShortCode(t *testing.T) {
+	userID := uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c413")
+	called := false
+	getURLHandler := middleware.Authenticator(URLRouteAuthStub{userID: userID})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		gotUserID, ok := ctxval.UserIDFromContext(r.Context())
+		if !ok || gotUserID != userID || r.PathValue("code") != "Ab3dX9" {
+			t.Errorf("handler received user/code = (%v, %q), want (%v, Ab3dX9)", gotUserID, r.PathValue("code"), userID)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	srv := NewServer(&Handlers{
+		UserHandler:          &handlers.UserHandler{},
+		SessionHandler:       &handlers.SessionHandler{},
+		PasswordResetHandler: newPasswordResetTestHandler(),
+		CreateURLHandler:     http.NotFoundHandler(),
+		ListURLHandler:       http.NotFoundHandler(),
+		GetURLHandler:        getURLHandler,
+		MeHandler:            http.NotFoundHandler(),
+	}, nil)
+	router := srv.NewRouterHTTP()
+
+	request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/urls/Ab3dX9", http.NoBody)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusUnauthorized || called {
+		t.Fatalf("without cookie: status = %d, handler called = %t; want 401 and no call", response.Code, called)
+	}
+
+	request = httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/urls/Ab3dX9", http.NoBody)
+	request.AddCookie(&http.Cookie{Name: "user_session", Value: "valid-session-token"})
+	response = httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent || !called {
+		t.Errorf("with cookie: status = %d, handler called = %t; want 204 and call", response.Code, called)
 	}
 }

@@ -54,6 +54,7 @@ func TestPasswordResetIntegration(t *testing.T) {
 		PasswordResetHandler: handlers.NewPasswordResetHandler(resetService, allowAll, false),
 		CreateURLHandler:     http.NotFoundHandler(),
 		ListURLHandler:       http.NotFoundHandler(),
+		GetURLHandler:        http.NotFoundHandler(),
 		MeHandler:            middleware.Authenticator(authService)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })),
 	}, pool).NewRouterHTTP()
 

@@ -51,6 +51,7 @@ type Handlers struct {
 	PasswordResetHandler *handlers.PasswordResetHandler
 	CreateURLHandler     http.Handler
 	ListURLHandler       http.Handler
+	GetURLHandler        http.Handler
 	MeHandler            http.Handler
 }
 
@@ -135,6 +136,7 @@ func (srv *Server) registerRoutes(mux *http.ServeMux) {
 
 	mux.Handle("POST /urls", srv.h.CreateURLHandler)
 	mux.Handle("GET /urls", srv.h.ListURLHandler)
+	mux.Handle("GET /urls/{code}", srv.h.GetURLHandler)
 }
 
 func (srv *Server) NewRouterHTTP() http.Handler {
