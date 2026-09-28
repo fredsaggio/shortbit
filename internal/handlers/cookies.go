@@ -21,6 +21,8 @@ const (
 	passwordRegistrationCookiePath = "/registrations/password"
 	passwordResetCookieName        = "password_reset"
 	passwordResetCookiePath        = "/password-resets"
+
+	linkAccessSessionCookieName = "link_access_session"
 )
 
 func setPasswordResetCookie(w http.ResponseWriter, token string, secure bool) {
@@ -186,6 +188,21 @@ func clearGoogleAuthorizationCookies(w http.ResponseWriter, secure bool) {
 			SameSite: http.SameSiteLaxMode,
 		})
 	}
+}
+
+func setLinkAccessSessionCookie(w http.ResponseWriter, shortCode, token string, expiresAt time.Time, secure bool) {
+	maxAge := int(math.Ceil(time.Until(expiresAt).Seconds()))
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     linkAccessSessionCookieName,
+		Value:    token,
+		Path:     "/" + shortCode,
+		MaxAge:   maxAge,
+		Expires:  expiresAt.UTC(),
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+	})
 }
 
 func requiredCookieValue(r *http.Request, name string) (string, error) {
