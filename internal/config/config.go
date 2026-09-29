@@ -17,6 +17,7 @@ const (
 
 	defaultUserSessionTTL           = 12 * time.Hour
 	defaultRememberedUserSessionTTL = 720 * time.Hour
+	defaultLinkAccessSessionTTL     = 30 * time.Minute
 	defaultCookieSecure             = true
 
 	defaultPasswordRegistrationCodeTTL    = 10 * time.Minute
@@ -32,6 +33,7 @@ type Config struct {
 	DatabaseURL          string
 	HTTP                 HTTPConfig
 	Session              SessionConfig
+	LinkAccessSession    LinkAccessSessionConfig
 	Google               GoogleConfig
 	Email                EmailConfig
 	Resend               ResendConfig
@@ -44,6 +46,10 @@ type SessionConfig struct {
 	TTL           time.Duration
 	RememberedTTL time.Duration
 	CookieSecure  bool
+}
+
+type LinkAccessSessionConfig struct {
+	TTL time.Duration
 }
 
 type EmailConfig struct {
@@ -103,6 +109,14 @@ func Load(getEnv func(string) string) (Config, error) {
 	}
 	if rememberedSessionTTL <= sessionTTL {
 		return Config{}, errors.New("REMEMBERED_USER_SESSION_TTL must be greater than USER_SESSION_TTL")
+	}
+
+	linkAccessSessionTTL, err := durationEnvOrDefault(getEnv, "LINK_ACCESS_SESSION_TTL", defaultLinkAccessSessionTTL)
+	if err != nil {
+		return Config{}, err
+	}
+	if linkAccessSessionTTL <= 0 {
+		return Config{}, errors.New("LINK_ACCESS_SESSION_TTL must be greater than zero")
 	}
 
 	cookieSecure, err := boolEnvOrDefault(getEnv, "COOKIE_SECURE", defaultCookieSecure)
@@ -166,6 +180,7 @@ func Load(getEnv func(string) string) (Config, error) {
 			RememberedTTL: rememberedSessionTTL,
 			CookieSecure:  cookieSecure,
 		},
+		LinkAccessSession: LinkAccessSessionConfig{TTL: linkAccessSessionTTL},
 		Google: GoogleConfig{
 			ClientID:     getEnv("GOOGLE_CLIENT_ID"),
 			ClientSecret: getEnv("GOOGLE_CLIENT_SECRET"),

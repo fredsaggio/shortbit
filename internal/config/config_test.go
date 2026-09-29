@@ -22,6 +22,7 @@ func TestLoad(t *testing.T) {
 				"HTTP_ADDR":                         ":9090",
 				"USER_SESSION_TTL":                  "12h",
 				"REMEMBERED_USER_SESSION_TTL":       "336h",
+				"LINK_ACCESS_SESSION_TTL":           "45m",
 				"COOKIE_SECURE":                     "false",
 				"GOOGLE_CLIENT_ID":                  "test-client-id",
 				"GOOGLE_CLIENT_SECRET":              "test-client-secret",
@@ -49,6 +50,7 @@ func TestLoad(t *testing.T) {
 					RememberedTTL: 336 * time.Hour,
 					CookieSecure:  false,
 				},
+				LinkAccessSession: config.LinkAccessSessionConfig{TTL: 45 * time.Minute},
 				Google: config.GoogleConfig{
 					ClientID:     "test-client-id",
 					ClientSecret: "test-client-secret",
@@ -96,6 +98,7 @@ func TestLoad(t *testing.T) {
 					RememberedTTL: 720 * time.Hour,
 					CookieSecure:  true,
 				},
+				LinkAccessSession: config.LinkAccessSessionConfig{TTL: 30 * time.Minute},
 				Google: config.GoogleConfig{
 					ClientID:     "test-client-id",
 					ClientSecret: "test-client-secret",
@@ -166,6 +169,21 @@ func TestLoad(t *testing.T) {
 			name:            "rejects remembered TTL shorter than ordinary TTL",
 			env:             map[string]string{"USER_SESSION_TTL": "24h", "REMEMBERED_USER_SESSION_TTL": "12h"},
 			wantErrContains: "REMEMBERED_USER_SESSION_TTL must be greater than USER_SESSION_TTL",
+		},
+		{
+			name:            "rejects invalid link access session TTL",
+			env:             map[string]string{"LINK_ACCESS_SESSION_TTL": "thirty minutes"},
+			wantErrContains: "LINK_ACCESS_SESSION_TTL must be a valid duration",
+		},
+		{
+			name:            "rejects zero link access session TTL",
+			env:             map[string]string{"LINK_ACCESS_SESSION_TTL": "0s"},
+			wantErrContains: "LINK_ACCESS_SESSION_TTL must be greater than zero",
+		},
+		{
+			name:            "rejects negative link access session TTL",
+			env:             map[string]string{"LINK_ACCESS_SESSION_TTL": "-1m"},
+			wantErrContains: "LINK_ACCESS_SESSION_TTL must be greater than zero",
 		},
 		{
 			name: "rejects invalid cookie secure value",

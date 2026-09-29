@@ -24,7 +24,7 @@ func (s linkAccessSessionServiceStub) CreateSession(ctx context.Context, shortCo
 
 func newUnlockRequest(t *testing.T, shortCode, body string) *http.Request {
 	t.Helper()
-	request := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/"+shortCode+"/unlock", strings.NewReader(body))
+	request := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/"+shortCode+"/access", strings.NewReader(body))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	request.SetPathValue("code", shortCode)
 	return request

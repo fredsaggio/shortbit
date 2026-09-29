@@ -83,6 +83,9 @@ func CompositionRoot(pool db.DB, cfg config.Config, googleClient services.Google
 	}
 	redirectService := services.NewRedirectService(urlRepository, urlRepository)
 	urlHandler := handlers.NewURLHandler(urlService, redirectService)
+	linkAccessSessionRepository := repositories.NewLinkAccessSessionRepository(pool)
+	linkAccessSessionService := services.NewLinkAccessSessionService(urlRepository, linkAccessSessionRepository, cfg.LinkAccessSession.TTL, sessiontoken.Generate, passwordHasher)
+	linkAccessSessionHandler := handlers.NewLinkAccessSessionHandler(linkAccessSessionService, cfg.Session.CookieSecure)
 
 	createURLHandler := middleware.Authenticator(authService)(
 		http.HandlerFunc(urlHandler.Create),
@@ -97,14 +100,15 @@ func CompositionRoot(pool db.DB, cfg config.Config, googleClient services.Google
 	meHandler := middleware.Authenticator(authService)(http.HandlerFunc(userHandler.GetUserInfo))
 
 	return &server.Handlers{
-		UserHandler:          userHandler,
-		SessionHandler:       sessionHandler,
-		GoogleAuthHandler:    googleAuthHandler,
-		PasswordResetHandler: passwordResetHandler,
-		URLHandler:           urlHandler,
-		CreateURLHandler:     createURLHandler,
-		ListURLHandler:       listURLHandler,
-		GetURLHandler:        getURLHandler,
-		MeHandler:            meHandler,
+		UserHandler:              userHandler,
+		SessionHandler:           sessionHandler,
+		GoogleAuthHandler:        googleAuthHandler,
+		PasswordResetHandler:     passwordResetHandler,
+		URLHandler:               urlHandler,
+		LinkAccessSessionHandler: linkAccessSessionHandler,
+		CreateURLHandler:         createURLHandler,
+		ListURLHandler:           listURLHandler,
+		GetURLHandler:            getURLHandler,
+		MeHandler:                meHandler,
 	}, passwordRegisterCleanup, nil
 }

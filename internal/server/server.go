@@ -45,15 +45,16 @@ type DatabasePinger interface {
 }
 
 type Handlers struct {
-	UserHandler          *handlers.UserHandler
-	SessionHandler       *handlers.SessionHandler
-	GoogleAuthHandler    *handlers.GoogleAuthHandler
-	PasswordResetHandler *handlers.PasswordResetHandler
-	URLHandler           *handlers.URLHandler
-	CreateURLHandler     http.Handler
-	ListURLHandler       http.Handler
-	GetURLHandler        http.Handler
-	MeHandler            http.Handler
+	UserHandler              *handlers.UserHandler
+	SessionHandler           *handlers.SessionHandler
+	GoogleAuthHandler        *handlers.GoogleAuthHandler
+	PasswordResetHandler     *handlers.PasswordResetHandler
+	URLHandler               *handlers.URLHandler
+	LinkAccessSessionHandler *handlers.LinkAccessSessionHandler
+	CreateURLHandler         http.Handler
+	ListURLHandler           http.Handler
+	GetURLHandler            http.Handler
+	MeHandler                http.Handler
 }
 
 type Server struct {
@@ -138,6 +139,7 @@ func (srv *Server) registerRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /urls", srv.h.CreateURLHandler)
 	mux.Handle("GET /urls", srv.h.ListURLHandler)
 	mux.Handle("GET /urls/{code}", srv.h.GetURLHandler)
+	mux.HandleFunc("POST /{code}/access", srv.h.LinkAccessSessionHandler.RedirectPrivateLink)
 	mux.HandleFunc("GET /{code}", srv.h.URLHandler.Redirect)
 }
 
