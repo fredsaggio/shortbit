@@ -6,7 +6,8 @@ info:
     Referência das rotas atualmente implementadas. A autenticação da conta usa
     uma sessão opaca no cookie HttpOnly `user_session`. Os cookies temporários
     de cadastro, recuperação e Google fazem parte dos respectivos fluxos.
-    Erros são retornados como texto simples em português.
+    Erros são retornados como texto simples em português, exceto respostas do
+    formulário HTML de senha dos links privados.
 servers:
   - url: /
     description: Mesmo domínio da página de documentação
@@ -25,7 +26,7 @@ tags:
   - name: Google
     description: Fluxo OAuth com Google.
   - name: Links
-    description: Criação e consulta dos links do usuário autenticado e redirect público.
+    description: Criação, consulta, desbloqueio e redirect de links públicos e privados.
 paths:
   /docs:
     get:
@@ -500,28 +501,37 @@ paths:
   /{code}:
     get:
       tags: [Links]
-      operationId: redirectPublicURL
-      summary: Abrir um link público curto
+      operationId: openShortURL
+      summary: Abrir um link curto público ou privado
       description: |
-        Não exige sessão. Resolve o shortcode exato e incrementa `click_count`
-        atomicamente no PostgreSQL antes de redirecionar. Código inexistente
-        e link privado retornam o mesmo 404, sem contar clique. A resposta de
-        redirect não deve ser armazenada pelo navegador; acessos posteriores
-        precisam voltar à API para serem contabilizados.
-      security: []
+        Não exige sessão de conta. Links públicos redirecionam diretamente.
+        Links privados sem cookie de acesso válido mostram uma página HTML de
+        senha; o cookie é específico do link e dura 30 minutos por padrão.
+        Somente um redirect efetivo incrementa `click_count` atomicamente no
+        PostgreSQL. A resposta de redirect não deve ser armazenada pelo
+        navegador; acessos posteriores precisam voltar à API.
+      security:
+        - {}
+        - linkAccessSession: []
       parameters:
         - name: code
           in: path
           required: true
-          description: Shortcode de um link público.
+          description: Shortcode do link público ou privado.
           schema:
             type: string
             minLength: 6
             pattern: '^[0-9A-Za-z]+$'
           example: Ab3dX9
       responses:
+        '200':
+          description: Link privado sem sessão válida; formulário HTML de senha, sem contar clique.
+          content:
+            text/html:
+              schema:
+                type: string
         '302':
-          description: Link público encontrado e clique registrado.
+          description: Link público ou link privado desbloqueado; clique registrado.
           headers:
             Location:
               description: URL original de destino.
@@ -534,7 +544,77 @@ paths:
                 type: string
                 example: no-store
         '404':
-          description: Código inexistente ou link privado.
+          description: Código inexistente.
+          content:
+            text/plain:
+              schema:
+                type: string
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /{code}/access:
+    post:
+      tags: [Links]
+      operationId: unlockPrivateURL
+      summary: Informar a senha de um link privado
+      description: |
+        Confere a senha usando Argon2id e cria uma sessão específica para este
+        link. O cookie HttpOnly tem `Path=/{code}` e TTL padrão de 30 minutos,
+        configurável por `LINK_ACCESS_SESSION_TTL`. A resposta 303 faz o
+        navegador repetir GET /{code} com o cookie. Esta operação não conta
+        clique; a contagem acontece somente no GET que redireciona.
+      security: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          description: Shortcode do link privado.
+          schema:
+            type: string
+            minLength: 6
+            pattern: '^[0-9A-Za-z]+$'
+          example: Ab3dX9
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password:
+                  type: string
+                  format: password
+                  writeOnly: true
+                  description: Senha compartilhada pelo criador do link.
+      responses:
+        '303':
+          description: Senha correta; sessão criada e navegador redirecionado para o shortcode.
+          headers:
+            Location:
+              description: Caminho do link curto, para repetir o GET com o cookie.
+              schema:
+                type: string
+                example: /Ab3dX9
+            Set-Cookie:
+              description: Cookie `link_access_session` específico do link, com HttpOnly, SameSite=Lax e Path=/{code}; Secure quando configurado.
+              schema:
+                type: string
+        '400':
+          description: Formulário ausente ou inválido; página HTML com mensagem de erro.
+          content:
+            text/html:
+              schema:
+                type: string
+        '401':
+          description: Senha incorreta; página HTML para tentar novamente, sem criar sessão.
+          content:
+            text/html:
+              schema:
+                type: string
+        '404':
+          description: Código inexistente ou link não privado.
           content:
             text/plain:
               schema:
@@ -550,6 +630,11 @@ components:
       in: cookie
       name: user_session
       description: Cookie HttpOnly emitido após login com senha ou Google.
+    linkAccessSession:
+      type: apiKey
+      in: cookie
+      name: link_access_session
+      description: Cookie HttpOnly opcional, específico de um link privado; não autentica a conta.
     passwordRegistration:
       type: apiKey
       in: cookie
@@ -760,7 +845,13 @@ components:
           schema:
             type: string
     TooManyRequests:
-      description: Limite global de requisições por IP excedido.
+      description: Limite global por IP ou limite específico de uma operação excedido.
+      headers:
+        Retry-After:
+          description: Segundos até uma nova tentativa.
+          schema:
+            type: integer
+            minimum: 1
       content:
         text/plain:
           schema:
