@@ -1,7 +1,7 @@
 # Documentação da ShortBit
 
 > Status: atual
-> Última atualização: 27 de setembro de 2026
+> Última atualização: 29 de setembro de 2026
 
 Esta pasta explica como o sistema funciona. Ela complementa os documentos da raiz:
 

@@ -1,7 +1,7 @@
 # API HTTP
 
 > Status: contratos implementados e planejados
-> Última atualização: 27 de setembro de 2026
+> Última atualização: 29 de setembro de 2026
 
 Base local:
 
@@ -41,8 +41,8 @@ e em [`docs/openapi.yaml`](openapi.yaml). Esta página Markdown também registra
 | `POST` | `/urls` | Sim | ✅ |
 | `GET` | `/urls` | Sim | ✅ |
 | `GET` | `/urls/{code}` | Sim + ownership | ✅ |
-| `GET` | `/{code}` | Não | 📋 |
-| `POST` | `/{code}/unlock` | Não | 📋 |
+| `GET` | `/{code}` | Não; cookie opcional para link privado | ✅ |
+| `POST` | `/{code}/access` | Não | ✅ |
 
 ## Health checks ✅
 
@@ -310,10 +310,10 @@ Este endpoint não redireciona nem desbloqueia o link.
 
 ### `GET /{code}` ✅
 
-Não exige sessão. Para um link público existente, incrementa `click_count` no PostgreSQL e retorna `302 Found`, com `Location` apontando para a URL original e `Cache-Control: no-store`. Cada novo acesso deve voltar à API para poder ser contabilizado. Código inexistente ou link privado retorna `404`, sem incrementar o contador; falha ao registrar o clique retorna `500`, sem redirect. O rate limit global pode retornar `429`.
+Não exige sessão de conta. Para um link público existente, incrementa `click_count` no PostgreSQL e retorna `302 Found`, com `Location` apontando para a URL original e `Cache-Control: no-store`. Para um link privado sem cookie de acesso válido, retorna `200 OK` com a página HTML de senha, sem contar clique. Com cookie válido para aquele link, incrementa o contador e retorna `302 Found`. Código inexistente retorna `404`; falha ao registrar o clique retorna `500`, sem redirect. O rate limit global pode retornar `429`.
 
-### Próxima rota 📋
+### `POST /{code}/access` ✅
 
-```text
-POST /{code}/unlock
-```
+Recebe `application/x-www-form-urlencoded` com o campo `password`. Senha correta cria sessão específica para o link, define cookie `link_access_session` (`HttpOnly`, `SameSite=Lax`, `Path=/{code}`, `Secure` quando configurado) e retorna `303 See Other` para `/{code}`. Essa sessão dura **30 minutos por padrão** (`LINK_ACCESS_SESSION_TTL`), sem renovação automática.
+
+Senha incorreta retorna `401` com o formulário HTML e não cria sessão; formulário inválido retorna `400`; código inexistente retorna `404`. Há rate limit por IP + shortcode antes da comparação da senha: burst de 5, reposição de 20 tentativas por minuto; excesso retorna `429` e `Retry-After`. O rate limit global também se aplica.

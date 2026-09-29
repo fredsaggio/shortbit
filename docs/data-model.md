@@ -1,7 +1,7 @@
 # Modelo de dados
 
 > Status: migrations `00001` a `00006`
-> Última atualização: 26 de setembro de 2026
+> Última atualização: 29 de setembro de 2026
 
 PostgreSQL é a fonte da verdade. Tokens secretos são armazenados somente como hash.
 
@@ -152,7 +152,7 @@ Há no máximo uma linha por usuário com senha. O token opaco fica no cookie e 
 
 ### `urls` ✅
 
-O schema e os fluxos HTTP de criação, listagem, consulta individual e redirect público estão implementados; o desbloqueio privado ainda está planejado. Links privados exigem `password_hash`; links públicos exigem que esse campo seja `NULL`. URLs criadas não expiram automaticamente; a expiração de `link_access_sessions` limita apenas o acesso temporário a um link privado.
+O schema e os fluxos HTTP de criação, listagem, consulta individual e redirects público/privado estão implementados. Links privados exigem `password_hash`; links públicos exigem que esse campo seja `NULL`. URLs criadas não expiram automaticamente; a expiração de `link_access_sessions` limita apenas o acesso temporário a um link privado (30 minutos por padrão, configurável).
 
 `id` é `BIGINT GENERATED ALWAYS AS IDENTITY`; `short_code` é derivado do ID com Sqids e `MinLength: 6`, persistido e protegido por `UNIQUE`. A migration exige **no mínimo seis caracteres, sem máximo fixo**. O redirect consulta `short_code` diretamente, sem decodificá-lo, e incrementa `click_count` atomicamente para links públicos. Consulte [Links e shortcodes](short-links.md) para configuração, limites reais e fluxo de criação.
 

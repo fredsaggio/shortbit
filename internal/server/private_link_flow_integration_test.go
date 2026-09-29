@@ -77,6 +77,25 @@ func TestPrivateLinkAccessFlowIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create private URL: %v", err)
 	}
+	otherID, err := urls.ReserveID(t.Context())
+	if err != nil {
+		t.Fatalf("reserve other URL ID: %v", err)
+	}
+	otherCode, err := generator.Generate(otherID)
+	if err != nil {
+		t.Fatalf("generate other shortcode: %v", err)
+	}
+	otherPasswordHash, err := (argon2.Argon2id{}).Hash("other-link-password")
+	if err != nil {
+		t.Fatalf("hash other link password: %v", err)
+	}
+	_, err = urls.Create(t.Context(), models.URL{
+		ID: otherID, ShortCode: otherCode, UserID: owner.ID, OriginalURL: "https://example.com/other-private-destination",
+		Visibility: models.VisibilityPrivate, PasswordHash: &otherPasswordHash,
+	})
+	if err != nil {
+		t.Fatalf("create other private URL: %v", err)
+	}
 
 	request := func(method, path, form string, cookie *http.Cookie) *httptest.ResponseRecorder {
 		t.Helper()
@@ -136,6 +155,19 @@ func TestPrivateLinkAccessFlowIntegration(t *testing.T) {
 	if withCookie.Code != http.StatusFound || withCookie.Header().Get("Location") != destination || clickCount() != 1 {
 		t.Fatalf("GET with cookie = status %d, location %q, count %d; want 302 to destination and one click",
 			withCookie.Code, withCookie.Header().Get("Location"), clickCount())
+	}
+	// Send the cookie manually despite its Path: the database must reject cross-link reuse too.
+	otherLinkWithCookie := request(http.MethodGet, "/"+otherCode, "", accessCookie)
+	if otherLinkWithCookie.Code != http.StatusOK || !strings.Contains(otherLinkWithCookie.Body.String(), `action="/`+otherCode+`/access"`) || otherLinkWithCookie.Header().Get("Location") != "" {
+		t.Fatalf("other link with first link's cookie = status %d, location %q; want password form without redirect",
+			otherLinkWithCookie.Code, otherLinkWithCookie.Header().Get("Location"))
+	}
+	var otherClickCount int64
+	if err := pool.QueryRow(t.Context(), "SELECT click_count FROM urls WHERE id = @id", pgx.StrictNamedArgs{"id": otherID}).Scan(&otherClickCount); err != nil {
+		t.Fatalf("query other link click count: %v", err)
+	}
+	if otherClickCount != 0 {
+		t.Errorf("other link click count = %d, want 0", otherClickCount)
 	}
 
 	_, err = pool.Exec(t.Context(), `

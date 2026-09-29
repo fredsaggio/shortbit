@@ -1,7 +1,7 @@
 # Links e shortcodes
 
-> Status: geração Sqids, criação, listagem, metadados individuais e redirect público com contador implementados; desbloqueio privado planejado
-> Última atualização: 27 de setembro de 2026
+> Status: geração Sqids, criação, listagem, metadados individuais e redirects público/privado com contador implementados
+> Última atualização: 29 de setembro de 2026
 
 ## Objetivo do domínio
 
@@ -21,9 +21,9 @@ Cada URL curta pertence a um usuário autenticado e possui:
 | Tabela `urls` | ✅ Implementada, com mínimo de seis caracteres e sem expiração |
 | Model `URL` | ✅ Implementado |
 | Gerador Sqids com `MinLength: 6` | ✅ Implementado |
-| Repository de URLs | ✅ Reserva ID, cria, consulta e lista por owner/cursor; resolve link público e conta clique |
-| Service e handlers | ✅ Criação, listagem, consulta individual e redirect público |
-| Rotas HTTP | ✅ `POST /urls`, `GET /urls` e `GET /urls/{code}` autenticadas; `GET /{code}` pública |
+| Repository de URLs | ✅ Reserva ID, cria, consulta e lista por owner/cursor; resolve links públicos/privados e conta clique |
+| Service e handlers | ✅ Criação, listagem, consulta individual, redirects e desbloqueio privado |
+| Rotas HTTP | ✅ `POST /urls`, `GET /urls` e `GET /urls/{code}` autenticadas; `GET /{code}` e `POST /{code}/access` públicas |
 | Redis seletivo | 📋 Planejado para depois da versão PostgreSQL |
 | Estratégia final de shortcode | ✅ Decidida: ID incremental + Sqids |
 
@@ -102,12 +102,12 @@ flowchart TD
     Request[GET /code] --> Find{Shortcode existe?}
     Find -- Não --> NotFound[404]
     Find -- Sim --> Visibility{É público?}
-    Visibility -- Não --> NotFound
+    Visibility -- Não --> PrivateFlow[Ver fluxo privado abaixo]
     Visibility -- Sim --> Increment[Incrementa click_count atomicamente]
     Increment --> Redirect[302 para original_url]
 ```
 
-`GET /{code}` não exige login. Por enquanto, link privado e código inexistente retornam o mesmo `404`; a página de senha e o desbloqueio pertencem à próxima fase. O clique só é contado quando o link público é resolvido e o servidor consegue persistir o incremento antes de responder com o redirect.
+`GET /{code}` não exige login. Código inexistente retorna `404`; link privado sem sessão válida mostra a página de senha descrita abaixo. O clique só é contado quando o link público é resolvido e o servidor consegue persistir o incremento antes de responder com o redirect.
 
 O repository faz a resolução e o incremento em uma operação atômica no PostgreSQL:
 
@@ -118,9 +118,9 @@ WHERE short_code = @shortCode AND visibility = 'public'
 RETURNING original_url;
 ```
 
-Não há o fluxo vulnerável `SELECT → incrementar em Go → UPDATE`. A resposta usa `302 Found` com `Location` apontando para a URL original e `Cache-Control: no-store`, para que o navegador não guarde o redirect e os acessos seguintes voltem à API. O rate limit global continua aplicado. Testes cobrem redirecionamento HTTP sem login, contador após acessos repetidos, `404` para links privados/inexistentes e incrementos concorrentes.
+Não há o fluxo vulnerável `SELECT → incrementar em Go → UPDATE`. A resposta usa `302 Found` com `Location` apontando para a URL original e `Cache-Control: no-store`, para que o navegador não guarde o redirect e os acessos seguintes voltem à API. O rate limit global continua aplicado. Testes cobrem redirecionamento HTTP sem login, contador após acessos repetidos, `404` para código inexistente e incrementos concorrentes.
 
-## Link privado e desbloqueio 📋
+## Link privado e desbloqueio ✅
 
 ```mermaid
 sequenceDiagram
@@ -130,16 +130,18 @@ sequenceDiagram
 
     Browser->>API: GET /{code}
     API-->>Browser: Página/formulário de senha
-    Browser->>API: POST /{code}/unlock
+    Browser->>API: POST /{code}/access (senha)
     API->>DB: Busca e compara password_hash
     API->>DB: Cria link_access_session
-    API-->>Browser: Cookie específico do link + redirect
+    API-->>Browser: Cookie específico do link + 303 para /{code}
     Browser->>API: GET /{code} + cookie de acesso
     API->>DB: Valida sessão do link e incrementa clique
     API-->>Browser: 302 para URL original
 ```
 
-O cookie de acesso a link privado não autentica a conta e só libera o link ao qual foi associado.
+`GET /{code}` mostra HTML com formulário quando o link privado não tem uma sessão válida. O `POST` recebe `application/x-www-form-urlencoded` com o campo `password`. Senha incorreta reapresenta o formulário com `401`, sem criar sessão nem contar clique. Senha correta cria `link_access_session` no PostgreSQL, define o cookie `link_access_session` com `HttpOnly`, `SameSite=Lax`, `Path=/{code}` e `Secure` em HTTPS, e responde `303` para o mesmo shortcode.
+
+O TTL padrão da sessão é **30 minutos**, configurável por `LINK_ACCESS_SESSION_TTL`; não há renovação automática. O cookie não autentica a conta. No GET seguinte, o servidor verifica se o hash do token pertence ao `link_id` e se a sessão não expirou; somente então incrementa o clique e responde `302`. Mesmo se um cliente anexar manualmente o cookie a outro link, ele não é aceito. O POST possui rate limit em memória por IP + shortcode, com burst de 5 e reposição de 20 tentativas por minuto, antes da comparação Argon2id. Teste de integração cobre senha errada, cookie, isolamento entre dois links, expiração e contador.
 
 ## Duração dos links
 
