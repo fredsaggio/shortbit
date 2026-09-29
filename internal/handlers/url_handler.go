@@ -27,8 +27,8 @@ type URLService interface {
 	GetByShortCode(ctx context.Context, userID uuid.UUID, shortCode string) (models.URL, error)
 }
 
-type PublicRedirectService interface {
-	ResolvePublic(ctx context.Context, shortCode string) (string, error)
+type RedirectService interface {
+	Resolve(ctx context.Context, shortCode, token string) (services.RedirectResult, error)
 }
 
 type createURLRequest struct {
@@ -63,10 +63,10 @@ type urlCursorPayload struct {
 
 type URLHandler struct {
 	serv     URLService
-	redirect PublicRedirectService
+	redirect RedirectService
 }
 
-func NewURLHandler(serv URLService, redirect PublicRedirectService) *URLHandler {
+func NewURLHandler(serv URLService, redirect RedirectService) *URLHandler {
 	return &URLHandler{serv: serv, redirect: redirect}
 }
 
@@ -263,21 +263,34 @@ func (h *URLHandler) GetByShortCode(w http.ResponseWriter, r *http.Request) {
 
 func (h *URLHandler) Redirect(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-
 	shortCode := r.PathValue("code")
+	w.Header().Set("Cache-Control", "no-store")
 
-	originalURL, err := h.redirect.ResolvePublic(ctx, shortCode)
+	var token string
+	cookie, err := r.Cookie(linkAccessSessionCookieName)
+	if err == nil {
+		token = cookie.Value
+	} else if !errors.Is(err, http.ErrNoCookie) {
+		slog.ErrorContext(ctx, "read link access cookie failed", "error", err)
+		http.Error(w, "erro interno do servidor", http.StatusInternalServerError)
+		return
+	}
+
+	result, err := h.redirect.Resolve(ctx, shortCode, token)
 
 	if err != nil {
 		if errors.Is(err, services.ErrURLNotFound) {
 			http.Error(w, "url não encontrada", http.StatusNotFound)
 			return
 		}
-		slog.ErrorContext(ctx, "resolve public url", "error", err)
+		slog.ErrorContext(ctx, "resolve url", "error", err)
 		http.Error(w, "erro interno do servidor", http.StatusInternalServerError)
 		return
 	}
+	if result.PasswordRequired {
+		http.Error(w, "senha do link necessária", http.StatusUnauthorized)
+		return
+	}
 
-	w.Header().Set("Cache-Control", "no-store")
-	http.Redirect(w, r, originalURL, http.StatusFound)
+	http.Redirect(w, r, result.OriginalURL, http.StatusFound)
 }

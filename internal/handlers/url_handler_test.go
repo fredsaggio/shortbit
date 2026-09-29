@@ -23,7 +23,7 @@ type urlServiceStub struct {
 	createFunc         func(context.Context, uuid.UUID, string, models.Visibility, string) (services.CreateURLResult, error)
 	listFunc           func(context.Context, uuid.UUID, int, *repositories.URLCursor) (services.ListURLResult, error)
 	getByShortCodeFunc func(context.Context, uuid.UUID, string) (models.URL, error)
-	resolvePublicFunc  func(context.Context, string) (string, error)
+	resolveFunc        func(context.Context, string, string) (services.RedirectResult, error)
 }
 
 func (s urlServiceStub) Create(ctx context.Context, userID uuid.UUID, originalURL string, visibility models.Visibility, password string) (services.CreateURLResult, error) {
@@ -38,14 +38,14 @@ func (s urlServiceStub) GetByShortCode(ctx context.Context, userID uuid.UUID, sh
 	return s.getByShortCodeFunc(ctx, userID, shortCode)
 }
 
-type publicRedirectServiceStub func(context.Context, string) (string, error)
+type redirectServiceStub func(context.Context, string, string) (services.RedirectResult, error)
 
-func (resolve publicRedirectServiceStub) ResolvePublic(ctx context.Context, shortCode string) (string, error) {
-	return resolve(ctx, shortCode)
+func (resolve redirectServiceStub) Resolve(ctx context.Context, shortCode, token string) (services.RedirectResult, error) {
+	return resolve(ctx, shortCode, token)
 }
 
 func newURLHandler(serv urlServiceStub) *handlers.URLHandler {
-	return handlers.NewURLHandler(serv, publicRedirectServiceStub(serv.resolvePublicFunc))
+	return handlers.NewURLHandler(serv, redirectServiceStub(serv.resolveFunc))
 }
 
 func TestURLHandlerCreate(t *testing.T) {
@@ -431,12 +431,12 @@ func TestURLHandlerRedirectPublicURL(t *testing.T) {
 	type contextKey struct{}
 	ctx := context.WithValue(t.Context(), contextKey{}, "request-context")
 	called := false
-	handler := newURLHandler(urlServiceStub{resolvePublicFunc: func(gotCtx context.Context, gotCode string) (string, error) {
+	handler := newURLHandler(urlServiceStub{resolveFunc: func(gotCtx context.Context, gotCode, gotToken string) (services.RedirectResult, error) {
 		called = true
-		if gotCtx.Value(contextKey{}) != "request-context" || gotCode != "Ab3dX9" {
-			t.Errorf("ResolvePublic() arguments = (%v, %q), want request context and Ab3dX9", gotCtx, gotCode)
+		if gotCtx.Value(contextKey{}) != "request-context" || gotCode != "Ab3dX9" || gotToken != "" {
+			t.Errorf("Resolve() arguments = (%v, %q, %q), want request context, Ab3dX9 and no token", gotCtx, gotCode, gotToken)
 		}
-		return "https://example.com/article", nil
+		return services.RedirectResult{OriginalURL: "https://example.com/article"}, nil
 	}})
 
 	request := httptest.NewRequestWithContext(ctx, http.MethodGet, "/Ab3dX9", nil)
@@ -445,7 +445,7 @@ func TestURLHandlerRedirectPublicURL(t *testing.T) {
 	handler.Redirect(response, request)
 
 	if !called {
-		t.Fatal("ResolvePublic() was not called")
+		t.Fatal("Resolve() was not called")
 	}
 	if response.Code != http.StatusFound {
 		t.Errorf("status = %d, want 302", response.Code)
@@ -455,6 +455,60 @@ func TestURLHandlerRedirectPublicURL(t *testing.T) {
 	}
 	if got := response.Header().Get("Cache-Control"); got != "no-store" {
 		t.Errorf("Cache-Control = %q, want no-store", got)
+	}
+}
+
+func TestURLHandlerRedirectPrivateURLWithCookie(t *testing.T) {
+	handler := newURLHandler(urlServiceStub{resolveFunc: func(_ context.Context, code, token string) (services.RedirectResult, error) {
+		if code != "Ab3dX9" || token != "link-access-token" {
+			t.Errorf("Resolve() arguments = (%q, %q), want shortcode and cookie token", code, token)
+		}
+		return services.RedirectResult{OriginalURL: "https://example.com/private"}, nil
+	}})
+	request := httptest.NewRequest(http.MethodGet, "/Ab3dX9", nil)
+	request.SetPathValue("code", "Ab3dX9")
+	request.AddCookie(&http.Cookie{Name: "link_access_session", Value: "link-access-token"})
+	response := httptest.NewRecorder()
+	handler.Redirect(response, request)
+
+	if response.Code != http.StatusFound || response.Header().Get("Location") != "https://example.com/private" {
+		t.Errorf("response = (%d, %q), want 302 and private destination", response.Code, response.Header().Get("Location"))
+	}
+	if got := response.Header().Get("Cache-Control"); got != "no-store" {
+		t.Errorf("Cache-Control = %q, want no-store", got)
+	}
+}
+
+func TestURLHandlerRedirectPrivateURLRequiresPassword(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		token string
+	}{
+		{name: "missing cookie"},
+		{name: "invalid or expired cookie", token: "invalid-token"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := newURLHandler(urlServiceStub{resolveFunc: func(_ context.Context, code, token string) (services.RedirectResult, error) {
+				if code != "Ab3dX9" || token != tt.token {
+					t.Errorf("Resolve() arguments = (%q, %q), want (%q, %q)", code, token, "Ab3dX9", tt.token)
+				}
+				return services.RedirectResult{PasswordRequired: true}, nil
+			}})
+			request := httptest.NewRequest(http.MethodGet, "/Ab3dX9", nil)
+			request.SetPathValue("code", "Ab3dX9")
+			if tt.token != "" {
+				request.AddCookie(&http.Cookie{Name: "link_access_session", Value: tt.token})
+			}
+			response := httptest.NewRecorder()
+			handler.Redirect(response, request)
+
+			if response.Code != http.StatusUnauthorized || response.Body.String() != "senha do link necessária\n" {
+				t.Errorf("response = (%d, %q), want 401 and password-required message", response.Code, response.Body.String())
+			}
+			if got := response.Header().Get("Location"); got != "" {
+				t.Errorf("Location = %q, want no redirect before password", got)
+			}
+		})
 	}
 }
 
@@ -471,11 +525,11 @@ func TestURLHandlerRedirectMapsServiceErrors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := newURLHandler(urlServiceStub{resolvePublicFunc: func(_ context.Context, gotCode string) (string, error) {
+			handler := newURLHandler(urlServiceStub{resolveFunc: func(_ context.Context, gotCode, _ string) (services.RedirectResult, error) {
 				if gotCode != "Ab3dX9" {
 					t.Errorf("short code = %q, want Ab3dX9", gotCode)
 				}
-				return "", tt.serviceErr
+				return services.RedirectResult{}, tt.serviceErr
 			}})
 			request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/Ab3dX9", nil)
 			request.SetPathValue("code", "Ab3dX9")
