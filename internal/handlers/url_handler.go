@@ -288,7 +288,7 @@ func (h *URLHandler) Redirect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if result.PasswordRequired {
-		http.Error(w, "senha do link necessária", http.StatusUnauthorized)
+		renderPrivateLinkPasswordPage(w, r, shortCode, "", http.StatusOK)
 		return
 	}
 

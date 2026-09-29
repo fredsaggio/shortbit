@@ -90,10 +90,10 @@ func TestLinkAccessSessionHandlerRejectsInvalidForm(t *testing.T) {
 		body string
 		want string
 	}{
-		{name: "empty body", body: "", want: "senha do link obrigatória\n"},
-		{name: "missing password", body: "other=value", want: "senha do link obrigatória\n"},
-		{name: "empty password", body: "password=", want: "senha do link obrigatória\n"},
-		{name: "malformed form", body: "password=%zz", want: "corpo da requisição inválido\n"},
+		{name: "empty body", body: "", want: "Informe a senha para continuar."},
+		{name: "missing password", body: "other=value", want: "Informe a senha para continuar."},
+		{name: "empty password", body: "password=", want: "Informe a senha para continuar."},
+		{name: "malformed form", body: "password=%zz", want: "Não foi possível ler o formulário. Tente novamente."},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -103,8 +103,9 @@ func TestLinkAccessSessionHandlerRejectsInvalidForm(t *testing.T) {
 			}}
 			response := httptest.NewRecorder()
 			handlers.NewLinkAccessSessionHandler(service, false).RedirectPrivateLink(response, newUnlockRequest(t, "Ab3dX9", tt.body))
-			if response.Code != http.StatusBadRequest || response.Body.String() != tt.want {
-				t.Errorf("response = (%d, %q), want (400, %q)", response.Code, response.Body.String(), tt.want)
+			if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), tt.want) ||
+				!strings.Contains(response.Body.String(), `<form method="post" action="/Ab3dX9/access">`) {
+				t.Errorf("response = (%d, %q), want 400 HTML form with %q", response.Code, response.Body.String(), tt.want)
 			}
 			if response.Header().Get("Set-Cookie") != "" || response.Header().Get("Location") != "" {
 				t.Error("invalid form created a cookie or redirect")
@@ -119,10 +120,11 @@ func TestLinkAccessSessionHandlerMapsServiceErrors(t *testing.T) {
 		serviceErr error
 		wantStatus int
 		wantBody   string
+		wantHTML   bool
 	}{
 		{name: "link not found", serviceErr: services.ErrURLNotFound, wantStatus: http.StatusNotFound, wantBody: "url não encontrada\n"},
 		{name: "wrapped link not found", serviceErr: errors.Join(errors.New("context"), services.ErrURLNotFound), wantStatus: http.StatusNotFound, wantBody: "url não encontrada\n"},
-		{name: "incorrect password", serviceErr: services.ErrIncorrectLinkPassword, wantStatus: http.StatusUnauthorized, wantBody: "senha incorreta\n"},
+		{name: "incorrect password", serviceErr: services.ErrIncorrectLinkPassword, wantStatus: http.StatusUnauthorized, wantBody: "Senha incorreta. Tente novamente.", wantHTML: true},
 		{name: "internal error", serviceErr: errors.New("secret database details"), wantStatus: http.StatusInternalServerError, wantBody: "erro interno do servidor\n"},
 	}
 	for _, tt := range tests {
@@ -135,8 +137,15 @@ func TestLinkAccessSessionHandlerMapsServiceErrors(t *testing.T) {
 			}}
 			response := httptest.NewRecorder()
 			handlers.NewLinkAccessSessionHandler(service, false).RedirectPrivateLink(response, newUnlockRequest(t, "Ab3dX9", "password=senha-do-link"))
-			if response.Code != tt.wantStatus || response.Body.String() != tt.wantBody {
-				t.Errorf("response = (%d, %q), want (%d, %q)", response.Code, response.Body.String(), tt.wantStatus, tt.wantBody)
+			if response.Code != tt.wantStatus {
+				t.Errorf("status = %d, want %d", response.Code, tt.wantStatus)
+			}
+			if tt.wantHTML {
+				if !strings.Contains(response.Body.String(), tt.wantBody) || !strings.Contains(response.Body.String(), `<form method="post" action="/Ab3dX9/access">`) {
+					t.Errorf("response body = %q, want password form with %q", response.Body.String(), tt.wantBody)
+				}
+			} else if response.Body.String() != tt.wantBody {
+				t.Errorf("response body = %q, want %q", response.Body.String(), tt.wantBody)
 			}
 			if response.Header().Get("Set-Cookie") != "" || response.Header().Get("Location") != "" {
 				t.Error("failed unlock created a cookie or redirect")

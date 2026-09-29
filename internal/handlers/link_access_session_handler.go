@@ -30,13 +30,13 @@ func (h *LinkAccessSessionHandler) RedirectPrivateLink(w http.ResponseWriter, r 
 	shortCode := r.PathValue("code")
 
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "corpo da requisição inválido", http.StatusBadRequest)
+		renderPrivateLinkPasswordPage(w, r, shortCode, "Não foi possível ler o formulário. Tente novamente.", http.StatusBadRequest)
 		return
 	}
 
 	password := r.PostForm.Get("password")
 	if password == "" {
-		http.Error(w, "senha do link obrigatória", http.StatusBadRequest)
+		renderPrivateLinkPasswordPage(w, r, shortCode, "Informe a senha para continuar.", http.StatusBadRequest)
 		return
 	}
 
@@ -47,7 +47,7 @@ func (h *LinkAccessSessionHandler) RedirectPrivateLink(w http.ResponseWriter, r 
 		case errors.Is(err, services.ErrURLNotFound):
 			http.Error(w, "url não encontrada", http.StatusNotFound)
 		case errors.Is(err, services.ErrIncorrectLinkPassword):
-			http.Error(w, "senha incorreta", http.StatusUnauthorized)
+			renderPrivateLinkPasswordPage(w, r, shortCode, "Senha incorreta. Tente novamente.", http.StatusUnauthorized)
 		default:
 			slog.ErrorContext(ctx, "create link access session failed", "error", err)
 			http.Error(w, "erro interno do servidor", http.StatusInternalServerError)

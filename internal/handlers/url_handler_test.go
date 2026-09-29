@@ -502,13 +502,31 @@ func TestURLHandlerRedirectPrivateURLRequiresPassword(t *testing.T) {
 			response := httptest.NewRecorder()
 			handler.Redirect(response, request)
 
-			if response.Code != http.StatusUnauthorized || response.Body.String() != "senha do link necessária\n" {
-				t.Errorf("response = (%d, %q), want 401 and password-required message", response.Code, response.Body.String())
+			if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `<form method="post" action="/Ab3dX9/access">`) ||
+				!strings.Contains(response.Body.String(), `name="password"`) {
+				t.Errorf("response = (%d, %q), want password form for /Ab3dX9/access", response.Code, response.Body.String())
+			}
+			if got := response.Header().Get("Content-Type"); got != "text/html; charset=utf-8" {
+				t.Errorf("Content-Type = %q, want HTML", got)
 			}
 			if got := response.Header().Get("Location"); got != "" {
 				t.Errorf("Location = %q, want no redirect before password", got)
 			}
 		})
+	}
+}
+
+func TestURLHandlerRedirectPasswordPageEscapesShortCode(t *testing.T) {
+	handler := newURLHandler(urlServiceStub{resolveFunc: func(context.Context, string, string) (services.RedirectResult, error) {
+		return services.RedirectResult{PasswordRequired: true}, nil
+	}})
+	request := httptest.NewRequest(http.MethodGet, "/test", nil)
+	request.SetPathValue("code", `<script>alert(1)</script>`)
+	response := httptest.NewRecorder()
+	handler.Redirect(response, request)
+
+	if response.Code != http.StatusOK || strings.Contains(response.Body.String(), `<script>alert(1)</script>`) {
+		t.Errorf("password page status = %d, body must escape shortcode", response.Code)
 	}
 }
 
