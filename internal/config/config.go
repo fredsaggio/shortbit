@@ -27,6 +27,9 @@ const (
 
 	defaultBaseURL             = "http://localhost:8080"
 	defaultMaxOriginalURLBytes = 8192
+
+	defaultRedisAddr             = "127.0.0.1:6379"
+	defaultRedisOperationTimeout = 200 * time.Millisecond
 )
 
 type Config struct {
@@ -40,6 +43,7 @@ type Config struct {
 	PasswordRegistration PasswordRegistrationConfig
 	PasswordReset        PasswordResetConfig
 	URL                  URLConfig
+	Redis                RedisConfig
 }
 
 type SessionConfig struct {
@@ -63,6 +67,11 @@ type URLConfig struct {
 
 type ResendConfig struct {
 	APIKey string
+}
+
+type RedisConfig struct {
+	Addr    string
+	Timeout time.Duration
 }
 
 type PasswordRegistrationConfig struct {
@@ -131,6 +140,14 @@ func Load(getEnv func(string) string) (Config, error) {
 
 	if codeTTL <= 0 {
 		return Config{}, errors.New("PASSWORD_REGISTRATION_CODE_TTL must be greater than zero")
+	}
+
+	redisOperationTimeout, err := durationEnvOrDefault(getEnv, "REDIS_OPERATION_TIMEOUT", defaultRedisOperationTimeout)
+	if err != nil {
+		return Config{}, err
+	}
+	if redisOperationTimeout <= 0 {
+		return Config{}, errors.New("REDIS_OPERATION_TIMEOUT must be greater than zero")
 	}
 
 	attemptTTL, err := durationEnvOrDefault(getEnv, "PASSWORD_REGISTRATION_ATTEMPT_TTL", defaultPasswordRegistrationAttemptTTL)
@@ -202,6 +219,10 @@ func Load(getEnv func(string) string) (Config, error) {
 		URL: URLConfig{
 			BaseURL:             envOrDefault(getEnv, "PUBLIC_BASE_URL", defaultBaseURL),
 			MaxOriginalURLBytes: defaultMaxOriginalURLBytes,
+		},
+		Redis: RedisConfig{
+			Addr:    envOrDefault(getEnv, "REDIS_ADDR", defaultRedisAddr),
+			Timeout: redisOperationTimeout,
 		},
 	}
 

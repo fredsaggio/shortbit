@@ -34,6 +34,8 @@ func TestLoad(t *testing.T) {
 				"PASSWORD_RESET_CODE_TTL":           "8m",
 				"PASSWORD_RESET_ATTEMPT_TTL":        "25m",
 				"PUBLIC_BASE_URL":                   "https://shortbit.com.br",
+				"REDIS_ADDR":                        "redis.example:6380",
+				"REDIS_OPERATION_TIMEOUT":           "350ms",
 			},
 			want: config.Config{
 				DatabaseURL: "postgres://user:password@localhost:5432/app",
@@ -71,6 +73,7 @@ func TestLoad(t *testing.T) {
 					BaseURL:             "https://shortbit.com.br",
 					MaxOriginalURLBytes: 8192,
 				},
+				Redis: config.RedisConfig{Addr: "redis.example:6380", Timeout: 350 * time.Millisecond},
 			},
 		},
 		{
@@ -119,7 +122,23 @@ func TestLoad(t *testing.T) {
 					BaseURL:             "http://localhost:8080",
 					MaxOriginalURLBytes: 8192,
 				},
+				Redis: config.RedisConfig{Addr: "127.0.0.1:6379", Timeout: 200 * time.Millisecond},
 			},
+		},
+		{
+			name:            "rejects invalid Redis operation timeout",
+			env:             map[string]string{"REDIS_OPERATION_TIMEOUT": "soon"},
+			wantErrContains: "REDIS_OPERATION_TIMEOUT must be a valid duration",
+		},
+		{
+			name:            "rejects zero Redis operation timeout",
+			env:             map[string]string{"REDIS_OPERATION_TIMEOUT": "0s"},
+			wantErrContains: "REDIS_OPERATION_TIMEOUT must be greater than zero",
+		},
+		{
+			name:            "rejects negative Redis operation timeout",
+			env:             map[string]string{"REDIS_OPERATION_TIMEOUT": "-1ms"},
+			wantErrContains: "REDIS_OPERATION_TIMEOUT must be greater than zero",
 		},
 		{
 			name: "rejects invalid session TTL",
