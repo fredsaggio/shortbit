@@ -92,6 +92,35 @@ func TestRateLimiterMiddlewareByIPReturnsTooManyRequests(t *testing.T) {
 	}
 }
 
+func TestRateLimiterMiddlewareByIPAndPathValueKeepsIndependentBuckets(t *testing.T) {
+	limiter, _ := newTestRateLimiter(0.001, 1, 10, time.Minute)
+	handler := limiter.MiddlewareByIPAndPathValue("code", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	request := func(ip, code string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/"+code+"/access", nil)
+		req.RemoteAddr = ip + ":1234"
+		req.SetPathValue("code", code)
+		resp := httptest.NewRecorder()
+		handler.ServeHTTP(resp, req)
+		return resp
+	}
+
+	if got := request("192.0.2.1", "Ab3dX9").Code; got != http.StatusNoContent {
+		t.Errorf("first request status = %d, want 204", got)
+	}
+	if got := request("192.0.2.1", "Ab3dX9").Code; got != http.StatusTooManyRequests {
+		t.Errorf("same IP and code status = %d, want 429", got)
+	}
+	if got := request("192.0.2.1", "Qz7Rt2").Code; got != http.StatusNoContent {
+		t.Errorf("same IP and different code status = %d, want 204", got)
+	}
+	if got := request("192.0.2.2", "Ab3dX9").Code; got != http.StatusNoContent {
+		t.Errorf("different IP and same code status = %d, want 204", got)
+	}
+}
+
 func TestRateLimiterKeepsIndependentBucketsPerKey(t *testing.T) {
 	limiter, _ := newTestRateLimiter(1, 1, 10, time.Minute)
 

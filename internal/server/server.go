@@ -38,6 +38,11 @@ const (
 	passwordResetStartRateLimitBurst               = 3
 	passwordResetConfirmRateLimitRequestsPerSecond = 10.0 / 60.0
 	passwordResetConfirmRateLimitBurst             = 5
+
+	linkAccessRateLimitRequestsPerSecond = 20.0 / 60.0
+	linkAccessRateLimitBurst             = 5
+	linkAccessRateLimitMaxEntries        = 10_000
+	linkAccessRateLimitStaleAfter        = 10 * time.Minute
 )
 
 type DatabasePinger interface {
@@ -67,6 +72,7 @@ type Server struct {
 	registrationResendLimiter   *middleware.RateLimiter
 	passwordResetStartLimiter   *middleware.RateLimiter
 	passwordResetConfirmLimiter *middleware.RateLimiter
+	linkAccessLimiter           *middleware.RateLimiter
 }
 
 func NewServer(h *Handlers, database DatabasePinger) *Server {
@@ -80,6 +86,7 @@ func NewServer(h *Handlers, database DatabasePinger) *Server {
 		registrationResendLimiter:   middleware.NewRateLimiter(registrationResendRateLimitRequestsPerSecond, registrationResendRateLimitBurst, registrationRateLimitMaxClients, registrationRateLimitStaleAfter),
 		passwordResetStartLimiter:   middleware.NewRateLimiter(passwordResetStartRateLimitRequestsPerSecond, passwordResetStartRateLimitBurst, registrationRateLimitMaxClients, registrationRateLimitStaleAfter),
 		passwordResetConfirmLimiter: middleware.NewRateLimiter(passwordResetConfirmRateLimitRequestsPerSecond, passwordResetConfirmRateLimitBurst, registrationRateLimitMaxClients, registrationRateLimitStaleAfter),
+		linkAccessLimiter:           middleware.NewRateLimiter(linkAccessRateLimitRequestsPerSecond, linkAccessRateLimitBurst, linkAccessRateLimitMaxEntries, linkAccessRateLimitStaleAfter),
 	}
 }
 
@@ -139,7 +146,8 @@ func (srv *Server) registerRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /urls", srv.h.CreateURLHandler)
 	mux.Handle("GET /urls", srv.h.ListURLHandler)
 	mux.Handle("GET /urls/{code}", srv.h.GetURLHandler)
-	mux.HandleFunc("POST /{code}/access", srv.h.LinkAccessSessionHandler.RedirectPrivateLink)
+	linkAccessHandler := srv.linkAccessLimiter.MiddlewareByIPAndPathValue("code", http.HandlerFunc(srv.h.LinkAccessSessionHandler.RedirectPrivateLink))
+	mux.Handle("POST /{code}/access", linkAccessHandler)
 	mux.HandleFunc("GET /{code}", srv.h.URLHandler.Redirect)
 }
 

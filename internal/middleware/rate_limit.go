@@ -59,8 +59,18 @@ func NewRateLimiter(requestsPerSecond float64, burst, maxEntries int, staleAfter
 }
 
 func (l *RateLimiter) MiddlewareByIP(next http.Handler) http.Handler {
+	return l.middlewareByKey(next, clientIP)
+}
+
+func (l *RateLimiter) MiddlewareByIPAndPathValue(pathValue string, next http.Handler) http.Handler {
+	return l.middlewareByKey(next, func(r *http.Request) string {
+		return clientIP(r) + "\x00" + r.PathValue(pathValue)
+	})
+}
+
+func (l *RateLimiter) middlewareByKey(next http.Handler, key func(*http.Request) string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		allowed, retryAfter := l.Allow(clientIP(r))
+		allowed, retryAfter := l.Allow(key(r))
 		if !allowed {
 			w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
 			http.Error(w, "muitas requisições, tente novamente mais tarde", http.StatusTooManyRequests)
