@@ -214,3 +214,31 @@ func (r *URLRepository) FindPrivateByShortCode(ctx context.Context, shortCode st
 
 	return linkID, passwordHash, nil
 }
+
+func (r *URLRepository) ResolvePrivateAndCountClick(ctx context.Context, linkID int64, tokenHash []byte) (string, error) {
+	const q = `
+		UPDATE urls
+		SET click_count = click_count + 1
+		WHERE id = @linkID AND visibility = 'private'
+			AND EXISTS (
+				SELECT 1
+				FROM link_access_sessions
+				WHERE link_id = urls.id
+					AND token_hash = @tokenHash
+					AND expires_at > NOW()
+			)
+		RETURNING original_url
+	`
+
+	args := pgx.StrictNamedArgs{"linkID": linkID, "tokenHash": tokenHash}
+	var originalURL string
+
+	if err := r.db.QueryRow(ctx, q, args).Scan(&originalURL); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", ErrURLNotFound
+		}
+		return "", fmt.Errorf("resolve private URL and count click: %w", err)
+	}
+
+	return originalURL, nil
+}

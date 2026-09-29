@@ -25,6 +25,9 @@ type URLService interface {
 	Create(ctx context.Context, userID uuid.UUID, originalURL string, visibility models.Visibility, password string) (services.CreateURLResult, error)
 	List(ctx context.Context, userID uuid.UUID, limit int, cursor *repositories.URLCursor) (services.ListURLResult, error)
 	GetByShortCode(ctx context.Context, userID uuid.UUID, shortCode string) (models.URL, error)
+}
+
+type PublicRedirectService interface {
 	ResolvePublic(ctx context.Context, shortCode string) (string, error)
 }
 
@@ -59,11 +62,12 @@ type urlCursorPayload struct {
 }
 
 type URLHandler struct {
-	serv URLService
+	serv     URLService
+	redirect PublicRedirectService
 }
 
-func NewURLHandler(serv URLService) *URLHandler {
-	return &URLHandler{serv: serv}
+func NewURLHandler(serv URLService, redirect PublicRedirectService) *URLHandler {
+	return &URLHandler{serv: serv, redirect: redirect}
 }
 
 func (h *URLHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -262,7 +266,7 @@ func (h *URLHandler) Redirect(w http.ResponseWriter, r *http.Request) {
 
 	shortCode := r.PathValue("code")
 
-	originalURL, err := h.serv.ResolvePublic(ctx, shortCode)
+	originalURL, err := h.redirect.ResolvePublic(ctx, shortCode)
 
 	if err != nil {
 		if errors.Is(err, services.ErrURLNotFound) {

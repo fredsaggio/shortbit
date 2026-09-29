@@ -81,7 +81,8 @@ func CompositionRoot(pool db.DB, cfg config.Config, googleClient services.Google
 	if err != nil {
 		return nil, nil, fmt.Errorf("initialize URL service: %w", err)
 	}
-	urlHandler := handlers.NewURLHandler(urlService)
+	redirectService := services.NewRedirectService(urlRepository, urlRepository)
+	urlHandler := handlers.NewURLHandler(urlService, redirectService)
 
 	createURLHandler := middleware.Authenticator(authService)(
 		http.HandlerFunc(urlHandler.Create),

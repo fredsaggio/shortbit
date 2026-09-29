@@ -3,9 +3,11 @@
 package repositories_test
 
 import (
+	"crypto/sha256"
 	"errors"
 	"sync"
 	"testing"
+	"time"
 	"uuid"
 
 	"github.com/fredsaggio/url-shortener/internal/db/dbtest"
@@ -527,5 +529,131 @@ func TestURLRepositoryResolvePublicAndCountClickIntegration(t *testing.T) {
 	}
 	if got := clickCount(public.ShortCode); got != 2+workers {
 		t.Errorf("click count after concurrent resolutions = %d, want %d", got, 2+workers)
+	}
+}
+
+func TestURLRepositoryResolvePrivateAndCountClickIntegration(t *testing.T) {
+	pool := dbtest.Open(t)
+	users := repositories.NewUserRepository(pool)
+	urls := repositories.NewURLRepository(pool)
+	sessions := repositories.NewLinkAccessSessionRepository(pool)
+	generator, err := shortcodes.NewGenerator()
+	if err != nil {
+		t.Fatalf("NewGenerator() error = %v", err)
+	}
+	owner, err := users.CreateWithPassword(t.Context(), "private-redirect-owner@example.com", "$argon2id$integration-test-hash")
+	if err != nil {
+		t.Fatalf("create owner: %v", err)
+	}
+
+	createPrivateURL := func(originalURL string) models.URL {
+		t.Helper()
+		id, err := urls.ReserveID(t.Context())
+		if err != nil {
+			t.Fatalf("ReserveID() error = %v", err)
+		}
+		code, err := generator.Generate(id)
+		if err != nil {
+			t.Fatalf("Generate(%d) error = %v", id, err)
+		}
+		passwordHash := "$argon2id$private-link-test-hash"
+		created, err := urls.Create(t.Context(), models.URL{
+			ID: id, ShortCode: code, UserID: owner.ID, OriginalURL: originalURL,
+			Visibility: models.VisibilityPrivate, PasswordHash: &passwordHash,
+		})
+		if err != nil {
+			t.Fatalf("Create() error = %v", err)
+		}
+		return created
+	}
+	link := createPrivateURL("https://example.com/private-redirect")
+	otherLink := createPrivateURL("https://example.com/other-private-redirect")
+	validHash := sha256.Sum256([]byte("valid-private-redirect-token"))
+	otherHash := sha256.Sum256([]byte("other-private-redirect-token"))
+	expiredHash := sha256.Sum256([]byte("expired-private-redirect-token"))
+	unknownHash := sha256.Sum256([]byte("unknown-private-redirect-token"))
+	if err := sessions.CreateLinkAccessSession(t.Context(), link.ID, validHash[:], time.Now().Add(15*time.Minute)); err != nil {
+		t.Fatalf("create valid session: %v", err)
+	}
+	if err := sessions.CreateLinkAccessSession(t.Context(), otherLink.ID, otherHash[:], time.Now().Add(15*time.Minute)); err != nil {
+		t.Fatalf("create session for other link: %v", err)
+	}
+	_, err = pool.Exec(t.Context(), `
+		INSERT INTO link_access_sessions (token_hash, link_id, created_at, expires_at)
+		VALUES (@tokenHash, @linkID, @createdAt, @expiresAt)
+	`, pgx.StrictNamedArgs{
+		"tokenHash": expiredHash[:], "linkID": link.ID,
+		"createdAt": time.Now().Add(-30 * time.Minute), "expiresAt": time.Now().Add(-15 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("create expired session: %v", err)
+	}
+	missingID, err := urls.ReserveID(t.Context())
+	if err != nil {
+		t.Fatalf("ReserveID() for missing link error = %v", err)
+	}
+
+	clickCount := func(id int64) int64 {
+		t.Helper()
+		var count int64
+		if err := pool.QueryRow(t.Context(), "SELECT click_count FROM urls WHERE id = @id", pgx.StrictNamedArgs{"id": id}).Scan(&count); err != nil {
+			t.Fatalf("query click count for link %d: %v", id, err)
+		}
+		return count
+	}
+
+	for _, tt := range []struct {
+		name string
+		id   int64
+		hash []byte
+	}{
+		{name: "unknown token", id: link.ID, hash: unknownHash[:]},
+		{name: "token for another link", id: link.ID, hash: otherHash[:]},
+		{name: "expired token", id: link.ID, hash: expiredHash[:]},
+		{name: "missing link", id: missingID, hash: validHash[:]},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := urls.ResolvePrivateAndCountClick(t.Context(), tt.id, tt.hash)
+			if got != "" || !errors.Is(err, repositories.ErrURLNotFound) {
+				t.Errorf("ResolvePrivateAndCountClick() = (%q, %v), want empty URL and ErrURLNotFound", got, err)
+			}
+			if count := clickCount(link.ID); count != 0 {
+				t.Errorf("private click count = %d, want 0", count)
+			}
+		})
+	}
+
+	got, err := urls.ResolvePrivateAndCountClick(t.Context(), link.ID, validHash[:])
+	if err != nil || got != link.OriginalURL || clickCount(link.ID) != 1 {
+		t.Fatalf("valid resolution = (%q, %v), count = %d; want (%q, nil), count 1", got, err, clickCount(link.ID), link.OriginalURL)
+	}
+
+	const workers = 20
+	type result struct {
+		originalURL string
+		err         error
+	}
+	results := make(chan result, workers)
+	var group sync.WaitGroup
+	for range workers {
+		group.Add(1)
+		go func() {
+			defer group.Done()
+			originalURL, err := urls.ResolvePrivateAndCountClick(t.Context(), link.ID, validHash[:])
+			results <- result{originalURL: originalURL, err: err}
+		}()
+	}
+	group.Wait()
+	close(results)
+	for result := range results {
+		if result.err != nil || result.originalURL != link.OriginalURL {
+			t.Errorf("concurrent resolution = (%q, %v), want %q", result.originalURL, result.err, link.OriginalURL)
+		}
+	}
+	if count := clickCount(link.ID); count != 1+workers {
+		t.Errorf("click count after concurrent resolutions = %d, want %d", count, 1+workers)
+	}
+	if count := clickCount(otherLink.ID); count != 0 {
+		t.Errorf("other link click count = %d, want 0", count)
 	}
 }

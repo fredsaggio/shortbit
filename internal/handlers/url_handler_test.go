@@ -38,8 +38,14 @@ func (s urlServiceStub) GetByShortCode(ctx context.Context, userID uuid.UUID, sh
 	return s.getByShortCodeFunc(ctx, userID, shortCode)
 }
 
-func (s urlServiceStub) ResolvePublic(ctx context.Context, shortCode string) (string, error) {
-	return s.resolvePublicFunc(ctx, shortCode)
+type publicRedirectServiceStub func(context.Context, string) (string, error)
+
+func (resolve publicRedirectServiceStub) ResolvePublic(ctx context.Context, shortCode string) (string, error) {
+	return resolve(ctx, shortCode)
+}
+
+func newURLHandler(serv urlServiceStub) *handlers.URLHandler {
+	return handlers.NewURLHandler(serv, publicRedirectServiceStub(serv.resolvePublicFunc))
 }
 
 func TestURLHandlerCreate(t *testing.T) {
@@ -49,7 +55,7 @@ func TestURLHandlerCreate(t *testing.T) {
 	ctx = ctxval.ContextWithUserID(ctx, userID)
 
 	called := false
-	handler := handlers.NewURLHandler(urlServiceStub{
+	handler := newURLHandler(urlServiceStub{
 		createFunc: func(gotCtx context.Context, gotUserID uuid.UUID, gotURL string, gotVisibility models.Visibility, gotPassword string) (services.CreateURLResult, error) {
 			called = true
 			if gotCtx.Value(contextKey{}) != "request-context" {
@@ -92,7 +98,7 @@ func TestURLHandlerCreate(t *testing.T) {
 }
 
 func TestURLHandlerCreateRejectsMissingAuthentication(t *testing.T) {
-	handler := handlers.NewURLHandler(urlServiceStub{
+	handler := newURLHandler(urlServiceStub{
 		createFunc: func(context.Context, uuid.UUID, string, models.Visibility, string) (services.CreateURLResult, error) {
 			t.Fatal("Create() called without an authenticated user")
 			return services.CreateURLResult{}, nil
@@ -123,7 +129,7 @@ func TestURLHandlerCreateRejectsInvalidJSON(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := handlers.NewURLHandler(urlServiceStub{
+			handler := newURLHandler(urlServiceStub{
 				createFunc: func(context.Context, uuid.UUID, string, models.Visibility, string) (services.CreateURLResult, error) {
 					t.Fatal("Create() called for invalid JSON")
 					return services.CreateURLResult{}, nil
@@ -162,7 +168,7 @@ func TestURLHandlerCreateMapsServiceErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := handlers.NewURLHandler(urlServiceStub{
+			handler := newURLHandler(urlServiceStub{
 				createFunc: func(context.Context, uuid.UUID, string, models.Visibility, string) (services.CreateURLResult, error) {
 					return services.CreateURLResult{}, tt.serviceErr
 				},
@@ -192,7 +198,7 @@ func TestURLHandlerListPaginatesWithoutExposingPasswordHash(t *testing.T) {
 	ctx := context.WithValue(t.Context(), contextKey{}, "request-context")
 	ctx = ctxval.ContextWithUserID(ctx, userID)
 	calls := 0
-	handler := handlers.NewURLHandler(urlServiceStub{listFunc: func(gotCtx context.Context, gotUserID uuid.UUID, limit int, cursor *repositories.URLCursor) (services.ListURLResult, error) {
+	handler := newURLHandler(urlServiceStub{listFunc: func(gotCtx context.Context, gotUserID uuid.UUID, limit int, cursor *repositories.URLCursor) (services.ListURLResult, error) {
 		calls++
 		if gotCtx.Value(contextKey{}) != "request-context" || gotUserID != userID {
 			t.Errorf("List() context/user = (%v, %v), want original context and owner", gotCtx, gotUserID)
@@ -262,7 +268,7 @@ func TestURLHandlerListPaginatesWithoutExposingPasswordHash(t *testing.T) {
 }
 
 func TestURLHandlerListRejectsMissingAuthentication(t *testing.T) {
-	handler := handlers.NewURLHandler(urlServiceStub{listFunc: func(context.Context, uuid.UUID, int, *repositories.URLCursor) (services.ListURLResult, error) {
+	handler := newURLHandler(urlServiceStub{listFunc: func(context.Context, uuid.UUID, int, *repositories.URLCursor) (services.ListURLResult, error) {
 		t.Fatal("List() called without authentication")
 		return services.ListURLResult{}, nil
 	}})
@@ -290,7 +296,7 @@ func TestURLHandlerListRejectsMalformedParameters(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := handlers.NewURLHandler(urlServiceStub{listFunc: func(context.Context, uuid.UUID, int, *repositories.URLCursor) (services.ListURLResult, error) {
+			handler := newURLHandler(urlServiceStub{listFunc: func(context.Context, uuid.UUID, int, *repositories.URLCursor) (services.ListURLResult, error) {
 				t.Fatal("List() called with malformed parameters")
 				return services.ListURLResult{}, nil
 			}})
@@ -321,7 +327,7 @@ func TestURLHandlerListMapsServiceErrors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := handlers.NewURLHandler(urlServiceStub{listFunc: func(context.Context, uuid.UUID, int, *repositories.URLCursor) (services.ListURLResult, error) {
+			handler := newURLHandler(urlServiceStub{listFunc: func(context.Context, uuid.UUID, int, *repositories.URLCursor) (services.ListURLResult, error) {
 				return services.ListURLResult{}, tt.serviceErr
 			}})
 			req := httptest.NewRequest(http.MethodGet, "/urls?limit=21", nil)
@@ -343,7 +349,7 @@ func TestURLHandlerGetByShortCodeReturnsMetadataWithoutPasswordHash(t *testing.T
 	ctx := context.WithValue(t.Context(), contextKey{}, "request-context")
 	ctx = ctxval.ContextWithUserID(ctx, userID)
 	called := false
-	handler := handlers.NewURLHandler(urlServiceStub{getByShortCodeFunc: func(gotCtx context.Context, gotUserID uuid.UUID, gotCode string) (models.URL, error) {
+	handler := newURLHandler(urlServiceStub{getByShortCodeFunc: func(gotCtx context.Context, gotUserID uuid.UUID, gotCode string) (models.URL, error) {
 		called = true
 		if gotCtx.Value(contextKey{}) != "request-context" || gotUserID != userID || gotCode != "Ab3dX9" {
 			t.Errorf("GetByShortCode() arguments = (%v, %v, %q), want request context, owner and Ab3dX9", gotCtx, gotUserID, gotCode)
@@ -379,7 +385,7 @@ func TestURLHandlerGetByShortCodeReturnsMetadataWithoutPasswordHash(t *testing.T
 }
 
 func TestURLHandlerGetByShortCodeRejectsMissingAuthentication(t *testing.T) {
-	handler := handlers.NewURLHandler(urlServiceStub{getByShortCodeFunc: func(context.Context, uuid.UUID, string) (models.URL, error) {
+	handler := newURLHandler(urlServiceStub{getByShortCodeFunc: func(context.Context, uuid.UUID, string) (models.URL, error) {
 		t.Fatal("GetByShortCode() called without authentication")
 		return models.URL{}, nil
 	}})
@@ -406,7 +412,7 @@ func TestURLHandlerGetByShortCodeMapsServiceErrors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := handlers.NewURLHandler(urlServiceStub{getByShortCodeFunc: func(context.Context, uuid.UUID, string) (models.URL, error) {
+			handler := newURLHandler(urlServiceStub{getByShortCodeFunc: func(context.Context, uuid.UUID, string) (models.URL, error) {
 				return models.URL{}, tt.serviceErr
 			}})
 			request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/urls/Ab3dX9", nil)
@@ -425,7 +431,7 @@ func TestURLHandlerRedirectPublicURL(t *testing.T) {
 	type contextKey struct{}
 	ctx := context.WithValue(t.Context(), contextKey{}, "request-context")
 	called := false
-	handler := handlers.NewURLHandler(urlServiceStub{resolvePublicFunc: func(gotCtx context.Context, gotCode string) (string, error) {
+	handler := newURLHandler(urlServiceStub{resolvePublicFunc: func(gotCtx context.Context, gotCode string) (string, error) {
 		called = true
 		if gotCtx.Value(contextKey{}) != "request-context" || gotCode != "Ab3dX9" {
 			t.Errorf("ResolvePublic() arguments = (%v, %q), want request context and Ab3dX9", gotCtx, gotCode)
@@ -465,7 +471,7 @@ func TestURLHandlerRedirectMapsServiceErrors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := handlers.NewURLHandler(urlServiceStub{resolvePublicFunc: func(_ context.Context, gotCode string) (string, error) {
+			handler := newURLHandler(urlServiceStub{resolvePublicFunc: func(_ context.Context, gotCode string) (string, error) {
 				if gotCode != "Ab3dX9" {
 					t.Errorf("short code = %q, want Ab3dX9", gotCode)
 				}
