@@ -7,6 +7,7 @@ require (
 	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/pressly/goose/v3 v3.28.0
+	github.com/redis/go-redis/v9 v9.22.0
 	github.com/resend/resend-go/v4 v4.6.0
 	github.com/sqids/sqids-go v0.4.1
 	github.com/testcontainers/testcontainers-go v0.44.0
@@ -66,6 +67,7 @@ require (
 	go.opentelemetry.io/otel v1.46.0 // indirect
 	go.opentelemetry.io/otel/metric v1.46.0 // indirect
 	go.opentelemetry.io/otel/trace v1.46.0 // indirect
+	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/sync v0.23.0 // indirect

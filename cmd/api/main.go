@@ -15,6 +15,8 @@ import (
 	"github.com/fredsaggio/url-shortener/internal/db"
 	"github.com/fredsaggio/url-shortener/internal/googleoidc"
 	"github.com/fredsaggio/url-shortener/internal/server"
+
+	"github.com/redis/go-redis/v9"
 )
 
 func main() {
@@ -40,6 +42,24 @@ func Run(ctx context.Context, getEnv func(string) string) error {
 		return err
 	}
 	defer pool.Close()
+
+	redisClient := redis.NewClient(&redis.Options{
+		Addr: cfg.Redis.Addr,
+		ContextTimeoutEnabled: true,
+		MaxRetries: -1,
+	})
+
+	defer redisClient.Close()
+
+	pingCtx, cancelPing := context.WithTimeout(ctx, cfg.Redis.Timeout)
+	err = redisClient.Ping(pingCtx).Err()
+	cancelPing()
+
+	if err != nil {
+		slog.Warn("Redis unavailable; continuing without cache", "error", err)
+	} else {
+		slog.Info("Redis connection ready")
+	}
 
 	googleClient, err := googleoidc.New(ctx, cfg.Google)
 
