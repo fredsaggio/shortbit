@@ -3,6 +3,7 @@
 package server_test
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -21,6 +22,13 @@ import (
 	"github.com/fredsaggio/url-shortener/internal/shortcodes"
 	"github.com/jackc/pgx/v5"
 )
+
+type unexpectedPrivateLinkHeatTracker struct{ t *testing.T }
+
+func (tracker unexpectedPrivateLinkHeatTracker) Record(_ context.Context, code string) (int64, error) {
+	tracker.t.Errorf("Record() called for private link %q", code)
+	return 0, nil
+}
 
 func TestPrivateLinkAccessFlowIntegration(t *testing.T) {
 	pool := dbtest.Open(t)
@@ -42,7 +50,7 @@ func TestPrivateLinkAccessFlowIntegration(t *testing.T) {
 		t.Fatalf("link access session TTL = %v, want 30m", cfg.LinkAccessSession.TTL)
 	}
 
-	handlers, _, err := app.CompositionRoot(pool, cfg, nil)
+	handlers, _, err := app.CompositionRoot(pool, cfg, nil, unexpectedPrivateLinkHeatTracker{t: t})
 	if err != nil {
 		t.Fatalf("build application: %v", err)
 	}

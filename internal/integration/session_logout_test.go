@@ -17,7 +17,7 @@ func TestLogoutIntegration(t *testing.T) {
 	const sessionTTL = 24 * time.Hour
 
 	pool := dbtest.Open(t)
-	applicationHandlers, _, err := app.CompositionRoot(pool, testConfig(sessionTTL), unusedGoogleOIDCClient{})
+	applicationHandlers, _, err := app.CompositionRoot(pool, testConfig(sessionTTL), unusedGoogleOIDCClient{}, noopHeatTracker{})
 	if err != nil {
 		t.Fatalf("CompositionRoot() error = %v", err)
 	}

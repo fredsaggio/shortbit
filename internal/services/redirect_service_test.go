@@ -17,28 +17,51 @@ func (resolve publicLinkResolverStub) ResolvePublicAndCountClick(ctx context.Con
 	return resolve(ctx, code)
 }
 
+type heatTrackerStub func(context.Context, string) (int64, error)
+
+func (record heatTrackerStub) Record(ctx context.Context, code string) (int64, error) {
+	return record(ctx, code)
+}
+
+func noOpHeatTracker(context.Context, string) (int64, error) { return 0, nil }
+
+func unexpectedHeatTracker(t *testing.T) heatTrackerStub {
+	t.Helper()
+	return func(context.Context, string) (int64, error) {
+		t.Error("Record() called without a successful public redirect")
+		return 0, nil
+	}
+}
+
 func TestRedirectServiceResolvePublicReturnsOriginalURL(t *testing.T) {
 	type contextKey struct{}
 	ctx := context.WithValue(t.Context(), contextKey{}, "request-context")
 	called := false
+	heatCalled := false
 	service := services.NewRedirectService(publicLinkResolverStub(func(gotCtx context.Context, gotCode string) (string, error) {
 		called = true
 		if gotCtx.Value(contextKey{}) != "request-context" || gotCode != "Ab3dX9" {
 			t.Errorf("ResolvePublicAndCountClick() arguments = (%v, %q), want request context and Ab3dX9", gotCtx, gotCode)
 		}
 		return "https://example.com/article", nil
-	}), nil)
+	}), nil, heatTrackerStub(func(gotCtx context.Context, gotCode string) (int64, error) {
+		heatCalled = true
+		if !called || gotCtx.Value(contextKey{}) != "request-context" || gotCode != "Ab3dX9" {
+			t.Errorf("Record() arguments = (%v, %q), repository called = %t; want request context, Ab3dX9, true", gotCtx, gotCode, called)
+		}
+		return 1, nil
+	}))
 
 	got, err := service.ResolvePublic(ctx, "Ab3dX9")
-	if err != nil || got != "https://example.com/article" || !called {
-		t.Errorf("ResolvePublic() = (%q, %v), repository called = %t; want original URL, nil, true", got, err, called)
+	if err != nil || got != "https://example.com/article" || !called || !heatCalled {
+		t.Errorf("ResolvePublic() = (%q, %v), repository called = %t, heat called = %t; want original URL, nil, true, true", got, err, called, heatCalled)
 	}
 }
 
 func TestRedirectServiceResolvePublicMapsNotFound(t *testing.T) {
 	service := services.NewRedirectService(publicLinkResolverStub(func(context.Context, string) (string, error) {
 		return "", repositories.ErrURLNotFound
-	}), nil)
+	}), nil, unexpectedHeatTracker(t))
 
 	got, err := service.ResolvePublic(t.Context(), "missing")
 	if got != "" || !errors.Is(err, services.ErrURLNotFound) {
@@ -50,11 +73,25 @@ func TestRedirectServiceResolvePublicWrapsRepositoryError(t *testing.T) {
 	wantErr := errors.New("database unavailable")
 	service := services.NewRedirectService(publicLinkResolverStub(func(context.Context, string) (string, error) {
 		return "", wantErr
-	}), nil)
+	}), nil, unexpectedHeatTracker(t))
 
 	got, err := service.ResolvePublic(t.Context(), "Ab3dX9")
 	if got != "" || !errors.Is(err, wantErr) {
 		t.Errorf("ResolvePublic() = (%q, %v), want empty URL and wrapped repository error", got, err)
+	}
+}
+
+func TestRedirectServiceResolvePublicIgnoresHeatError(t *testing.T) {
+	heatErr := errors.New("Redis unavailable")
+	service := services.NewRedirectService(publicLinkResolverStub(func(context.Context, string) (string, error) {
+		return "https://example.com/article", nil
+	}), nil, heatTrackerStub(func(context.Context, string) (int64, error) {
+		return 0, heatErr
+	}))
+
+	got, err := service.ResolvePublic(t.Context(), "Ab3dX9")
+	if err != nil || got != "https://example.com/article" {
+		t.Errorf("ResolvePublic() = (%q, %v), want original URL despite Redis error", got, err)
 	}
 }
 
@@ -81,7 +118,7 @@ func TestRedirectServiceResolvePublic(t *testing.T) {
 			t.Errorf("public shortcode = %q, want Ab3dX9", code)
 		}
 		return "https://example.com/public", nil
-	}), private)
+	}), private, heatTrackerStub(noOpHeatTracker))
 
 	result, err := service.Resolve(t.Context(), "Ab3dX9", "ignored-cookie-token")
 	if err != nil || result.OriginalURL != "https://example.com/public" || result.PasswordRequired {
@@ -104,7 +141,7 @@ func TestRedirectServiceResolvePrivateWithoutCookie(t *testing.T) {
 	}
 	service := services.NewRedirectService(publicLinkResolverStub(func(context.Context, string) (string, error) {
 		return "", repositories.ErrURLNotFound
-	}), private)
+	}), private, unexpectedHeatTracker(t))
 
 	result, err := service.Resolve(t.Context(), "Qz7Rt2", "")
 	if err != nil || !result.PasswordRequired || result.OriginalURL != "" {
@@ -134,7 +171,7 @@ func TestRedirectServiceResolvePrivateWithValidCookie(t *testing.T) {
 			t.Errorf("public resolution arguments = (%v, %q), want request context and Qz7Rt2", gotCtx, code)
 		}
 		return "", repositories.ErrURLNotFound
-	}), private)
+	}), private, unexpectedHeatTracker(t))
 
 	result, err := service.Resolve(ctx, "Qz7Rt2", "raw-link-token")
 	if err != nil || result.OriginalURL != "https://example.com/private" || result.PasswordRequired {
@@ -150,7 +187,7 @@ func TestRedirectServiceResolvePrivateWithInvalidOrExpiredCookie(t *testing.T) {
 		resolveFunc: func(context.Context, int64, []byte) (string, error) {
 			return "", repositories.ErrURLNotFound
 		},
-	})
+	}, unexpectedHeatTracker(t))
 
 	result, err := service.Resolve(t.Context(), "Qz7Rt2", "invalid-token")
 	if err != nil || !result.PasswordRequired || result.OriginalURL != "" {
@@ -163,7 +200,7 @@ func TestRedirectServiceResolveMissingLink(t *testing.T) {
 		return "", repositories.ErrURLNotFound
 	}), privateLinkResolverStub{findFunc: func(context.Context, string) (int64, string, error) {
 		return 0, "", repositories.ErrURLNotFound
-	}})
+	}}, unexpectedHeatTracker(t))
 
 	result, err := service.Resolve(t.Context(), "MissingCode", "")
 	if !errors.Is(err, services.ErrURLNotFound) || result != (services.RedirectResult{}) {
@@ -198,7 +235,7 @@ func TestRedirectServiceResolvePropagatesInfrastructureErrors(t *testing.T) {
 			}
 			service := services.NewRedirectService(publicLinkResolverStub(func(context.Context, string) (string, error) {
 				return "", tt.publicErr
-			}), private)
+			}), private, unexpectedHeatTracker(t))
 
 			result, err := service.Resolve(t.Context(), "Qz7Rt2", "raw-link-token")
 			if !errors.Is(err, tt.wantErr) || result != (services.RedirectResult{}) {

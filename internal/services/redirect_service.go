@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/fredsaggio/url-shortener/internal/repositories"
 	"github.com/fredsaggio/url-shortener/internal/sessiontoken"
@@ -11,6 +12,10 @@ import (
 
 type PublicLinkResolver interface {
 	ResolvePublicAndCountClick(ctx context.Context, shortCode string) (string, error)
+}
+
+type HeatTracker interface {
+	Record(ctx context.Context, shortCode string) (int64, error)
 }
 
 type PrivateLinkResolver interface {
@@ -27,10 +32,11 @@ type RedirectResult struct {
 type RedirectService struct {
 	public  PublicLinkResolver
 	private PrivateLinkResolver
+	heat    HeatTracker
 }
 
-func NewRedirectService(public PublicLinkResolver, private PrivateLinkResolver) *RedirectService {
-	return &RedirectService{public: public, private: private}
+func NewRedirectService(public PublicLinkResolver, private PrivateLinkResolver, heat HeatTracker) *RedirectService {
+	return &RedirectService{public: public, private: private, heat: heat}
 }
 
 func (s *RedirectService) Resolve(ctx context.Context, shortCode, token string) (RedirectResult, error) {
@@ -71,6 +77,10 @@ func (s *RedirectService) ResolvePublic(ctx context.Context, shortCode string) (
 			return "", ErrURLNotFound
 		}
 		return "", fmt.Errorf("resolve public URL and count click: %w", err)
+	}
+
+	if _, err := s.heat.Record(ctx, shortCode); err != nil {
+		slog.Warn("record public URL heat failed", "short_code", shortCode, "error", err)
 	}
 	return originalURL, nil
 }

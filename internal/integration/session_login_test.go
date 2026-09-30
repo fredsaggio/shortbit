@@ -29,7 +29,7 @@ func TestPasswordLoginIntegration(t *testing.T) {
 	)
 
 	pool := dbtest.Open(t)
-	applicationHandlers, _, err := app.CompositionRoot(pool, testConfig(sessionTTL), unusedGoogleOIDCClient{})
+	applicationHandlers, _, err := app.CompositionRoot(pool, testConfig(sessionTTL), unusedGoogleOIDCClient{}, noopHeatTracker{})
 	if err != nil {
 		t.Fatalf("CompositionRoot() error = %v", err)
 	}

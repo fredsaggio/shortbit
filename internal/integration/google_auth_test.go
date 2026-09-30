@@ -93,7 +93,7 @@ func TestGoogleLoginIntegration(t *testing.T) {
 			},
 		},
 	}
-	applicationHandlers, _, err := app.CompositionRoot(pool, testConfig(sessionTTL), googleClient)
+	applicationHandlers, _, err := app.CompositionRoot(pool, testConfig(sessionTTL), googleClient, noopHeatTracker{})
 	if err != nil {
 		t.Fatalf("CompositionRoot() error = %v", err)
 	}

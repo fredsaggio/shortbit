@@ -19,7 +19,7 @@ func TestGetURLIntegration(t *testing.T) {
 	createConfirmedPasswordUser(t, pool, "url-get-owner@example.com", "senha12345")
 	createConfirmedPasswordUser(t, pool, "url-get-other@example.com", "senha12345")
 
-	applicationHandlers, _, err := app.CompositionRoot(pool, testConfig(24*time.Hour), unusedGoogleOIDCClient{})
+	applicationHandlers, _, err := app.CompositionRoot(pool, testConfig(24*time.Hour), unusedGoogleOIDCClient{}, noopHeatTracker{})
 	if err != nil {
 		t.Fatalf("CompositionRoot() error = %v", err)
 	}

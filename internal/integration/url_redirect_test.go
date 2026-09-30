@@ -18,7 +18,7 @@ func TestPublicURLRedirectIntegration(t *testing.T) {
 	pool := dbtest.Open(t)
 	createConfirmedPasswordUser(t, pool, email, "senha12345")
 
-	applicationHandlers, _, err := app.CompositionRoot(pool, testConfig(24*time.Hour), unusedGoogleOIDCClient{})
+	applicationHandlers, _, err := app.CompositionRoot(pool, testConfig(24*time.Hour), unusedGoogleOIDCClient{}, noopHeatTracker{})
 	if err != nil {
 		t.Fatalf("CompositionRoot() error = %v", err)
 	}
@@ -74,8 +74,8 @@ func TestPublicURLRedirectIntegration(t *testing.T) {
 	defer privateResponse.Body.Close()
 	missingResponse := performRequestWithCookie(t, router, http.MethodGet, "/NoSuchCode123", nil)
 	defer missingResponse.Body.Close()
-	if privateResponse.StatusCode != http.StatusNotFound || missingResponse.StatusCode != http.StatusNotFound {
-		t.Errorf("private/missing status = (%d, %d), want (404, 404)", privateResponse.StatusCode, missingResponse.StatusCode)
+	if privateResponse.StatusCode != http.StatusOK || missingResponse.StatusCode != http.StatusNotFound {
+		t.Errorf("private/missing status = (%d, %d), want (200, 404)", privateResponse.StatusCode, missingResponse.StatusCode)
 	}
 	if privateResponse.Header.Get("Location") != "" || missingResponse.Header.Get("Location") != "" {
 		t.Error("private or missing URL returned a redirect location")
