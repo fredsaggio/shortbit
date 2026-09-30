@@ -32,7 +32,7 @@ func (t *RedisHeatTracker) Record(ctx context.Context, shortCode string) (int64,
 
 	key := "url:heat:" + shortCode
 
-	count, err := incrementHeatScript.Run(opCtx, t.client, []string{key}, time.Minute.Milliseconds()).Int64()
+	count, err := incrementHeatScript.Run(opCtx, t.client, []string{key}, t.window.Milliseconds()).Int64()
 
 	if err != nil {
 		return 0, fmt.Errorf("record URL heat: %w", err)
