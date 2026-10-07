@@ -4,13 +4,18 @@ package integration_test
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
 	"testing"
 	"time"
 
 	"github.com/fredsaggio/url-shortener/internal/app"
+	"github.com/fredsaggio/url-shortener/internal/cache"
 	"github.com/fredsaggio/url-shortener/internal/db/dbtest"
 	"github.com/fredsaggio/url-shortener/internal/server"
+	"github.com/redis/go-redis/v9"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 func TestPublicURLRedirectIntegration(t *testing.T) {
@@ -18,7 +23,36 @@ func TestPublicURLRedirectIntegration(t *testing.T) {
 	pool := dbtest.Open(t)
 	createConfirmedPasswordUser(t, pool, email, "senha12345")
 
-	applicationHandlers, _, err := app.CompositionRoot(pool, testConfig(24*time.Hour), unusedGoogleOIDCClient{}, noopHeatTracker{})
+	redisContainer, err := testcontainers.GenericContainer(t.Context(), testcontainers.GenericContainerRequest{
+		ContainerRequest: testcontainers.ContainerRequest{
+			Image:        "redis:8-alpine",
+			ExposedPorts: []string{"6379/tcp"},
+			WaitingFor:   wait.ForListeningPort("6379/tcp"),
+		},
+		Started: true,
+	})
+	testcontainers.CleanupContainer(t, redisContainer)
+	if err != nil {
+		t.Fatalf("start Redis container: %v", err)
+	}
+	host, err := redisContainer.Host(t.Context())
+	if err != nil {
+		t.Fatalf("get Redis host: %v", err)
+	}
+	port, err := redisContainer.MappedPort(t.Context(), "6379/tcp")
+	if err != nil {
+		t.Fatalf("get Redis port: %v", err)
+	}
+	redisClient := redis.NewClient(&redis.Options{Addr: net.JoinHostPort(host, port.Port()), ContextTimeoutEnabled: true, MaxRetries: -1})
+	t.Cleanup(func() { _ = redisClient.Close() })
+	if err := redisClient.Ping(t.Context()).Err(); err != nil {
+		t.Fatalf("ping Redis: %v", err)
+	}
+
+	cfg := testConfig(24 * time.Hour)
+	cfg.Redis.Timeout = 2 * time.Second
+	heatTracker := cache.NewRedisHeatTracker(redisClient, cfg.Redis.Timeout, time.Minute)
+	applicationHandlers, _, err := app.CompositionRoot(pool, cfg, unusedGoogleOIDCClient{}, heatTracker)
 	if err != nil {
 		t.Fatalf("CompositionRoot() error = %v", err)
 	}
@@ -48,6 +82,7 @@ func TestPublicURLRedirectIntegration(t *testing.T) {
 	}
 	publicCode := createURL(`{"url":"https://example.com/public","visibility":"public"}`)
 	privateCode := createURL(`{"url":"https://example.com/private","visibility":"private","password":"senha-do-link"}`)
+	publicHeatKey := "url:heat:" + publicCode
 
 	clickCount := func(code string) int64 {
 		t.Helper()
@@ -68,6 +103,12 @@ func TestPublicURLRedirectIntegration(t *testing.T) {
 		if got := clickCount(publicCode); got != visit {
 			t.Errorf("public click count after visit %d = %d, want %d", visit, got, visit)
 		}
+		if got, err := redisClient.Get(t.Context(), publicHeatKey).Int64(); err != nil || got != visit {
+			t.Errorf("public Redis heat after visit %d = (%d, %v), want (%d, nil)", visit, got, err, visit)
+		}
+	}
+	if ttl, err := redisClient.PTTL(t.Context(), publicHeatKey).Result(); err != nil || ttl <= 0 || ttl > time.Minute {
+		t.Errorf("public Redis heat TTL = (%v, %v), want between 0 and 1m", ttl, err)
 	}
 
 	privateResponse := performRequestWithCookie(t, router, http.MethodGet, "/"+privateCode, nil)
@@ -82,6 +123,9 @@ func TestPublicURLRedirectIntegration(t *testing.T) {
 	}
 	if got := clickCount(privateCode); got != 0 {
 		t.Errorf("private click count = %d, want 0", got)
+	}
+	if exists, err := redisClient.Exists(t.Context(), "url:heat:"+privateCode).Result(); err != nil || exists != 0 {
+		t.Errorf("private Redis heat key exists = (%d, %v), want (0, nil)", exists, err)
 	}
 	if got := clickCount(publicCode); got != 2 {
 		t.Errorf("public click count after failed redirects = %d, want 2", got)
