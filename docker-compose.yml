@@ -32,5 +32,26 @@ services:
       retries: 5
     restart: unless-stopped
 
+  rabbitmq-shortener:
+    image: rabbitmq:4-management
+    container_name: rabbitmq-shortener
+    hostname: rabbitmq-shortener
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-shortbit}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Defina RABBITMQ_PASSWORD para iniciar o RabbitMQ}
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - rabbitmq-shortener:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
 volumes:
   postgres-shortener:
+  rabbitmq-shortener:

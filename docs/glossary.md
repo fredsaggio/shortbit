@@ -146,3 +146,19 @@ Alfabeto formado por dez dígitos, 26 letras maiúsculas e 26 minúsculas, total
 ## Cache-aside
 
 Estratégia em que a aplicação consulta o cache primeiro e recorre ao PostgreSQL em caso de ausência ou falha. O banco continua sendo a fonte da verdade.
+
+## Mensageria e worker
+
+A API publica mensagens em um broker, e um worker as consome para executar trabalho fora do caminho síncrono da requisição. No fluxo planejado de cliques, RabbitMQ mantém os eventos e o worker incrementa o contador no PostgreSQL um evento por vez, sem lotes.
+
+## Consistência eventual do contador
+
+O redirect pode terminar antes de o worker atualizar o contador. A consulta administrativa pode mostrar um valor temporariamente atrasado enquanto existem eventos pendentes.
+
+## Confirmação e idempotência
+
+A confirmação de publicação informa que o broker aceitou a mensagem; a confirmação de consumo informa que o worker a processou. São confirmações distintas. Um evento pode ser reentregue: processamento idempotente impede que o mesmo evento incremente o contador duas vezes.
+
+## Transactional outbox
+
+Padrão que salva uma alteração de negócio e o evento correspondente na mesma transação de banco, para publicação posterior. Não é obrigatório para usar mensageria e não foi escolhido para cada redirect, pois reintroduziria uma escrita síncrona no PostgreSQL por clique.

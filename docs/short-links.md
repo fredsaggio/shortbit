@@ -155,16 +155,26 @@ Analytics por evento, localização, dispositivo ou série temporal ficam fora d
 
 ## Cache seletivo futuro
 
-O redirect e o contador já usam PostgreSQL; o Redis virá depois de medir esse fluxo.
+O redirect e o contador atualmente usam PostgreSQL de forma síncrona. Cliente Redis e medição de frequência pública já existem, mas o cache de destinos ainda não. A decisão para a próxima etapa é usar Redis para destinos públicos quentes e RabbitMQ para eventos de clique, processados individualmente, sem lotes.
 
 ```mermaid
 flowchart TD
-    Redirect[Redirect efetivo] --> Heat[Incrementa frequência efêmera]
+    Request[GET do link público] --> Hit{Destino no Redis?}
+    Hit -- Sim --> Publish[Publica evento no RabbitMQ]
+    Hit -- Não --> Postgres[Busca destino no PostgreSQL]
+    Postgres --> Publish
+    Publish --> Confirm[Broker confirma publicação]
+    Confirm --> Response[API responde 302]
+    Confirm --> Heat[Incrementa frequência efêmera]
     Heat --> Hot{Atingiu limite?}
-    Hot -- Não --> Postgres[Continua no PostgreSQL]
     Hot -- Sim --> Cache[Admite projeção no Redis]
-    Cache --> Resolve[Próximas resoluções podem evitar SELECT]
-    Resolve --> Count[Cliques continuam no PostgreSQL]
+    Publish --> Worker[Worker consome um evento]
+    Worker --> Count[PostgreSQL incrementa contador em 1]
+    Count --> Ack[Confirma processamento na fila]
 ```
 
 Redis será uma otimização de leitura. Se estiver indisponível, a aplicação volta ao PostgreSQL.
+
+O worker não diminui o número de escritas: um clique continua gerando um incremento individual no banco, mas o redirect não espera essa escrita. As estatísticas terão consistência eventual. Reentregas devem ser deduplicadas; não basta confirmar a mensagem depois do UPDATE para impedir contagem dupla.
+
+RabbitMQ e worker ainda não estão implementados. Antes de alterar o fluxo, definir com o usuário durabilidade, tratamento de falhas e execução do worker, além da migração da contagem privada. A política de falha do Redis não define o comportamento diante de falha do RabbitMQ. Não adicionar lotes, Kafka, Tinybird ou outbox por redirect.
