@@ -1,7 +1,7 @@
 # Decisões arquiteturais
 
-> Status: estrutura preparada; primeira decisão registrada
-> Última atualização: 26 de setembro de 2026
+> Status: atual
+> Última atualização: 24 de outubro de 2026
 
 Esta pasta recebe Architecture Decision Records (ADRs). Um ADR registra por que uma decisão importante foi tomada, quais alternativas foram consideradas e quais consequências foram aceitas.
 
@@ -44,4 +44,5 @@ Quais benefícios, limitações e trabalhos futuros surgem dessa escolha?
 
 ## ADRs
 
-- [0001 — Shortcodes com ID incremental e Sqids](0001-shortcode-sqids.md) — aceita; implementação pendente.
+- [0001 — Shortcodes com ID incremental e Sqids](0001-shortcode-sqids.md) — aceita; implementada.
+- [0002 — Contagem de cliques via RabbitMQ e cache Redis de destinos quentes](0002-click-events-rabbitmq-redis-cache.md) — aceita; implementação em andamento.

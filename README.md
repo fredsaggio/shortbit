@@ -16,7 +16,9 @@ ShortBit is a URL shortener for public or password-protected links. It tracks cl
 - listagem autenticada de links com paginação por cursor (até 20 por página);
 - consulta individual autenticada com metadados e contador de cliques;
 - redirect público com contador atômico de cliques;
-- desbloqueio de links privados e analytics além do contador ainda planejados.
+- desbloqueio de links privados por senha, com sessão temporária por link;
+- cache Redis de destinos quentes e contagem de cliques via RabbitMQ em andamento ([ADR 0002](docs/decisions/0002-click-events-rabbitmq-redis-cache.md));
+- analytics além do contador ainda planejados.
 
 ## Documentação
 
