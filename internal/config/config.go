@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"strconv"
 	"time"
 )
@@ -44,6 +45,7 @@ type Config struct {
 	PasswordReset        PasswordResetConfig
 	URL                  URLConfig
 	Redis                RedisConfig
+	RabbitMQ             RabbitMQConfig
 }
 
 type SessionConfig struct {
@@ -72,6 +74,10 @@ type ResendConfig struct {
 type RedisConfig struct {
 	Addr    string
 	Timeout time.Duration
+}
+
+type RabbitMQConfig struct {
+	URL string
 }
 
 type PasswordRegistrationConfig struct {
@@ -224,6 +230,9 @@ func Load(getEnv func(string) string) (Config, error) {
 			Addr:    envOrDefault(getEnv, "REDIS_ADDR", defaultRedisAddr),
 			Timeout: redisOperationTimeout,
 		},
+		RabbitMQ: RabbitMQConfig{
+			URL: getEnv("RABBITMQ_URL"),
+		},
 	}
 
 	if cfg.DatabaseURL == "" {
@@ -250,7 +259,32 @@ func Load(getEnv func(string) string) (Config, error) {
 		return Config{}, errors.New("RESEND_API_KEY is required")
 	}
 
+	if cfg.RabbitMQ.URL == "" {
+		return Config{}, errors.New("RABBITMQ_URL is required")
+	}
+
+	if err := validateAMQPURL(cfg.RabbitMQ.URL); err != nil {
+		return Config{}, err
+	}
+
 	return cfg, nil
+}
+
+func validateAMQPURL(value string) error {
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return errors.New("RABBITMQ_URL must be a valid URL")
+	}
+
+	if parsed.Scheme != "amqp" && parsed.Scheme != "amqps" {
+		return errors.New("RABBITMQ_URL must use the amqp or amqps scheme")
+	}
+
+	if parsed.Host == "" {
+		return errors.New("RABBITMQ_URL must include a host")
+	}
+
+	return nil
 }
 
 func envOrDefault(getEnv func(string) string, key string, defaultValue string) string {

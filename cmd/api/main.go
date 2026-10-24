@@ -16,6 +16,7 @@ import (
 	"github.com/fredsaggio/url-shortener/internal/config"
 	"github.com/fredsaggio/url-shortener/internal/db"
 	"github.com/fredsaggio/url-shortener/internal/googleoidc"
+	"github.com/fredsaggio/url-shortener/internal/messaging"
 	"github.com/fredsaggio/url-shortener/internal/server"
 
 	"github.com/redis/go-redis/v9"
@@ -63,6 +64,14 @@ func Run(ctx context.Context, getEnv func(string) string) error {
 		slog.Warn("Redis unavailable; continuing without cache", "error", err)
 	} else {
 		slog.Info("Redis connection ready")
+	}
+
+	rabbitConn, err := messaging.Connect(cfg.RabbitMQ.URL, "shortbit-api")
+	if err != nil {
+		slog.Warn("RabbitMQ unavailable; continuing with synchronous click counting", "error", err)
+	} else {
+		defer rabbitConn.Close()
+		slog.Info("RabbitMQ connection ready")
 	}
 
 	googleClient, err := googleoidc.New(ctx, cfg.Google)

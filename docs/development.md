@@ -1,7 +1,7 @@
 # Desenvolvimento local
 
 > Status: atual
-> Última atualização: 27 de setembro de 2026
+> Última atualização: 24 de outubro de 2026
 
 ## Requisitos
 
@@ -39,9 +39,15 @@ GOOGLE_CLIENT_SECRET=...
 GOOGLE_REDIRECT_URL=http://localhost:8080/auth/google/callback
 
 PUBLIC_BASE_URL=http://localhost:8080
+
+RABBITMQ_USER=shortbit
+RABBITMQ_PASSWORD=...
+RABBITMQ_URL=amqp://shortbit:...@localhost:5672/
 ```
 
 `PUBLIC_BASE_URL` é opcional e assume `http://localhost:8080` no desenvolvimento; é usado para compor o `short_url` devolvido por `POST /urls`. Em produção, configure o domínio público, `COOKIE_SECURE=true` e callback Google com HTTPS.
+
+`RABBITMQ_USER` e `RABBITMQ_PASSWORD` criam o usuário do container RabbitMQ no Compose; `RABBITMQ_URL` é a URL que a API usa e deve conter as mesmas credenciais. `RABBITMQ_URL` é obrigatória e aceita `amqp://` ou `amqps://`; em produção, use `amqps://`. Ela contém a senha e nunca é logada. Se o broker estiver indisponível na inicialização, a API registra um aviso e continua contando cliques de forma síncrona no PostgreSQL ([ADR 0002](decisions/0002-click-events-rabbitmq-redis-cache.md)). O painel de administração do RabbitMQ fica em `http://localhost:15672`.
 
 ## Subir o PostgreSQL
 

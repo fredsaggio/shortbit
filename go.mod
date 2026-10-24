@@ -7,6 +7,7 @@ require (
 	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/pressly/goose/v3 v3.28.0
+	github.com/rabbitmq/amqp091-go v1.16.0
 	github.com/redis/go-redis/v9 v9.22.0
 	github.com/resend/resend-go/v4 v4.6.0
 	github.com/sqids/sqids-go v0.4.1

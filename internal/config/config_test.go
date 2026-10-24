@@ -36,6 +36,7 @@ func TestLoad(t *testing.T) {
 				"PUBLIC_BASE_URL":                   "https://shortbit.com.br",
 				"REDIS_ADDR":                        "redis.example:6380",
 				"REDIS_OPERATION_TIMEOUT":           "350ms",
+				"RABBITMQ_URL":                      "amqps://user:password@rabbitmq.example:5671/shortbit",
 			},
 			want: config.Config{
 				DatabaseURL: "postgres://user:password@localhost:5432/app",
@@ -73,7 +74,8 @@ func TestLoad(t *testing.T) {
 					BaseURL:             "https://shortbit.com.br",
 					MaxOriginalURLBytes: 8192,
 				},
-				Redis: config.RedisConfig{Addr: "redis.example:6380", Timeout: 350 * time.Millisecond},
+				Redis:    config.RedisConfig{Addr: "redis.example:6380", Timeout: 350 * time.Millisecond},
+				RabbitMQ: config.RabbitMQConfig{URL: "amqps://user:password@rabbitmq.example:5671/shortbit"},
 			},
 		},
 		{
@@ -85,6 +87,7 @@ func TestLoad(t *testing.T) {
 				"GOOGLE_REDIRECT_URL":  "http://localhost:8080/auth/google/callback",
 				"EMAIL_FROM":           "noreply@example.com",
 				"RESEND_API_KEY":       "re_test_api_key",
+				"RABBITMQ_URL":         "amqp://user:password@localhost:5672/",
 			},
 			want: config.Config{
 				DatabaseURL: "postgres://localhost/app",
@@ -122,7 +125,8 @@ func TestLoad(t *testing.T) {
 					BaseURL:             "http://localhost:8080",
 					MaxOriginalURLBytes: 8192,
 				},
-				Redis: config.RedisConfig{Addr: "127.0.0.1:6379", Timeout: 200 * time.Millisecond},
+				Redis:    config.RedisConfig{Addr: "127.0.0.1:6379", Timeout: 200 * time.Millisecond},
+				RabbitMQ: config.RabbitMQConfig{URL: "amqp://user:password@localhost:5672/"},
 			},
 		},
 		{
@@ -303,6 +307,26 @@ func TestLoad(t *testing.T) {
 			wantErrContains: "RESEND_API_KEY is required",
 		},
 		{
+			name:            "rejects missing RabbitMQ URL",
+			env:             rabbitMQEnv(""),
+			wantErrContains: "RABBITMQ_URL is required",
+		},
+		{
+			name:            "rejects RabbitMQ URL with another scheme",
+			env:             rabbitMQEnv("http://user:password@localhost:5672/"),
+			wantErrContains: "RABBITMQ_URL must use the amqp or amqps scheme",
+		},
+		{
+			name:            "rejects RabbitMQ URL without host",
+			env:             rabbitMQEnv("amqp:///shortbit"),
+			wantErrContains: "RABBITMQ_URL must include a host",
+		},
+		{
+			name:            "rejects malformed RabbitMQ URL",
+			env:             rabbitMQEnv("amqp://user:password@localhost:port/"),
+			wantErrContains: "RABBITMQ_URL must be a valid URL",
+		},
+		{
 			name:            "rejects missing database URL",
 			env:             map[string]string{},
 			wantErrContains: "DATABASE_URL is required",
@@ -344,5 +368,17 @@ func TestLoad(t *testing.T) {
 				t.Errorf("Load() = %#v, want %#v", got, tt.want)
 			}
 		})
+	}
+}
+
+func rabbitMQEnv(rabbitMQURL string) map[string]string {
+	return map[string]string{
+		"DATABASE_URL":         "postgres://localhost/app",
+		"GOOGLE_CLIENT_ID":     "test-client-id",
+		"GOOGLE_CLIENT_SECRET": "test-client-secret",
+		"GOOGLE_REDIRECT_URL":  "http://localhost:8080/auth/google/callback",
+		"EMAIL_FROM":           "noreply@example.com",
+		"RESEND_API_KEY":       "re_test_api_key",
+		"RABBITMQ_URL":         rabbitMQURL,
 	}
 }
