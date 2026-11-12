@@ -21,7 +21,7 @@ Não coloque co-author em nenhum commit criado por você, em nenhuma hipótese.
 ## Estrutura do projeto
 - **Um só `Makefile`, na raiz.** Rode tudo com `make` a partir da raiz; `make help` lista todos os alvos.
 - `cmd/api/`: ponto de entrada da API. `cmd/worker/`: worker que consome a fila de cliques (ADR 0002).
-- `internal/`: `app` (composition root), `server` (rotas e health), `handlers`, `middleware`, `services` (regras de negócio), `repositories` (PostgreSQL), `models`, `config`, `db`, `cache` (Redis), `messaging` (RabbitMQ), `jobs`, `shortcodes` (Sqids), `argon2`, `googleoidc`, `email` (Resend), `sessiontoken`, `verificationcode`, `ctxval`, `integration` (testes HTTP + PostgreSQL).
+- `internal/`: `app` (composition root), `server` (rotas e health), `handlers`, `middleware`, `services` (regras de negócio), `repositories` (PostgreSQL), `models`, `config`, `db`, `cache` (Redis: frequência e destinos), `messaging` (RabbitMQ), `jobs`, `shortcodes` (Sqids), `argon2`, `googleoidc`, `email` (Resend), `sessiontoken`, `verificationcode`, `ctxval`, `integration` (testes HTTP + PostgreSQL).
 - `migrations/`: migrations Goose, embarcadas no binário de testes.
 - `docs/`: `authentication.md`, `short-links.md`, `api.md`, `openapi.yaml`, `data-model.md`, `glossary.md`, `development.md` e `decisions/` (ADRs). Leia só quando mexer no assunto.
 - `IMPLEMENTATION_PLAN.md` (ordem das fases e progresso) e `PROJECT_CONTEXT.md` (produto e regras gerais) ficam só na máquina do usuário, ignorados pelo Git.

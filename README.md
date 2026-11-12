@@ -10,13 +10,14 @@ ShortBit is a URL shortener for public or password-protected links. It tracks cl
 | **Sessões** | Sessões opacas em cookies, com `remember_me` opcional no login por senha e sessão lembrada por padrão no Google |
 | **Links** | Criação de links públicos e privados com shortcodes Sqids, listagem com paginação por cursor (até 20 por página) e consulta individual com metadados e contador de cliques |
 | **Redirect** | Redirect público e privado; o clique vai para o RabbitMQ e um worker incrementa o contador, com fallback síncrono no PostgreSQL; links privados exigem senha e criam uma sessão temporária por link |
+| **Cache** | Links públicos com 20 acessos em 60 segundos têm o destino guardado no Redis por 5 minutos; sem Redis, a leitura volta ao PostgreSQL |
 | **Proteções** | Rate limiting, limite de tamanho do corpo e limpeza de cadastros pendentes |
 
 ---
 
 ## Estado atual
 
-Tudo da tabela acima está implementado e testado. Em andamento, a Fase 13 tira a contagem de cliques do caminho do redirect ([ADR 0002](docs/decisions/0002-click-events-rabbitmq-redis-cache.md)):
+Tudo da tabela acima está implementado e testado. A Fase 13 tirou a contagem de cliques e a leitura dos links quentes do caminho do redirect ([ADR 0002](docs/decisions/0002-click-events-rabbitmq-redis-cache.md)):
 
 | Passo | Estado |
 | --- | --- |
@@ -24,7 +25,7 @@ Tudo da tabela acima está implementado e testado. Em andamento, a Fase 13 tira 
 | Publisher com confirmação do broker | ✅ |
 | Worker (`cmd/worker`) com deduplicação | ✅ |
 | Redirect contando pela fila, com fallback síncrono | ✅ |
-| Cache Redis dos destinos mais acessados | 📋 próximo (o rastreio de frequência já existe) |
+| Cache Redis dos destinos mais acessados | ✅ |
 
 Analytics além do contador total ficam fora do MVP.
 
@@ -36,7 +37,7 @@ Analytics além do contador total ficam fora do MVP.
 | --- | --- |
 | Backend | Go 1.27, `net/http` da biblioteca padrão, pgx |
 | Banco | PostgreSQL 18, migrations com Goose |
-| Cache | Redis 8 (go-redis) |
+| Cache | Redis 8 (go-redis): destinos quentes e contador de frequência |
 | Mensageria | RabbitMQ 4 (amqp091-go) |
 | Autenticação | Argon2id para senhas, Google OIDC (go-oidc) |
 | Email | Resend |
@@ -67,7 +68,7 @@ Analytics além do contador total ficam fora do MVP.
 │   ├── models/         # Tipos de domínio
 │   ├── config/         # Leitura e validação das variáveis de ambiente
 │   ├── db/             # Pool de conexões e utilitários de teste
-│   ├── cache/          # Redis (rastreio de frequência dos links)
+│   ├── cache/          # Redis: frequência dos links e cache de destinos
 │   ├── messaging/      # RabbitMQ
 │   ├── jobs/           # Tarefas em segundo plano
 │   ├── shortcodes/     # Gerador Sqids

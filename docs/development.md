@@ -42,6 +42,10 @@ PUBLIC_BASE_URL=http://localhost:8080
 
 RABBITMQ_USER=shortbit
 RABBITMQ_PASSWORD=...
+HOT_URL_THRESHOLD=20
+HOT_URL_WINDOW=60s
+URL_CACHE_TTL=5m
+
 RABBITMQ_URL=amqp://shortbit:...@localhost:5672/
 RABBITMQ_PUBLISH_TIMEOUT=500ms
 
@@ -51,6 +55,8 @@ PROCESSED_CLICK_EVENT_RETENTION=168h
 ```
 
 `PUBLIC_BASE_URL` é opcional e assume `http://localhost:8080` no desenvolvimento; é usado para compor o `short_url` devolvido por `POST /urls`. Em produção, configure o domínio público, `COOKIE_SECURE=true` e callback Google com HTTPS.
+
+`HOT_URL_THRESHOLD`, `HOT_URL_WINDOW` e `URL_CACHE_TTL` são opcionais: um link público com 20 redirects em 60 segundos tem o destino guardado no Redis por 5 minutos. Sem Redis, a API lê o PostgreSQL normalmente.
 
 `RABBITMQ_USER` e `RABBITMQ_PASSWORD` criam o usuário do container RabbitMQ no Compose; `RABBITMQ_URL` é a URL que a API usa e deve conter as mesmas credenciais. `RABBITMQ_URL` é obrigatória e aceita `amqp://` ou `amqps://`; em produção, use `amqps://`. Ela contém a senha e nunca é logada. `RABBITMQ_PUBLISH_TIMEOUT` é opcional (padrão `500ms`) e limita a espera pela confirmação do broker. Se o broker estiver indisponível, a API registra um aviso, continua contando cliques de forma síncrona no PostgreSQL e tenta reconectar em segundo plano ([ADR 0002](decisions/0002-click-events-rabbitmq-redis-cache.md)). O painel de administração do RabbitMQ fica em `http://localhost:15672`.
 

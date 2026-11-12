@@ -1,6 +1,6 @@
 # 0002 — Contagem de cliques via RabbitMQ e cache Redis de destinos quentes
 
-Status: Accepted (implementação em andamento: contagem pelo RabbitMQ pronta; falta o cache Redis)
+Status: Accepted (implementado)
 Data: 2026-10-24
 Revisão: 2026-11-12 — fallback reaproveita o `event_id`; falhas do worker usam `basic.reject`; topologia e timeout do publish definidos.
 
@@ -87,7 +87,8 @@ A validação da `link_access_session` continua síncrona no PostgreSQL, por ser
 
 ### Cache Redis
 
-- Admissão pelo contador de frequência existente: 20 redirects efetivos em 60 segundos admitem o destino por até 5 minutos, conforme o plano.
+- Admissão pelo contador de frequência existente: 20 redirects efetivos em 60 segundos admitem o destino por até 5 minutos (`HOT_URL_THRESHOLD`, `HOT_URL_WINDOW` e `URL_CACHE_TTL`).
+- A entrada só é gravada num miss, e um hit não renova o TTL: o TTL é o atraso máximo entre PostgreSQL e Redis.
 - Somente links públicos, guardando apenas o dado de resolução. Senha, hash, token, dados de sessão e `click_count` nunca vão para o cache.
 - Falha do Redis volta ao PostgreSQL.
 - Hoje os links são imutáveis e não há exclusão, então não há invalidação a tratar. Quando edição ou exclusão existir, o fluxo correspondente deve apagar a chave.

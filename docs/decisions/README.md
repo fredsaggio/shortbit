@@ -45,4 +45,4 @@ Quais benefícios, limitações e trabalhos futuros surgem dessa escolha?
 ## ADRs
 
 - [0001 — Shortcodes com ID incremental e Sqids](0001-shortcode-sqids.md) — aceita; implementada.
-- [0002 — Contagem de cliques via RabbitMQ e cache Redis de destinos quentes](0002-click-events-rabbitmq-redis-cache.md) — aceita; contagem pelo RabbitMQ implementada, cache Redis pendente.
+- [0002 — Contagem de cliques via RabbitMQ e cache Redis de destinos quentes](0002-click-events-rabbitmq-redis-cache.md) — aceita; implementada.

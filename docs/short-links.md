@@ -1,6 +1,6 @@
 # Links e shortcodes
 
-> Status: geração Sqids, criação, listagem, metadados individuais e redirects público/privado com contagem pelo RabbitMQ implementados
+> Status: geração Sqids, criação, listagem, metadados individuais, redirects público/privado com contagem pelo RabbitMQ e cache Redis de destinos implementados
 > Última atualização: 12 de novembro de 2026
 
 ## Objetivo do domínio
@@ -24,7 +24,7 @@ Cada URL curta pertence a um usuário autenticado e possui:
 | Repository de URLs | ✅ Reserva ID, cria, consulta e lista por owner/cursor; resolve links públicos/privados e conta clique |
 | Service e handlers | ✅ Criação, listagem, consulta individual, redirects e desbloqueio privado |
 | Rotas HTTP | ✅ `POST /urls`, `GET /urls` e `GET /urls/{code}` autenticadas; `GET /{code}` e `POST /{code}/access` públicas |
-| Redis seletivo | 📋 Planejado para depois da versão PostgreSQL |
+| Redis seletivo | ✅ Cache de destinos públicos quentes, admitido por frequência |
 | Estratégia final de shortcode | ✅ Decidida: ID incremental + Sqids |
 
 ## Decisão para o shortcode
@@ -155,9 +155,9 @@ O MVP começa com `click_count` total. A consulta administrativa exige que `urls
 
 Analytics por evento, localização, dispositivo ou série temporal ficam fora do MVP.
 
-## Cache seletivo futuro
+## Cache seletivo e contagem pela fila ✅
 
-A contagem de cliques já passa pelo RabbitMQ. Cliente Redis e medição de frequência pública já existem, mas o cache de destinos ainda não: a próxima etapa é usar Redis para destinos públicos quentes. O diagrama mostra o fluxo final.
+O redirect público consulta o Redis antes do PostgreSQL e conta o clique pelo RabbitMQ:
 
 ```mermaid
 flowchart TD
@@ -175,8 +175,14 @@ flowchart TD
     Count --> Ack[Confirma processamento na fila]
 ```
 
-Redis será uma otimização de leitura. Se estiver indisponível, a aplicação volta ao PostgreSQL.
+O Redis é só uma otimização de leitura. Se estiver indisponível, ou se uma entrada estiver corrompida, a aplicação lê o PostgreSQL e o redirect continua funcionando.
+
+- **Admissão:** cada redirect público efetivo incrementa `url:heat:{code}`, que expira após `HOT_URL_WINDOW` (60s). Quando o contador chega a `HOT_URL_THRESHOLD` (20) num miss, o destino é gravado em `url:dest:{code}` com TTL `URL_CACHE_TTL` (5 minutos).
+- **Conteúdo:** só `url_id` e `original_url`. Senha, hash, tokens, sessões e `click_count` nunca vão para o cache.
+- **TTL:** um hit não renova a entrada. Depois de expirar, o próximo acesso lê o PostgreSQL e, se o link continuar quente, é admitido de novo. Assim o TTL é o atraso máximo entre o banco e o cache.
+- **Links privados** nunca são admitidos: só a resolução pública grava no cache.
+- **Invalidação:** links são imutáveis e não há exclusão no MVP. Quando edição ou exclusão existirem, o fluxo deve apagar `url:dest:{code}`.
 
 O worker não diminui o número de escritas: um clique continua gerando um incremento individual no banco, mas o redirect não espera essa escrita. As estatísticas têm consistência eventual. Reentregas são deduplicadas por `processed_click_events`; confirmar a mensagem depois do UPDATE não bastaria para impedir contagem dupla.
 
-As decisões de durabilidade, falha do broker, execução do worker, deduplicação e contagem dos links privados estão no [ADR 0002](decisions/0002-click-events-rabbitmq-redis-cache.md). Resumo: quorum queue com publisher confirms; fallback para o `UPDATE` síncrono se o broker falhar e `503` se o PostgreSQL também falhar; worker em binário separado com tabela de eventos processados; links privados contam pela fila, mas nunca entram no cache. Publisher, worker e o redirect publicando eventos estão implementados; falta o cache de destinos. Não adicionar lotes, Kafka, Tinybird ou outbox por redirect.
+As decisões de durabilidade, falha do broker, execução do worker, deduplicação e contagem dos links privados estão no [ADR 0002](decisions/0002-click-events-rabbitmq-redis-cache.md). Resumo: quorum queue com publisher confirms; fallback para o `UPDATE` síncrono se o broker falhar e `503` se o PostgreSQL também falhar; worker em binário separado com tabela de eventos processados; links privados contam pela fila, mas nunca entram no cache. Publisher, worker, redirect publicando eventos e cache de destinos estão implementados. Não adicionar lotes, Kafka, Tinybird ou outbox por redirect.
