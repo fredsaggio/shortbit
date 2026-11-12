@@ -1,7 +1,8 @@
 # 0002 — Contagem de cliques via RabbitMQ e cache Redis de destinos quentes
 
-Status: Accepted (implementação em andamento: conexão com o RabbitMQ)
+Status: Accepted (implementação em andamento: conexão e publisher prontos)
 Data: 2026-10-24
+Revisão: 2026-11-12 — fallback reaproveita o `event_id`; falhas do worker usam `basic.reject`; topologia e timeout do publish definidos.
 
 ## Contexto
 
@@ -33,11 +34,26 @@ O cache só entra quando a contagem já não depende do PostgreSQL no redirect.
 - Fila do tipo **quorum queue**. Ela é sempre durável e é o tipo replicado recomendado no RabbitMQ 4, que removeu o espelhamento de filas clássicas.
 - Mensagens **persistentes**, publicadas com **publisher confirms** e flag `mandatory`. Sem `mandatory`, uma mensagem sem fila de destino é confirmada mesmo assim e se perde em silêncio. A API só responde `302` depois do confirm, que numa quorum queue significa que a maioria das réplicas aceitou a mensagem.
 - Consumo com **ack manual**, enviado somente depois do commit no PostgreSQL.
-- Falhas recorrentes: a quorum queue tem `delivery-limit` padrão de 20 no RabbitMQ 4. Ao ultrapassá-lo, a mensagem vai para uma **dead-letter queue**. Dead-lettering at-least-once exige `dead-letter-strategy=at-least-once` e `overflow=reject-publish`; os detalhes ficam para a implementação do publisher e do worker.
+- Falhas recorrentes: a fila declara `delivery-limit` de 20. Ao ultrapassá-lo, a mensagem vai para uma **dead-letter queue**. Dead-lettering at-least-once exige `dead-letter-strategy=at-least-once` e `overflow=reject-publish`.
+- No RabbitMQ 4.3+, só `basic.reject` e a queda do consumidor contam para o `delivery-limit`. Um `basic.nack` com requeue **não conta**, e a mensagem ficaria em loop sem nunca ir para a dead-letter queue. Por isso o worker sinaliza falha com `Reject(requeue=true)`, nunca com `Nack`.
+
+### Topologia e mensagem
+
+| Item | Valor |
+| --- | --- |
+| Exchange | `click_events` (direct, durável), routing key `click` |
+| Fila | `click_events.count` (quorum) |
+| Dead-letter | exchange `click_events.dlx` (fanout) e fila `click_events.dead` (quorum) |
+| Corpo | JSON com `event_id` (UUIDv7), `url_id` e `occurred_at` |
+| Propriedades | `message_id` = `event_id`, persistente, `application/json` |
+
+A API e o worker declaram a mesma topologia com os mesmos argumentos (`messaging.DeclareClickTopology`), então qualquer um pode subir primeiro. Mudar um argumento de uma fila existente exige apagá-la ou migrar, porque o RabbitMQ rejeita uma redeclaração diferente.
+
+O publisher usa um único canal com confirmações assíncronas e reconecta em segundo plano com backoff exponencial (1s a 30s). Sem conexão, ou com o broker sinalizando `connection.blocked`, o publish falha na hora para não segurar o redirect.
 
 ### Indisponibilidade do broker
 
-Se a publicação ou o confirm falharem dentro de um timeout curto, a API faz **fallback para o `UPDATE` síncrono atual** no PostgreSQL. Se o PostgreSQL também falhar, responde `503`. Mantém-se a regra atual: o clique só é contado se for persistido antes da resposta. Redirecionar sem contar foi descartado porque perderia cliques em silêncio.
+Se a publicação ou o confirm falharem dentro de um timeout curto (`RABBITMQ_PUBLISH_TIMEOUT`, padrão 500ms), a API faz **fallback para o `UPDATE` síncrono atual** no PostgreSQL. Se o PostgreSQL também falhar, responde `503`. Mantém-se a regra atual: o clique só é contado se for persistido antes da resposta. Redirecionar sem contar foi descartado porque perderia cliques em silêncio.
 
 Por isso o RabbitMQ **não** entra no readiness da API, e a API sobe mesmo com o broker fora (com um log de aviso), como já acontece com o Redis.
 
@@ -56,6 +72,8 @@ Usar o padrão idempotent consumer:
 - Um `UPDATE` que afete zero linhas (link removido no futuro) é logado e confirmado.
 
 Confirmar a mensagem depois do `UPDATE` não basta para impedir contagem dupla. A tabela de eventos processados é o que garante a idempotência.
+
+Um timeout do confirm não prova que a mensagem se perdeu: o broker pode tê-la guardado e só demorado a responder. Por isso o **fallback síncrono também grava o `event_id`** em `processed_click_events`, na mesma transação do `UPDATE`. Se a mensagem atrasada chegar ao worker, ele a reconhece como já processada e não conta de novo.
 
 ### Links privados
 
