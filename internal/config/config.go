@@ -31,6 +31,8 @@ const (
 
 	defaultRedisAddr             = "127.0.0.1:6379"
 	defaultRedisOperationTimeout = 200 * time.Millisecond
+
+	defaultRabbitMQPublishTimeout = 500 * time.Millisecond
 )
 
 type Config struct {
@@ -77,7 +79,8 @@ type RedisConfig struct {
 }
 
 type RabbitMQConfig struct {
-	URL string
+	URL            string
+	PublishTimeout time.Duration
 }
 
 type PasswordRegistrationConfig struct {
@@ -156,6 +159,14 @@ func Load(getEnv func(string) string) (Config, error) {
 		return Config{}, errors.New("REDIS_OPERATION_TIMEOUT must be greater than zero")
 	}
 
+	rabbitMQPublishTimeout, err := durationEnvOrDefault(getEnv, "RABBITMQ_PUBLISH_TIMEOUT", defaultRabbitMQPublishTimeout)
+	if err != nil {
+		return Config{}, err
+	}
+	if rabbitMQPublishTimeout <= 0 {
+		return Config{}, errors.New("RABBITMQ_PUBLISH_TIMEOUT must be greater than zero")
+	}
+
 	attemptTTL, err := durationEnvOrDefault(getEnv, "PASSWORD_REGISTRATION_ATTEMPT_TTL", defaultPasswordRegistrationAttemptTTL)
 	if err != nil {
 		return Config{}, err
@@ -231,7 +242,8 @@ func Load(getEnv func(string) string) (Config, error) {
 			Timeout: redisOperationTimeout,
 		},
 		RabbitMQ: RabbitMQConfig{
-			URL: getEnv("RABBITMQ_URL"),
+			URL:            getEnv("RABBITMQ_URL"),
+			PublishTimeout: rabbitMQPublishTimeout,
 		},
 	}
 

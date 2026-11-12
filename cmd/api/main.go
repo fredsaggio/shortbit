@@ -66,13 +66,19 @@ func Run(ctx context.Context, getEnv func(string) string) error {
 		slog.Info("Redis connection ready")
 	}
 
-	rabbitConn, err := messaging.Connect(cfg.RabbitMQ.URL, "shortbit-api")
-	if err != nil {
-		slog.Warn("RabbitMQ unavailable; continuing with synchronous click counting", "error", err)
-	} else {
-		defer rabbitConn.Close()
-		slog.Info("RabbitMQ connection ready")
-	}
+	clickPublisher := messaging.NewClickPublisher(cfg.RabbitMQ.URL, cfg.RabbitMQ.PublishTimeout)
+	publisherCtx, stopPublisher := context.WithCancel(ctx)
+	publisherDone := make(chan struct{})
+
+	go func() {
+		defer close(publisherDone)
+		clickPublisher.Run(publisherCtx)
+	}()
+
+	defer func() {
+		stopPublisher()
+		<-publisherDone
+	}()
 
 	googleClient, err := googleoidc.New(ctx, cfg.Google)
 

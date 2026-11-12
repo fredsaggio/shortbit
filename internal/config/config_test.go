@@ -37,6 +37,7 @@ func TestLoad(t *testing.T) {
 				"REDIS_ADDR":                        "redis.example:6380",
 				"REDIS_OPERATION_TIMEOUT":           "350ms",
 				"RABBITMQ_URL":                      "amqps://user:password@rabbitmq.example:5671/shortbit",
+				"RABBITMQ_PUBLISH_TIMEOUT":          "750ms",
 			},
 			want: config.Config{
 				DatabaseURL: "postgres://user:password@localhost:5432/app",
@@ -75,7 +76,7 @@ func TestLoad(t *testing.T) {
 					MaxOriginalURLBytes: 8192,
 				},
 				Redis:    config.RedisConfig{Addr: "redis.example:6380", Timeout: 350 * time.Millisecond},
-				RabbitMQ: config.RabbitMQConfig{URL: "amqps://user:password@rabbitmq.example:5671/shortbit"},
+				RabbitMQ: config.RabbitMQConfig{URL: "amqps://user:password@rabbitmq.example:5671/shortbit", PublishTimeout: 750 * time.Millisecond},
 			},
 		},
 		{
@@ -126,7 +127,7 @@ func TestLoad(t *testing.T) {
 					MaxOriginalURLBytes: 8192,
 				},
 				Redis:    config.RedisConfig{Addr: "127.0.0.1:6379", Timeout: 200 * time.Millisecond},
-				RabbitMQ: config.RabbitMQConfig{URL: "amqp://user:password@localhost:5672/"},
+				RabbitMQ: config.RabbitMQConfig{URL: "amqp://user:password@localhost:5672/", PublishTimeout: 500 * time.Millisecond},
 			},
 		},
 		{
@@ -305,6 +306,16 @@ func TestLoad(t *testing.T) {
 				"EMAIL_FROM":           "noreply@example.com",
 			},
 			wantErrContains: "RESEND_API_KEY is required",
+		},
+		{
+			name:            "rejects invalid RabbitMQ publish timeout",
+			env:             map[string]string{"RABBITMQ_PUBLISH_TIMEOUT": "soon"},
+			wantErrContains: "RABBITMQ_PUBLISH_TIMEOUT must be a valid duration",
+		},
+		{
+			name:            "rejects zero RabbitMQ publish timeout",
+			env:             map[string]string{"RABBITMQ_PUBLISH_TIMEOUT": "0s"},
+			wantErrContains: "RABBITMQ_PUBLISH_TIMEOUT must be greater than zero",
 		},
 		{
 			name:            "rejects missing RabbitMQ URL",

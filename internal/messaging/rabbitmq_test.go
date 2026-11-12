@@ -18,7 +18,8 @@ const (
 	rabbitMQPassword = "test-secret-password"
 )
 
-func TestConnectIntegration(t *testing.T) {
+func startRabbitMQ(t *testing.T) (testcontainers.Container, string) {
+	t.Helper()
 	ctx := t.Context()
 
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
@@ -48,17 +49,23 @@ func TestConnectIntegration(t *testing.T) {
 		t.Fatalf("get RabbitMQ port: %v", err)
 	}
 
-	address := net.JoinHostPort(host, port.Port())
+	return container, net.JoinHostPort(host, port.Port())
+}
+
+func rabbitMQURL(address string, password string) string {
+	return (&url.URL{
+		Scheme: "amqp",
+		User:   url.UserPassword(rabbitMQUser, password),
+		Host:   address,
+		Path:   "/",
+	}).String()
+}
+
+func TestConnectIntegration(t *testing.T) {
+	_, address := startRabbitMQ(t)
 
 	t.Run("connects with valid credentials", func(t *testing.T) {
-		rabbitURL := (&url.URL{
-			Scheme: "amqp",
-			User:   url.UserPassword(rabbitMQUser, rabbitMQPassword),
-			Host:   address,
-			Path:   "/",
-		}).String()
-
-		conn, err := messaging.Connect(rabbitURL, "shortbit-test")
+		conn, err := messaging.Connect(rabbitMQURL(address, rabbitMQPassword), "shortbit-test")
 		if err != nil {
 			t.Fatalf("Connect() error = %v", err)
 		}
@@ -71,14 +78,8 @@ func TestConnectIntegration(t *testing.T) {
 
 	t.Run("rejects invalid credentials without leaking them", func(t *testing.T) {
 		wrongPassword := "wrong-secret-password"
-		rabbitURL := (&url.URL{
-			Scheme: "amqp",
-			User:   url.UserPassword(rabbitMQUser, wrongPassword),
-			Host:   address,
-			Path:   "/",
-		}).String()
 
-		conn, err := messaging.Connect(rabbitURL, "shortbit-test")
+		conn, err := messaging.Connect(rabbitMQURL(address, wrongPassword), "shortbit-test")
 		if err == nil {
 			_ = conn.Close()
 			t.Fatal("Connect() error = nil, want authentication error")
