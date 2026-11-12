@@ -1,7 +1,7 @@
 # Links e shortcodes
 
-> Status: geração Sqids, criação, listagem, metadados individuais e redirects público/privado com contador implementados
-> Última atualização: 29 de setembro de 2026
+> Status: geração Sqids, criação, listagem, metadados individuais e redirects público/privado com contagem pelo RabbitMQ implementados
+> Última atualização: 12 de novembro de 2026
 
 ## Objetivo do domínio
 
@@ -103,22 +103,23 @@ flowchart TD
     Find -- Não --> NotFound[404]
     Find -- Sim --> Visibility{É público?}
     Visibility -- Não --> PrivateFlow[Ver fluxo privado abaixo]
-    Visibility -- Sim --> Increment[Incrementa click_count atomicamente]
-    Increment --> Redirect[302 para original_url]
+    Visibility -- Sim --> Publish[Publica evento de clique no RabbitMQ]
+    Publish --> Confirmed{Broker confirmou?}
+    Confirmed -- Sim --> Redirect[302 para original_url]
+    Confirmed -- Não --> Fallback[Incrementa no PostgreSQL com o mesmo event_id]
+    Fallback -- Ok --> Redirect
+    Fallback -- Falhou --> Unavailable[503]
+    Publish -.-> Worker[Worker incrementa click_count depois]
 ```
 
-`GET /{code}` não exige login. Código inexistente retorna `404`; link privado sem sessão válida mostra a página de senha descrita abaixo. O clique só é contado quando o link público é resolvido e o servidor consegue persistir o incremento antes de responder com o redirect.
+`GET /{code}` não exige login. Código inexistente retorna `404`; link privado sem sessão válida mostra a página de senha descrita abaixo. O clique só é contado quando o link é resolvido, e o redirect só sai depois que o clique está registrado: confirmado pelo RabbitMQ ou gravado no PostgreSQL.
 
-O repository faz a resolução e o incremento em uma operação atômica no PostgreSQL:
+1. O repository busca `id` e `original_url` com um `SELECT`, sem escrever.
+2. O redirect service cria um evento com `event_id` (UUIDv7) e o publica no RabbitMQ, esperando a confirmação por até `RABBITMQ_PUBLISH_TIMEOUT`.
+3. Se a publicação falhar, o service chama o mesmo `CountClickOnce` do worker, que grava o `event_id` em `processed_click_events` e incrementa `click_count` numa transação. Se a publicação na verdade chegou à fila e só demorou, o worker encontra o `event_id` e não conta de novo.
+4. Se o fallback também falhar, a API responde `503`, sem redirect.
 
-```sql
-UPDATE urls
-SET click_count = click_count + 1
-WHERE short_code = @shortCode AND visibility = 'public'
-RETURNING original_url;
-```
-
-Não há o fluxo vulnerável `SELECT → incrementar em Go → UPDATE`. A resposta usa `302 Found` com `Location` apontando para a URL original e `Cache-Control: no-store`, para que o navegador não guarde o redirect e os acessos seguintes voltem à API. O rate limit global continua aplicado. Testes cobrem redirecionamento HTTP sem login, contador após acessos repetidos, `404` para código inexistente e incrementos concorrentes.
+O worker (`cmd/worker`) consome a fila e incrementa `click_count` um evento por vez. O contador tem consistência eventual. A resposta usa `302 Found` com `Location` apontando para a URL original e `Cache-Control: no-store`, para que o navegador não guarde o redirect e os acessos seguintes voltem à API. O rate limit global continua aplicado.
 
 ## Link privado e desbloqueio ✅
 
@@ -135,13 +136,14 @@ sequenceDiagram
     API->>DB: Cria link_access_session
     API-->>Browser: Cookie específico do link + 303 para /{code}
     Browser->>API: GET /{code} + cookie de acesso
-    API->>DB: Valida sessão do link e incrementa clique
+    API->>DB: Valida sessão do link
+    API->>API: Registra o clique (RabbitMQ ou fallback)
     API-->>Browser: 302 para URL original
 ```
 
 `GET /{code}` mostra HTML com formulário quando o link privado não tem uma sessão válida. O `POST` recebe `application/x-www-form-urlencoded` com o campo `password`. Senha incorreta reapresenta o formulário com `401`, sem criar sessão nem contar clique. Senha correta cria `link_access_session` no PostgreSQL, define o cookie `link_access_session` com `HttpOnly`, `SameSite=Lax`, `Path=/{code}` e `Secure` em HTTPS, e responde `303` para o mesmo shortcode.
 
-O TTL padrão da sessão é **30 minutos**, configurável por `LINK_ACCESS_SESSION_TTL`; não há renovação automática. O cookie não autentica a conta. No GET seguinte, o servidor verifica se o hash do token pertence ao `link_id` e se a sessão não expirou; somente então incrementa o clique e responde `302`. Mesmo se um cliente anexar manualmente o cookie a outro link, ele não é aceito. O POST possui rate limit em memória por IP + shortcode, com burst de 5 e reposição de 20 tentativas por minuto, antes da comparação Argon2id. Teste de integração cobre senha errada, cookie, isolamento entre dois links, expiração e contador.
+O TTL padrão da sessão é **30 minutos**, configurável por `LINK_ACCESS_SESSION_TTL`; não há renovação automática. O cookie não autentica a conta. No GET seguinte, o servidor verifica se o hash do token pertence ao `link_id` e se a sessão não expirou; somente então registra o clique, do mesmo jeito que no link público, e responde `302`. Mesmo se um cliente anexar manualmente o cookie a outro link, ele não é aceito. O POST possui rate limit em memória por IP + shortcode, com burst de 5 e reposição de 20 tentativas por minuto, antes da comparação Argon2id. Teste de integração cobre senha errada, cookie, isolamento entre dois links, expiração e contador.
 
 ## Duração dos links
 
@@ -155,7 +157,7 @@ Analytics por evento, localização, dispositivo ou série temporal ficam fora d
 
 ## Cache seletivo futuro
 
-O redirect e o contador atualmente usam PostgreSQL de forma síncrona. Cliente Redis e medição de frequência pública já existem, mas o cache de destinos ainda não. A decisão para a próxima etapa é usar Redis para destinos públicos quentes e RabbitMQ para eventos de clique, processados individualmente, sem lotes.
+A contagem de cliques já passa pelo RabbitMQ. Cliente Redis e medição de frequência pública já existem, mas o cache de destinos ainda não: a próxima etapa é usar Redis para destinos públicos quentes. O diagrama mostra o fluxo final.
 
 ```mermaid
 flowchart TD
@@ -175,6 +177,6 @@ flowchart TD
 
 Redis será uma otimização de leitura. Se estiver indisponível, a aplicação volta ao PostgreSQL.
 
-O worker não diminui o número de escritas: um clique continua gerando um incremento individual no banco, mas o redirect não espera essa escrita. As estatísticas terão consistência eventual. Reentregas devem ser deduplicadas; não basta confirmar a mensagem depois do UPDATE para impedir contagem dupla.
+O worker não diminui o número de escritas: um clique continua gerando um incremento individual no banco, mas o redirect não espera essa escrita. As estatísticas têm consistência eventual. Reentregas são deduplicadas por `processed_click_events`; confirmar a mensagem depois do UPDATE não bastaria para impedir contagem dupla.
 
-As decisões de durabilidade, falha do broker, execução do worker, deduplicação e contagem dos links privados estão no [ADR 0002](decisions/0002-click-events-rabbitmq-redis-cache.md). Resumo: quorum queue com publisher confirms; fallback para o `UPDATE` síncrono se o broker falhar e `503` se o PostgreSQL também falhar; worker em binário separado com tabela de eventos processados; links privados contam pela fila, mas nunca entram no cache. A conexão, o publisher com confirmação e o worker (`cmd/worker`, com deduplicação em `processed_click_events`) já existem; o redirect ainda não publica eventos. Não adicionar lotes, Kafka, Tinybird ou outbox por redirect.
+As decisões de durabilidade, falha do broker, execução do worker, deduplicação e contagem dos links privados estão no [ADR 0002](decisions/0002-click-events-rabbitmq-redis-cache.md). Resumo: quorum queue com publisher confirms; fallback para o `UPDATE` síncrono se o broker falhar e `503` se o PostgreSQL também falhar; worker em binário separado com tabela de eventos processados; links privados contam pela fila, mas nunca entram no cache. Publisher, worker e o redirect publicando eventos estão implementados; falta o cache de destinos. Não adicionar lotes, Kafka, Tinybird ou outbox por redirect.

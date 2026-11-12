@@ -1,6 +1,6 @@
 # 0002 — Contagem de cliques via RabbitMQ e cache Redis de destinos quentes
 
-Status: Accepted (implementação em andamento: conexão, publisher e worker prontos)
+Status: Accepted (implementação em andamento: contagem pelo RabbitMQ pronta; falta o cache Redis)
 Data: 2026-10-24
 Revisão: 2026-11-12 — fallback reaproveita o `event_id`; falhas do worker usam `basic.reject`; topologia e timeout do publish definidos.
 

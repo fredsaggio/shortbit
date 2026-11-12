@@ -74,7 +74,7 @@ make infra/down
 make worker
 ```
 
-O worker consome a fila `click_events.count` e incrementa `urls.click_count` uma vez por evento. Ele lê só `DATABASE_URL`, `RABBITMQ_URL`, `RABBITMQ_PREFETCH` (opcional, padrão `10`) e `PROCESSED_CLICK_EVENT_RETENTION` (opcional, padrão `168h`), sem exigir as variáveis de Google, email e sessão da API. A migration `00007` precisa estar aplicada. Enquanto o redirect não publica eventos, o worker fica ocioso.
+O worker consome a fila `click_events.count` e incrementa `urls.click_count` uma vez por evento. Ele lê só `DATABASE_URL`, `RABBITMQ_URL`, `RABBITMQ_PREFETCH` (opcional, padrão `10`) e `PROCESSED_CLICK_EVENT_RETENTION` (opcional, padrão `168h`), sem exigir as variáveis de Google, email e sessão da API. A migration `00007` precisa estar aplicada. Sem o worker rodando, os cliques ficam na fila e `click_count` não muda até ele voltar.
 
 ## Migrations
 
@@ -105,15 +105,10 @@ http://localhost:8080
 ```
 
 A documentação HTTP renderizada fica em `http://localhost:8080/docs`, e o
-OpenAPI bruto em `http://localhost:8080/docs/openapi.yaml`. Depois de editar
-`docs/openapi.yaml`, gere novamente o HTML embarcado no binário:
-
-```bash
-npx --yes @redocly/cli@2.36.0 build-docs docs/openapi.yaml --output docs/redoc.html --title 'ShortBit API' --disableGoogleFont
-```
-
-O HTML já contém o conteúdo da especificação, mas usa o script do ReDoc via CDN
-para a navegação dinâmica; o navegador precisa de internet para essa parte.
+OpenAPI bruto em `http://localhost:8080/docs/openapi.yaml`. O `docs/redoc.html`
+embarcado carrega `/docs/openapi.yaml` no navegador, então editar o YAML basta;
+não há HTML para gerar de novo. O script do ReDoc vem de CDN, e o navegador
+precisa de internet para renderizar a página.
 
 ## Testes
 

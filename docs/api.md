@@ -297,6 +297,10 @@ hash de um link privado. Código inexistente **e** link de outro usuário retorn
 o mesmo `404`, sem revelar a existência do link. Sem sessão, retorna `401`.
 Este endpoint não redireciona nem desbloqueia o link.
 
+`click_count` tem consistência eventual: um clique publicado no RabbitMQ só
+aparece depois que o worker o processa, e fica parado na fila enquanto o
+worker estiver desligado.
+
 ```json
 {
   "short_code": "Ab3dX9",
@@ -310,7 +314,9 @@ Este endpoint não redireciona nem desbloqueia o link.
 
 ### `GET /{code}` ✅
 
-Não exige sessão de conta. Para um link público existente, incrementa `click_count` no PostgreSQL e retorna `302 Found`, com `Location` apontando para a URL original e `Cache-Control: no-store`. Para um link privado sem cookie de acesso válido, retorna `200 OK` com a página HTML de senha, sem contar clique. Com cookie válido para aquele link, incrementa o contador e retorna `302 Found`. Código inexistente retorna `404`; falha ao registrar o clique retorna `500`, sem redirect. O rate limit global pode retornar `429`.
+Não exige sessão de conta. Para um link público existente, registra o clique e retorna `302 Found`, com `Location` apontando para a URL original e `Cache-Control: no-store`. Para um link privado sem cookie de acesso válido, retorna `200 OK` com a página HTML de senha, sem contar clique. Com cookie válido para aquele link, registra o clique e retorna `302 Found`.
+
+O clique é registrado como um evento no RabbitMQ, confirmado pelo broker antes do redirect, e o worker incrementa `click_count` depois. Se a publicação falhar, a API incrementa o contador no PostgreSQL antes de responder. Se nem o RabbitMQ nem o PostgreSQL registrarem o clique, retorna `503 Service Unavailable`, sem redirect. Código inexistente retorna `404`; outras falhas retornam `500`. O rate limit global pode retornar `429`.
 
 ### `POST /{code}/access` ✅
 

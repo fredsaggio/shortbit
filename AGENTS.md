@@ -33,7 +33,7 @@ Não coloque co-author em nenhum commit criado por você, em nenhuma hipótese.
 | `make run` | Sobe a API em `:8080` |
 | `make worker` | Sobe o worker de cliques |
 | `make test` | Testes unitários |
-| `make test/integration` | Testes de integração com Testcontainers (build tag `integration`), então o Docker precisa estar ligado. Um pacote novo com testes de integração precisa entrar na lista do alvo, no `Makefile` |
+| `make test/integration` | Testes de integração com Testcontainers (build tag `integration`): PostgreSQL, Redis e RabbitMQ, então o Docker precisa estar ligado. Um pacote novo com testes de integração precisa entrar na lista do alvo, no `Makefile` |
 | `make migration/new name=descricao` | Cria migration Goose |
 | `make migration/up` / `make migration/down` / `make migration/status` | Aplica / desfaz a última / mostra o estado |
 | `make migration/validate` | Confere as migrations sem aplicar |
@@ -42,6 +42,6 @@ Não coloque co-author em nenhum commit criado por você, em nenhuma hipótese.
 1. `gofmt -w <arquivos-alterados>`, `go vet ./...` e `make test` passam. Mexeu em concorrência, sessões, cache ou rate limiting: rode também `go test -race ./...`. Mexeu em repository, integração HTTP ou mensageria: rode `make test/integration`.
 2. **Variável de ambiente nova e obrigatória** (`internal/config/config.go`): documente em `docs/development.md` e **avise o usuário para criá-la no `.env`**, porque sem ela a API não sobe.
 3. Uma decisão difícil de reverter entra como ADR em `docs/decisions/`, e o índice em `docs/decisions/README.md` é atualizado. Uma mudança de comportamento atualiza o documento responsável em `docs/`.
-4. Mudou `docs/openapi.yaml`: gere de novo o `docs/redoc.html` (comando em `docs/development.md`).
+4. Mudou um endpoint: atualize `docs/api.md` e `docs/openapi.yaml`. O `docs/redoc.html` lê o YAML no navegador e não precisa ser gerado.
 5. Jobs e workers devem poder rodar de novo depois de um reinício ou de uma reentrega (idempotentes).
 6. **Nunca faça push, merge ou abra PR sem o usuário pedir.**

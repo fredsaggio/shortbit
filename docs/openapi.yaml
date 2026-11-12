@@ -467,6 +467,8 @@ paths:
         Retorna os metadados e o contador de cliques de um link pertencente ao
         usuário da sessão. Código inexistente e link de outro usuário retornam
         o mesmo 404. Este endpoint não abre nem desbloqueia o link curto.
+        `click_count` tem consistência eventual: cliques publicados no
+        RabbitMQ aparecem depois que o worker os processa.
       security:
         - userSession: []
       parameters:
@@ -507,8 +509,11 @@ paths:
         Não exige sessão de conta. Links públicos redirecionam diretamente.
         Links privados sem cookie de acesso válido mostram uma página HTML de
         senha; o cookie é específico do link e dura 30 minutos por padrão.
-        Somente um redirect efetivo incrementa `click_count` atomicamente no
-        PostgreSQL. A resposta de redirect não deve ser armazenada pelo
+        Somente um redirect efetivo registra um clique: a API publica um evento
+        no RabbitMQ, espera a confirmação do broker e o worker incrementa
+        `click_count` depois. Se a publicação falhar, a API incrementa o
+        contador no PostgreSQL antes de responder; se isso também falhar,
+        retorna 503. A resposta de redirect não deve ser armazenada pelo
         navegador; acessos posteriores precisam voltar à API.
       security:
         - {}
@@ -553,6 +558,12 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          description: O clique não pôde ser registrado no RabbitMQ nem no PostgreSQL; nenhum redirect.
+          content:
+            text/plain:
+              schema:
+                type: string
   /{code}/access:
     post:
       tags: [Links]

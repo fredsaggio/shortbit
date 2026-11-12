@@ -9,7 +9,7 @@ ShortBit is a URL shortener for public or password-protected links. It tracks cl
 | **Contas** | Cadastro com senha e confirmação por email, login com senha ou Google OIDC, recuperação de senha por código, `/me` e logout |
 | **Sessões** | Sessões opacas em cookies, com `remember_me` opcional no login por senha e sessão lembrada por padrão no Google |
 | **Links** | Criação de links públicos e privados com shortcodes Sqids, listagem com paginação por cursor (até 20 por página) e consulta individual com metadados e contador de cliques |
-| **Redirect** | Redirect público com contador atômico de cliques; links privados exigem senha e criam uma sessão temporária por link |
+| **Redirect** | Redirect público e privado; o clique vai para o RabbitMQ e um worker incrementa o contador, com fallback síncrono no PostgreSQL; links privados exigem senha e criam uma sessão temporária por link |
 | **Proteções** | Rate limiting, limite de tamanho do corpo e limpeza de cadastros pendentes |
 
 ---
@@ -23,8 +23,8 @@ Tudo da tabela acima está implementado e testado. Em andamento, a Fase 13 tira 
 | Conexão e configuração do RabbitMQ | ✅ |
 | Publisher com confirmação do broker | ✅ |
 | Worker (`cmd/worker`) com deduplicação | ✅ |
-| Redirect contando pela fila, com fallback síncrono | 📋 próximo |
-| Cache Redis dos destinos mais acessados | 📋 (o rastreio de frequência já existe) |
+| Redirect contando pela fila, com fallback síncrono | ✅ |
+| Cache Redis dos destinos mais acessados | 📋 próximo (o rastreio de frequência já existe) |
 
 Analytics além do contador total ficam fora do MVP.
 
@@ -119,7 +119,7 @@ O `make infra/up` sobe só o PostgreSQL. A API funciona sem Redis e sem RabbitMQ
 | Comando | O que faz |
 | --- | --- |
 | `make test` | Testes unitários |
-| `make test/integration` | Testes de integração. Sobem PostgreSQL e RabbitMQ descartáveis com Testcontainers, então o Docker precisa estar ligado |
+| `make test/integration` | Testes de integração. Sobem PostgreSQL, Redis e RabbitMQ descartáveis com Testcontainers, então o Docker precisa estar ligado |
 | `go vet ./...` | Análise estática |
 | `go test -race ./...` | Detector de race conditions, para mudanças em concorrência, sessões, cache e rate limiting |
 | `gofmt -w <arquivos>` | Formatação |

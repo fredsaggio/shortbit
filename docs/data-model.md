@@ -159,7 +159,7 @@ Há no máximo uma linha por usuário com senha. O token opaco fica no cookie e 
 
 O schema e os fluxos HTTP de criação, listagem, consulta individual e redirects público/privado estão implementados. Links privados exigem `password_hash`; links públicos exigem que esse campo seja `NULL`. URLs criadas não expiram automaticamente; a expiração de `link_access_sessions` limita apenas o acesso temporário a um link privado (30 minutos por padrão, configurável).
 
-`id` é `BIGINT GENERATED ALWAYS AS IDENTITY`; `short_code` é derivado do ID com Sqids e `MinLength: 6`, persistido e protegido por `UNIQUE`. A migration exige **no mínimo seis caracteres, sem máximo fixo**. O redirect consulta `short_code` diretamente, sem decodificá-lo, e incrementa `click_count` atomicamente para links públicos. Consulte [Links e shortcodes](short-links.md) para configuração, limites reais e fluxo de criação.
+`id` é `BIGINT GENERATED ALWAYS AS IDENTITY`; `short_code` é derivado do ID com Sqids e `MinLength: 6`, persistido e protegido por `UNIQUE`. A migration exige **no mínimo seis caracteres, sem máximo fixo**. O redirect consulta `short_code` diretamente, sem decodificá-lo. `click_count` é incrementado pelo worker de cliques, ou pelo fallback síncrono, com deduplicação em `processed_click_events`. Consulte [Links e shortcodes](short-links.md) para configuração, limites reais e fluxo de criação.
 
 ### `link_access_sessions` 📋
 
