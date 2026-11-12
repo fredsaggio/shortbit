@@ -1,6 +1,6 @@
 # 0002 — Contagem de cliques via RabbitMQ e cache Redis de destinos quentes
 
-Status: Accepted (implementação em andamento: conexão e publisher prontos)
+Status: Accepted (implementação em andamento: conexão, publisher e worker prontos)
 Data: 2026-10-24
 Revisão: 2026-11-12 — fallback reaproveita o `event_id`; falhas do worker usam `basic.reject`; topologia e timeout do publish definidos.
 
@@ -59,7 +59,13 @@ Por isso o RabbitMQ **não** entra no readiness da API, e a API sobe mesmo com o
 
 ### Execução do worker
 
-O worker é um **binário separado** (`cmd/worker`), que escala e reinicia sem afetar a API. Ele reutiliza `config`, `db` e `repositories` e processa **um evento por transação**, sem lotes, com `prefetch` baixo e configurável. O job de limpeza de cadastros continua dentro da API.
+O worker é um **binário separado** (`cmd/worker`), que escala e reinicia sem afetar a API. Ele reutiliza `config`, `db` e `repositories` e processa **um evento por transação**, sem lotes, com `prefetch` configurável (`RABBITMQ_PREFETCH`, padrão 10). O job de limpeza de cadastros continua dentro da API.
+
+Quando o processamento falha (por exemplo, PostgreSQL fora), o worker espera antes de devolver o evento com `Reject(requeue=true)`. A espera começa em 1s e dobra a cada falha seguida, até 30s, voltando a 1s no primeiro sucesso. Sem ela, uma queda do banco gastaria as 20 tentativas em milissegundos. Com ela, o primeiro evento só vai para a dead-letter queue depois de uns 9 minutos de falhas seguidas. Eventos na dead-letter queue não se perdem e podem ser reenviados pelo painel.
+
+- Evento malformado (JSON inválido, `event_id` nulo ou `url_id` não positivo) vai direto para a dead-letter queue com `Reject(requeue=false)`.
+- Evento para URL inexistente é confirmado e logado, sem retry.
+- No desligamento, o worker termina o evento em andamento e devolve os já recebidos com `Nack(requeue=true)`, que não conta como falha.
 
 ### Deduplicação
 
@@ -68,7 +74,7 @@ Usar o padrão idempotent consumer:
 - A API gera um `event_id` (UUIDv7) por clique e o envia como `message_id`.
 - Numa única transação, o worker executa `INSERT INTO processed_click_events ... ON CONFLICT DO NOTHING`. Se a linha foi inserida, faz `UPDATE urls SET click_count = click_count + 1`.
 - Depois do commit, envia o ack. Numa reentrega o `INSERT` não insere nada e o worker só envia o ack.
-- Um job remove eventos processados antigos. A janela de retenção deve ser bem maior que o tempo máximo de reentrega.
+- Um job do worker remove, a cada hora, eventos processados há mais de `PROCESSED_CLICK_EVENT_RETENTION` (padrão 7 dias). A retenção precisa ser maior que o tempo que um evento pode ficar parado na fila: se o worker ficar fora por mais que isso, um evento já contado pelo fallback síncrono pode ser contado de novo.
 - Um `UPDATE` que afete zero linhas (link removido no futuro) é logado e confirmado.
 
 Confirmar a mensagem depois do `UPDATE` não basta para impedir contagem dupla. A tabela de eventos processados é o que garante a idempotência.

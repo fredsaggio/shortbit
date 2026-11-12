@@ -22,8 +22,8 @@ Tudo da tabela acima está implementado e testado. Em andamento, a Fase 13 tira 
 | --- | --- |
 | Conexão e configuração do RabbitMQ | ✅ |
 | Publisher com confirmação do broker | ✅ |
-| Worker (`cmd/worker`) com deduplicação | 📋 próximo |
-| Redirect contando pela fila, com fallback síncrono | 📋 |
+| Worker (`cmd/worker`) com deduplicação | ✅ |
+| Redirect contando pela fila, com fallback síncrono | 📋 próximo |
 | Cache Redis dos destinos mais acessados | 📋 (o rastreio de frequência já existe) |
 
 Analytics além do contador total ficam fora do MVP.
@@ -55,7 +55,8 @@ Analytics além do contador total ficam fora do MVP.
 ├── AGENTS.md           # Regras do projeto (segurança, privacidade, comunicação)
 ├── docker-compose.yml  # PostgreSQL, Redis e RabbitMQ
 ├── cmd/
-│   └── api/            # Ponto de entrada da API
+│   ├── api/            # Ponto de entrada da API
+│   └── worker/         # Worker que consome a fila de cliques
 ├── internal/
 │   ├── app/            # Composition root: monta services, repositories e handlers
 │   ├── server/         # Rotas, health checks e /docs
@@ -94,6 +95,7 @@ make infra/up                                # sobe o PostgreSQL
 docker compose up -d --wait redis-shortener rabbitmq-shortener
 make migration/up                            # aplica as migrations
 make run                                     # sobe a API
+make worker                                  # sobe o worker de cliques (outro terminal)
 ```
 
 O `make infra/up` sobe só o PostgreSQL. A API funciona sem Redis e sem RabbitMQ: registra um aviso e continua sem cache e contando cliques de forma síncrona.

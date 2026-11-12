@@ -44,6 +44,10 @@ RABBITMQ_USER=shortbit
 RABBITMQ_PASSWORD=...
 RABBITMQ_URL=amqp://shortbit:...@localhost:5672/
 RABBITMQ_PUBLISH_TIMEOUT=500ms
+
+# Somente o worker
+RABBITMQ_PREFETCH=10
+PROCESSED_CLICK_EVENT_RETENTION=168h
 ```
 
 `PUBLIC_BASE_URL` é opcional e assume `http://localhost:8080` no desenvolvimento; é usado para compor o `short_url` devolvido por `POST /urls`. Em produção, configure o domínio público, `COOKIE_SECURE=true` e callback Google com HTTPS.
@@ -63,6 +67,14 @@ Para encerrar:
 ```bash
 make infra/down
 ```
+
+## Executar o worker de cliques
+
+```bash
+make worker
+```
+
+O worker consome a fila `click_events.count` e incrementa `urls.click_count` uma vez por evento. Ele lê só `DATABASE_URL`, `RABBITMQ_URL`, `RABBITMQ_PREFETCH` (opcional, padrão `10`) e `PROCESSED_CLICK_EVENT_RETENTION` (opcional, padrão `168h`), sem exigir as variáveis de Google, email e sessão da API. A migration `00007` precisa estar aplicada. Enquanto o redirect não publica eventos, o worker fica ocioso.
 
 ## Migrations
 

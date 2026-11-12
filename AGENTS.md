@@ -20,7 +20,7 @@ Não coloque co-author em nenhum commit criado por você, em nenhuma hipótese.
 
 ## Estrutura do projeto
 - **Um só `Makefile`, na raiz.** Rode tudo com `make` a partir da raiz; `make help` lista todos os alvos.
-- `cmd/api/`: ponto de entrada da API. O worker de cliques vai para `cmd/worker/` (ADR 0002).
+- `cmd/api/`: ponto de entrada da API. `cmd/worker/`: worker que consome a fila de cliques (ADR 0002).
 - `internal/`: `app` (composition root), `server` (rotas e health), `handlers`, `middleware`, `services` (regras de negócio), `repositories` (PostgreSQL), `models`, `config`, `db`, `cache` (Redis), `messaging` (RabbitMQ), `jobs`, `shortcodes` (Sqids), `argon2`, `googleoidc`, `email` (Resend), `sessiontoken`, `verificationcode`, `ctxval`, `integration` (testes HTTP + PostgreSQL).
 - `migrations/`: migrations Goose, embarcadas no binário de testes.
 - `docs/`: `authentication.md`, `short-links.md`, `api.md`, `openapi.yaml`, `data-model.md`, `glossary.md`, `development.md` e `decisions/` (ADRs). Leia só quando mexer no assunto.
@@ -31,6 +31,7 @@ Não coloque co-author em nenhum commit criado por você, em nenhuma hipótese.
 | --- | --- |
 | `make infra/up` / `make infra/down` | Sobe só o PostgreSQL / para tudo. Redis e RabbitMQ sobem com `docker compose up -d --wait redis-shortener rabbitmq-shortener` |
 | `make run` | Sobe a API em `:8080` |
+| `make worker` | Sobe o worker de cliques |
 | `make test` | Testes unitários |
 | `make test/integration` | Testes de integração com Testcontainers (build tag `integration`), então o Docker precisa estar ligado. Um pacote novo com testes de integração precisa entrar na lista do alvo, no `Makefile` |
 | `make migration/new name=descricao` | Cria migration Goose |

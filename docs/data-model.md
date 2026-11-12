@@ -1,7 +1,7 @@
 # Modelo de dados
 
-> Status: migrations `00001` a `00006`
-> Última atualização: 29 de setembro de 2026
+> Status: migrations `00001` a `00007`
+> Última atualização: 12 de novembro de 2026
 
 PostgreSQL é a fonte da verdade. Tokens secretos são armazenados somente como hash.
 
@@ -77,9 +77,14 @@ erDiagram
         timestamptz created_at
         timestamptz expires_at
     }
+
+    processed_click_events {
+        uuid event_id PK
+        timestamptz processed_at
+    }
 ```
 
-`password_registration_attempts` não aponta para `users`, pois representa um cadastro que ainda não virou conta.
+`password_registration_attempts` não aponta para `users`, pois representa um cadastro que ainda não virou conta. `processed_click_events` não aponta para `urls`: guarda só o `event_id` para deduplicação.
 
 ## Ciclo de vida das contas
 
@@ -159,6 +164,12 @@ O schema e os fluxos HTTP de criação, listagem, consulta individual e redirect
 ### `link_access_sessions` 📋
 
 Sessão temporária e específica de um link privado. Não substitui `user_sessions` e não autentica uma conta.
+
+### `processed_click_events` ✅
+
+Tabela de deduplicação do worker de cliques ([ADR 0002](decisions/0002-click-events-rabbitmq-redis-cache.md)). Na mesma transação, o worker insere o `event_id` com `ON CONFLICT DO NOTHING` e, só se a linha foi inserida, incrementa `urls.click_count`. Uma reentrega do mesmo evento não insere nada e não conta de novo. Um evento para uma URL inexistente desfaz a transação e não é registrado.
+
+O worker apaga eventos com `processed_at` mais antigo que `PROCESSED_CLICK_EVENT_RETENTION` (7 dias por padrão), a cada hora; o índice em `processed_at` atende essa limpeza.
 
 ## Regras de exclusão
 
