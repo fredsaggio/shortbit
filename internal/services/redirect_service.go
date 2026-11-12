@@ -28,6 +28,11 @@ type PrivateLinkResolver interface {
 	ResolvePrivate(ctx context.Context, linkID int64, tokenHash []byte) (string, error)
 }
 
+type DestinationCache interface {
+	Get(ctx context.Context, shortCode string) (int64, string, bool, error)
+	Set(ctx context.Context, shortCode string, urlID int64, originalURL string) error
+}
+
 type ClickPublisher interface {
 	Publish(ctx context.Context, event messaging.ClickEvent) error
 }
@@ -38,16 +43,27 @@ type RedirectResult struct {
 }
 
 type RedirectService struct {
-	public    PublicLinkResolver
-	private   PrivateLinkResolver
-	heat      HeatTracker
-	publisher ClickPublisher
-	clicks    ClickEventStore
-	now       func() time.Time
+	public       PublicLinkResolver
+	private      PrivateLinkResolver
+	heat         HeatTracker
+	cache        DestinationCache
+	hotThreshold int64
+	publisher    ClickPublisher
+	clicks       ClickEventStore
+	now          func() time.Time
 }
 
-func NewRedirectService(public PublicLinkResolver, private PrivateLinkResolver, heat HeatTracker, publisher ClickPublisher, clicks ClickEventStore) *RedirectService {
-	return &RedirectService{public: public, private: private, heat: heat, publisher: publisher, clicks: clicks, now: time.Now}
+func NewRedirectService(public PublicLinkResolver, private PrivateLinkResolver, heat HeatTracker, cache DestinationCache, hotThreshold int64, publisher ClickPublisher, clicks ClickEventStore) *RedirectService {
+	return &RedirectService{
+		public:       public,
+		private:      private,
+		heat:         heat,
+		cache:        cache,
+		hotThreshold: hotThreshold,
+		publisher:    publisher,
+		clicks:       clicks,
+		now:          time.Now,
+	}
 }
 
 func (s *RedirectService) Resolve(ctx context.Context, shortCode, token string) (RedirectResult, error) {
@@ -86,21 +102,40 @@ func (s *RedirectService) Resolve(ctx context.Context, shortCode, token string) 
 }
 
 func (s *RedirectService) ResolvePublic(ctx context.Context, shortCode string) (string, error) {
-	urlID, originalURL, err := s.public.ResolvePublic(ctx, shortCode)
+	urlID, originalURL, cached, err := s.cache.Get(ctx, shortCode)
 	if err != nil {
-		if errors.Is(err, repositories.ErrURLNotFound) {
-			return "", ErrURLNotFound
+		slog.Warn("read cached URL destination failed", "short_code", shortCode, "error", err)
+		cached = false
+	}
+
+	if !cached {
+		urlID, originalURL, err = s.public.ResolvePublic(ctx, shortCode)
+		if err != nil {
+			if errors.Is(err, repositories.ErrURLNotFound) {
+				return "", ErrURLNotFound
+			}
+			return "", fmt.Errorf("resolve public URL: %w", err)
 		}
-		return "", fmt.Errorf("resolve public URL: %w", err)
 	}
 
 	if err := s.countClick(ctx, urlID); err != nil {
 		return "", err
 	}
 
-	if _, err := s.heat.Record(ctx, shortCode); err != nil {
+	heat, err := s.heat.Record(ctx, shortCode)
+	if err != nil {
 		slog.Warn("record public URL heat failed", "short_code", shortCode, "error", err)
+		return originalURL, nil
 	}
+
+	// Admitting only on a miss keeps the TTL as the maximum staleness: a hot
+	// link is read from PostgreSQL again after each expiry.
+	if !cached && heat >= s.hotThreshold {
+		if err := s.cache.Set(ctx, shortCode, urlID, originalURL); err != nil {
+			slog.Warn("cache hot URL destination failed", "short_code", shortCode, "error", err)
+		}
+	}
+
 	return originalURL, nil
 }
 

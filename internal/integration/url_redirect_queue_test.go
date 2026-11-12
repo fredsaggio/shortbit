@@ -94,7 +94,7 @@ func newQueueTestRouter(t *testing.T, pool *pgxpool.Pool, publisher services.Cli
 
 	createConfirmedPasswordUser(t, pool, email, "senha12345")
 
-	applicationHandlers, _, err := app.CompositionRoot(pool, testConfig(24*time.Hour), unusedGoogleOIDCClient{}, noopHeatTracker{}, publisher)
+	applicationHandlers, _, err := app.CompositionRoot(pool, testConfig(24*time.Hour), unusedGoogleOIDCClient{}, noopHeatTracker{}, noopDestinationCache{}, publisher)
 	if err != nil {
 		t.Fatalf("CompositionRoot() error = %v", err)
 	}

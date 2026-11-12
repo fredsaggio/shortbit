@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/fredsaggio/url-shortener/internal/app"
 	"github.com/fredsaggio/url-shortener/internal/cache"
@@ -52,7 +51,8 @@ func Run(ctx context.Context, getEnv func(string) string) error {
 		MaxRetries:            -1,
 	})
 
-	heatTracker := cache.NewRedisHeatTracker(redisClient, cfg.Redis.Timeout, time.Minute)
+	heatTracker := cache.NewRedisHeatTracker(redisClient, cfg.Redis.Timeout, cfg.HotURL.Window)
+	destinationCache := cache.NewRedisDestinationCache(redisClient, cfg.Redis.Timeout, cfg.HotURL.CacheTTL)
 
 	defer redisClient.Close()
 
@@ -86,7 +86,7 @@ func Run(ctx context.Context, getEnv func(string) string) error {
 		return fmt.Errorf("initialize Google OIDC client: %w", err)
 	}
 
-	handlers, registrationCleanup, err := app.CompositionRoot(pool, cfg, googleClient, heatTracker, clickPublisher)
+	handlers, registrationCleanup, err := app.CompositionRoot(pool, cfg, googleClient, heatTracker, destinationCache, clickPublisher)
 	if err != nil {
 		return fmt.Errorf("initialize application handlers: %w", err)
 	}

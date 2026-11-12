@@ -32,6 +32,10 @@ const (
 	defaultRedisAddr             = "127.0.0.1:6379"
 	defaultRedisOperationTimeout = 200 * time.Millisecond
 
+	defaultHotURLThreshold = 20
+	defaultHotURLWindow    = 60 * time.Second
+	defaultURLCacheTTL     = 5 * time.Minute
+
 	defaultRabbitMQPublishTimeout = 500 * time.Millisecond
 
 	defaultRabbitMQPrefetch             = 10
@@ -51,6 +55,7 @@ type Config struct {
 	PasswordReset        PasswordResetConfig
 	URL                  URLConfig
 	Redis                RedisConfig
+	HotURL               HotURLConfig
 	RabbitMQ             RabbitMQConfig
 }
 
@@ -80,6 +85,12 @@ type ResendConfig struct {
 type RedisConfig struct {
 	Addr    string
 	Timeout time.Duration
+}
+
+type HotURLConfig struct {
+	Threshold int64
+	Window    time.Duration
+	CacheTTL  time.Duration
 }
 
 type RabbitMQConfig struct {
@@ -170,6 +181,30 @@ func Load(getEnv func(string) string) (Config, error) {
 		return Config{}, errors.New("REDIS_OPERATION_TIMEOUT must be greater than zero")
 	}
 
+	hotURLThreshold, err := intEnvOrDefault(getEnv, "HOT_URL_THRESHOLD", defaultHotURLThreshold)
+	if err != nil {
+		return Config{}, err
+	}
+	if hotURLThreshold <= 0 {
+		return Config{}, errors.New("HOT_URL_THRESHOLD must be greater than zero")
+	}
+
+	hotURLWindow, err := durationEnvOrDefault(getEnv, "HOT_URL_WINDOW", defaultHotURLWindow)
+	if err != nil {
+		return Config{}, err
+	}
+	if hotURLWindow <= 0 {
+		return Config{}, errors.New("HOT_URL_WINDOW must be greater than zero")
+	}
+
+	urlCacheTTL, err := durationEnvOrDefault(getEnv, "URL_CACHE_TTL", defaultURLCacheTTL)
+	if err != nil {
+		return Config{}, err
+	}
+	if urlCacheTTL <= 0 {
+		return Config{}, errors.New("URL_CACHE_TTL must be greater than zero")
+	}
+
 	rabbitMQPublishTimeout, err := durationEnvOrDefault(getEnv, "RABBITMQ_PUBLISH_TIMEOUT", defaultRabbitMQPublishTimeout)
 	if err != nil {
 		return Config{}, err
@@ -251,6 +286,11 @@ func Load(getEnv func(string) string) (Config, error) {
 		Redis: RedisConfig{
 			Addr:    envOrDefault(getEnv, "REDIS_ADDR", defaultRedisAddr),
 			Timeout: redisOperationTimeout,
+		},
+		HotURL: HotURLConfig{
+			Threshold: int64(hotURLThreshold),
+			Window:    hotURLWindow,
+			CacheTTL:  urlCacheTTL,
 		},
 		RabbitMQ: RabbitMQConfig{
 			URL:            getEnv("RABBITMQ_URL"),

@@ -65,6 +65,37 @@ func (s *clickEventStoreStub) CountClickOnce(_ context.Context, eventID uuid.UUI
 	return s.err == nil, s.err
 }
 
+type destinationCacheStub struct {
+	urlID       int64
+	originalURL string
+	found       bool
+	getErr      error
+	setErr      error
+
+	gets []string
+	sets []struct {
+		shortCode   string
+		urlID       int64
+		originalURL string
+	}
+}
+
+func (c *destinationCacheStub) Get(_ context.Context, shortCode string) (int64, string, bool, error) {
+	c.gets = append(c.gets, shortCode)
+	return c.urlID, c.originalURL, c.found, c.getErr
+}
+
+func (c *destinationCacheStub) Set(_ context.Context, shortCode string, urlID int64, originalURL string) error {
+	c.sets = append(c.sets, struct {
+		shortCode   string
+		urlID       int64
+		originalURL string
+	}{shortCode, urlID, originalURL})
+	return c.setErr
+}
+
+const testHotThreshold = 3
+
 type privateLinkResolverStub struct {
 	findFunc    func(context.Context, string) (int64, string, error)
 	resolveFunc func(context.Context, int64, []byte) (string, error)
@@ -79,9 +110,129 @@ func (s privateLinkResolverStub) ResolvePrivate(ctx context.Context, linkID int6
 }
 
 func newRedirectService(public publicLinkResolverStub, private services.PrivateLinkResolver, heat heatTrackerStub) (*services.RedirectService, *clickPublisherStub, *clickEventStoreStub) {
+	service, publisher, clicks, _ := newCachedRedirectService(public, private, heat, &destinationCacheStub{})
+	return service, publisher, clicks
+}
+
+func newCachedRedirectService(public publicLinkResolverStub, private services.PrivateLinkResolver, heat heatTrackerStub, cache *destinationCacheStub) (*services.RedirectService, *clickPublisherStub, *clickEventStoreStub, *destinationCacheStub) {
 	publisher := &clickPublisherStub{}
 	clicks := &clickEventStoreStub{}
-	return services.NewRedirectService(public, private, heat, publisher, clicks), publisher, clicks
+	return services.NewRedirectService(public, private, heat, cache, testHotThreshold, publisher, clicks), publisher, clicks, cache
+}
+
+func heatCount(count int64) heatTrackerStub {
+	return func(context.Context, string) (int64, error) { return count, nil }
+}
+
+func unexpectedPublicResolver(t *testing.T) publicLinkResolverStub {
+	t.Helper()
+	return func(context.Context, string) (int64, string, error) {
+		t.Error("ResolvePublic() called on a cache hit")
+		return 0, "", nil
+	}
+}
+
+func TestRedirectServiceResolvePublicServesCacheHitWithoutDatabase(t *testing.T) {
+	service, publisher, _, cache := newCachedRedirectService(unexpectedPublicResolver(t), nil, heatCount(100),
+		&destinationCacheStub{urlID: 7, originalURL: "https://example.com/hot", found: true})
+
+	got, err := service.ResolvePublic(t.Context(), "Ab3dX9")
+	if err != nil || got != "https://example.com/hot" {
+		t.Fatalf("ResolvePublic() = (%q, %v), want cached destination", got, err)
+	}
+	if len(publisher.events) != 1 || publisher.events[0].URLID != 7 {
+		t.Errorf("published events = %+v, want one event for cached URL 7", publisher.events)
+	}
+	if len(cache.sets) != 0 {
+		t.Errorf("cache sets = %d, want 0: a hit must not renew the entry", len(cache.sets))
+	}
+}
+
+func TestRedirectServiceResolvePublicAdmitsHotDestination(t *testing.T) {
+	tests := []struct {
+		name      string
+		heat      int64
+		wantCache bool
+	}{
+		{name: "cold link stays out of the cache", heat: testHotThreshold - 1, wantCache: false},
+		{name: "link reaching the threshold is cached", heat: testHotThreshold, wantCache: true},
+		{name: "link above the threshold is cached", heat: testHotThreshold + 10, wantCache: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			service, _, _, cache := newCachedRedirectService(func(context.Context, string) (int64, string, error) {
+				return 7, "https://example.com/article", nil
+			}, nil, heatCount(tt.heat), &destinationCacheStub{})
+
+			if _, err := service.ResolvePublic(t.Context(), "Ab3dX9"); err != nil {
+				t.Fatalf("ResolvePublic() error = %v", err)
+			}
+
+			if !tt.wantCache {
+				if len(cache.sets) != 0 {
+					t.Errorf("cache sets = %+v, want none", cache.sets)
+				}
+				return
+			}
+			if len(cache.sets) != 1 || cache.sets[0].shortCode != "Ab3dX9" || cache.sets[0].urlID != 7 || cache.sets[0].originalURL != "https://example.com/article" {
+				t.Errorf("cache sets = %+v, want Ab3dX9 -> (7, destination)", cache.sets)
+			}
+		})
+	}
+}
+
+func TestRedirectServiceResolvePublicFallsBackToDatabaseOnCacheError(t *testing.T) {
+	resolved := false
+	service, _, _, _ := newCachedRedirectService(func(context.Context, string) (int64, string, error) {
+		resolved = true
+		return 7, "https://example.com/article", nil
+	}, nil, heatCount(1), &destinationCacheStub{getErr: errors.New("Redis unavailable")})
+
+	got, err := service.ResolvePublic(t.Context(), "Ab3dX9")
+	if err != nil || got != "https://example.com/article" || !resolved {
+		t.Errorf("ResolvePublic() = (%q, %v), resolved = %v; want database destination", got, err, resolved)
+	}
+}
+
+func TestRedirectServiceResolvePublicIgnoresCacheWriteError(t *testing.T) {
+	service, _, _, _ := newCachedRedirectService(func(context.Context, string) (int64, string, error) {
+		return 7, "https://example.com/article", nil
+	}, nil, heatCount(testHotThreshold), &destinationCacheStub{setErr: errors.New("Redis unavailable")})
+
+	got, err := service.ResolvePublic(t.Context(), "Ab3dX9")
+	if err != nil || got != "https://example.com/article" {
+		t.Errorf("ResolvePublic() = (%q, %v), want destination despite cache write error", got, err)
+	}
+}
+
+func TestRedirectServiceResolvePublicDoesNotCacheWithoutHeat(t *testing.T) {
+	service, _, _, cache := newCachedRedirectService(func(context.Context, string) (int64, string, error) {
+		return 7, "https://example.com/article", nil
+	}, nil, func(context.Context, string) (int64, error) {
+		return 0, errors.New("Redis unavailable")
+	}, &destinationCacheStub{})
+
+	if _, err := service.ResolvePublic(t.Context(), "Ab3dX9"); err != nil {
+		t.Fatalf("ResolvePublic() error = %v", err)
+	}
+	if len(cache.sets) != 0 {
+		t.Errorf("cache sets = %+v, want none when heat is unknown", cache.sets)
+	}
+}
+
+func TestRedirectServiceResolveNeverCachesPrivateLinks(t *testing.T) {
+	service, _, _, cache := newCachedRedirectService(publicNotFound, privateLinkResolverStub{
+		findFunc:    func(context.Context, string) (int64, string, error) { return 42, "stored-password-hash", nil },
+		resolveFunc: func(context.Context, int64, []byte) (string, error) { return "https://example.com/private", nil },
+	}, heatCount(testHotThreshold+10), &destinationCacheStub{})
+
+	if _, err := service.Resolve(t.Context(), "Qz7Rt2", "raw-link-token"); err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	if len(cache.sets) != 0 {
+		t.Errorf("cache sets = %+v, want none for a private link", cache.sets)
+	}
 }
 
 func TestRedirectServiceResolvePublicReturnsOriginalURL(t *testing.T) {

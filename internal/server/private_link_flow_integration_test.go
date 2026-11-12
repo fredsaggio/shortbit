@@ -31,6 +31,14 @@ func (tracker unexpectedPrivateLinkHeatTracker) Record(_ context.Context, code s
 	return 0, nil
 }
 
+type noopDestinationCache struct{}
+
+func (noopDestinationCache) Get(context.Context, string) (int64, string, bool, error) {
+	return 0, "", false, nil
+}
+
+func (noopDestinationCache) Set(context.Context, string, int64, string) error { return nil }
+
 type unavailableClickPublisher struct{}
 
 func (unavailableClickPublisher) Publish(context.Context, messaging.ClickEvent) error {
@@ -58,7 +66,7 @@ func TestPrivateLinkAccessFlowIntegration(t *testing.T) {
 		t.Fatalf("link access session TTL = %v, want 30m", cfg.LinkAccessSession.TTL)
 	}
 
-	handlers, _, err := app.CompositionRoot(pool, cfg, nil, unexpectedPrivateLinkHeatTracker{t: t}, unavailableClickPublisher{})
+	handlers, _, err := app.CompositionRoot(pool, cfg, nil, unexpectedPrivateLinkHeatTracker{t: t}, noopDestinationCache{}, unavailableClickPublisher{})
 	if err != nil {
 		t.Fatalf("build application: %v", err)
 	}
