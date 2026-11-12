@@ -19,9 +19,6 @@ var (
 )
 
 const (
-	minReconnectDelay = time.Second
-	maxReconnectDelay = 30 * time.Second
-
 	returnsBufferSize = 256
 	// A return whose publisher already gave up is never claimed; drop it
 	// after a period far longer than any publish timeout.
@@ -54,31 +51,16 @@ func NewClickPublisher(url string, timeout time.Duration) *ClickPublisher {
 
 // Run connects and reconnects with exponential backoff until ctx is done.
 func (p *ClickPublisher) Run(ctx context.Context) {
-	delay := minReconnectDelay
-
-	for {
+	keepConnected(ctx, "RabbitMQ unavailable; counting clicks synchronously", func(ctx context.Context) error {
 		conn, ch, returns, err := p.open()
 		if err != nil {
-			slog.Warn("RabbitMQ unavailable; counting clicks synchronously", "error", err, "retry_in", delay.String())
-
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(delay):
-			}
-
-			delay = min(delay*2, maxReconnectDelay)
-			continue
+			return err
 		}
 
-		delay = minReconnectDelay
 		slog.Info("RabbitMQ click publisher ready")
-
 		p.serve(ctx, conn, ch, returns)
-		if ctx.Err() != nil {
-			return
-		}
-	}
+		return nil
+	})
 }
 
 func (p *ClickPublisher) open() (*amqp.Connection, *amqp.Channel, chan amqp.Return, error) {

@@ -33,6 +33,10 @@ const (
 	defaultRedisOperationTimeout = 200 * time.Millisecond
 
 	defaultRabbitMQPublishTimeout = 500 * time.Millisecond
+
+	defaultRabbitMQPrefetch             = 10
+	maxRabbitMQPrefetch                 = 65535
+	defaultProcessedClickEventRetention = 7 * 24 * time.Hour
 )
 
 type Config struct {
@@ -81,6 +85,13 @@ type RedisConfig struct {
 type RabbitMQConfig struct {
 	URL            string
 	PublishTimeout time.Duration
+}
+
+type WorkerConfig struct {
+	DatabaseURL                  string
+	RabbitMQURL                  string
+	RabbitMQPrefetch             int
+	ProcessedClickEventRetention time.Duration
 }
 
 type PasswordRegistrationConfig struct {
@@ -282,6 +293,45 @@ func Load(getEnv func(string) string) (Config, error) {
 	return cfg, nil
 }
 
+func LoadWorker(getEnv func(string) string) (WorkerConfig, error) {
+	prefetch, err := intEnvOrDefault(getEnv, "RABBITMQ_PREFETCH", defaultRabbitMQPrefetch)
+	if err != nil {
+		return WorkerConfig{}, err
+	}
+	if prefetch <= 0 || prefetch > maxRabbitMQPrefetch {
+		return WorkerConfig{}, fmt.Errorf("RABBITMQ_PREFETCH must be between 1 and %d", maxRabbitMQPrefetch)
+	}
+
+	retention, err := durationEnvOrDefault(getEnv, "PROCESSED_CLICK_EVENT_RETENTION", defaultProcessedClickEventRetention)
+	if err != nil {
+		return WorkerConfig{}, err
+	}
+	if retention <= 0 {
+		return WorkerConfig{}, errors.New("PROCESSED_CLICK_EVENT_RETENTION must be greater than zero")
+	}
+
+	cfg := WorkerConfig{
+		DatabaseURL:                  getEnv("DATABASE_URL"),
+		RabbitMQURL:                  getEnv("RABBITMQ_URL"),
+		RabbitMQPrefetch:             prefetch,
+		ProcessedClickEventRetention: retention,
+	}
+
+	if cfg.DatabaseURL == "" {
+		return WorkerConfig{}, errors.New("DATABASE_URL is required")
+	}
+
+	if cfg.RabbitMQURL == "" {
+		return WorkerConfig{}, errors.New("RABBITMQ_URL is required")
+	}
+
+	if err := validateAMQPURL(cfg.RabbitMQURL); err != nil {
+		return WorkerConfig{}, err
+	}
+
+	return cfg, nil
+}
+
 func validateAMQPURL(value string) error {
 	parsed, err := url.Parse(value)
 	if err != nil {
@@ -321,6 +371,20 @@ func durationEnvOrDefault(getEnv func(string) string, key string, defaultValue t
 	}
 
 	return duration, nil
+}
+
+func intEnvOrDefault(getEnv func(string) string, key string, defaultValue int) (int, error) {
+	value := getEnv(key)
+	if value == "" {
+		return defaultValue, nil
+	}
+
+	number, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, fmt.Errorf("%s must be a valid integer: %w", key, err)
+	}
+
+	return number, nil
 }
 
 func boolEnvOrDefault(getEnv func(string) string, key string, defaultValue bool) (bool, error) {

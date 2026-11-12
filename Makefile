@@ -19,6 +19,7 @@ help:
 	@echo "  make test"
 	@echo "  make test/integration"
 	@echo "  make run"
+	@echo "  make worker"
 
 # Exemplo: make infra/up
 .PHONY: infra/up
@@ -75,3 +76,8 @@ test/integration:
 .PHONY: run
 run:
 	@go run ./cmd/api
+
+# Exemplo: make worker
+.PHONY: worker
+worker:
+	@go run ./cmd/worker

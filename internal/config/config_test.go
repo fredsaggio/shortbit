@@ -393,3 +393,70 @@ func rabbitMQEnv(rabbitMQURL string) map[string]string {
 		"RABBITMQ_URL":         rabbitMQURL,
 	}
 }
+
+func TestLoadWorker(t *testing.T) {
+	validEnv := func(overrides map[string]string) map[string]string {
+		env := map[string]string{
+			"DATABASE_URL": "postgres://localhost/app",
+			"RABBITMQ_URL": "amqp://user:password@localhost:5672/",
+		}
+		for key, value := range overrides {
+			env[key] = value
+		}
+		return env
+	}
+
+	defaults := config.WorkerConfig{
+		DatabaseURL:                  "postgres://localhost/app",
+		RabbitMQURL:                  "amqp://user:password@localhost:5672/",
+		RabbitMQPrefetch:             10,
+		ProcessedClickEventRetention: 7 * 24 * time.Hour,
+	}
+
+	tests := []struct {
+		name            string
+		env             map[string]string
+		want            config.WorkerConfig
+		wantErrContains string
+	}{
+		{name: "uses default values without API settings", env: validEnv(nil), want: defaults},
+		{
+			name: "loads provided configuration",
+			env:  validEnv(map[string]string{"RABBITMQ_PREFETCH": "25", "PROCESSED_CLICK_EVENT_RETENTION": "72h"}),
+			want: config.WorkerConfig{
+				DatabaseURL:                  "postgres://localhost/app",
+				RabbitMQURL:                  "amqp://user:password@localhost:5672/",
+				RabbitMQPrefetch:             25,
+				ProcessedClickEventRetention: 72 * time.Hour,
+			},
+		},
+		{name: "rejects invalid prefetch", env: validEnv(map[string]string{"RABBITMQ_PREFETCH": "many"}), wantErrContains: "RABBITMQ_PREFETCH must be a valid integer"},
+		{name: "rejects zero prefetch", env: validEnv(map[string]string{"RABBITMQ_PREFETCH": "0"}), wantErrContains: "RABBITMQ_PREFETCH must be between 1 and 65535"},
+		{name: "rejects prefetch above the AMQP limit", env: validEnv(map[string]string{"RABBITMQ_PREFETCH": "65536"}), wantErrContains: "RABBITMQ_PREFETCH must be between 1 and 65535"},
+		{name: "rejects invalid retention", env: validEnv(map[string]string{"PROCESSED_CLICK_EVENT_RETENTION": "forever"}), wantErrContains: "PROCESSED_CLICK_EVENT_RETENTION must be a valid duration"},
+		{name: "rejects zero retention", env: validEnv(map[string]string{"PROCESSED_CLICK_EVENT_RETENTION": "0s"}), wantErrContains: "PROCESSED_CLICK_EVENT_RETENTION must be greater than zero"},
+		{name: "rejects missing database URL", env: validEnv(map[string]string{"DATABASE_URL": ""}), wantErrContains: "DATABASE_URL is required"},
+		{name: "rejects missing RabbitMQ URL", env: validEnv(map[string]string{"RABBITMQ_URL": ""}), wantErrContains: "RABBITMQ_URL is required"},
+		{name: "rejects RabbitMQ URL with another scheme", env: validEnv(map[string]string{"RABBITMQ_URL": "http://localhost:5672/"}), wantErrContains: "RABBITMQ_URL must use the amqp or amqps scheme"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := config.LoadWorker(func(key string) string { return tt.env[key] })
+
+			if tt.wantErrContains != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErrContains) {
+					t.Fatalf("LoadWorker() error = %v, want error containing %q", err, tt.wantErrContains)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("LoadWorker() unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("LoadWorker() = %#v, want %#v", got, tt.want)
+			}
+		})
+	}
+}
