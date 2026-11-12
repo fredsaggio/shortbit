@@ -52,7 +52,7 @@ func TestPublicURLRedirectIntegration(t *testing.T) {
 	cfg := testConfig(24 * time.Hour)
 	cfg.Redis.Timeout = 2 * time.Second
 	heatTracker := cache.NewRedisHeatTracker(redisClient, cfg.Redis.Timeout, time.Minute)
-	applicationHandlers, _, err := app.CompositionRoot(pool, cfg, unusedGoogleOIDCClient{}, heatTracker)
+	applicationHandlers, _, err := app.CompositionRoot(pool, cfg, unusedGoogleOIDCClient{}, heatTracker, unavailableClickPublisher{})
 	if err != nil {
 		t.Fatalf("CompositionRoot() error = %v", err)
 	}

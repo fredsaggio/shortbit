@@ -283,6 +283,11 @@ func (h *URLHandler) Redirect(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "url não encontrada", http.StatusNotFound)
 			return
 		}
+		if errors.Is(err, services.ErrClickNotRecorded) {
+			slog.ErrorContext(ctx, "record click failed", "error", err)
+			http.Error(w, "serviço indisponível", http.StatusServiceUnavailable)
+			return
+		}
 		slog.ErrorContext(ctx, "resolve url", "error", err)
 		http.Error(w, "erro interno do servidor", http.StatusInternalServerError)
 		return

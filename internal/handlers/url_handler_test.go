@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -539,6 +540,7 @@ func TestURLHandlerRedirectMapsServiceErrors(t *testing.T) {
 	}{
 		{name: "not found", serviceErr: services.ErrURLNotFound, wantStatus: http.StatusNotFound, wantBody: "url não encontrada\n"},
 		{name: "wrapped not found", serviceErr: errors.Join(errors.New("context"), services.ErrURLNotFound), wantStatus: http.StatusNotFound, wantBody: "url não encontrada\n"},
+		{name: "click not recorded", serviceErr: fmt.Errorf("%w: secret broker and database details", services.ErrClickNotRecorded), wantStatus: http.StatusServiceUnavailable, wantBody: "serviço indisponível\n"},
 		{name: "internal", serviceErr: errors.New("secret database details"), wantStatus: http.StatusInternalServerError, wantBody: "erro interno do servidor\n"},
 	}
 	for _, tt := range tests {

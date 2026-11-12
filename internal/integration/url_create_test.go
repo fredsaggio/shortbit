@@ -24,7 +24,7 @@ func TestCreateURLIntegration(t *testing.T) {
 
 	pool := dbtest.Open(t)
 	userID := createConfirmedPasswordUser(t, pool, email, password)
-	applicationHandlers, _, err := app.CompositionRoot(pool, testConfig(24*time.Hour), unusedGoogleOIDCClient{}, noopHeatTracker{})
+	applicationHandlers, _, err := app.CompositionRoot(pool, testConfig(24*time.Hour), unusedGoogleOIDCClient{}, noopHeatTracker{}, unavailableClickPublisher{})
 	if err != nil {
 		t.Fatalf("CompositionRoot() error = %v", err)
 	}

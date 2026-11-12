@@ -15,6 +15,7 @@ import (
 	"github.com/fredsaggio/url-shortener/internal/argon2"
 	"github.com/fredsaggio/url-shortener/internal/config"
 	"github.com/fredsaggio/url-shortener/internal/db/dbtest"
+	"github.com/fredsaggio/url-shortener/internal/messaging"
 	"github.com/fredsaggio/url-shortener/internal/models"
 	"github.com/fredsaggio/url-shortener/internal/repositories"
 	"github.com/fredsaggio/url-shortener/internal/server"
@@ -30,6 +31,12 @@ func (tracker unexpectedPrivateLinkHeatTracker) Record(_ context.Context, code s
 	return 0, nil
 }
 
+type unavailableClickPublisher struct{}
+
+func (unavailableClickPublisher) Publish(context.Context, messaging.ClickEvent) error {
+	return messaging.ErrPublisherUnavailable
+}
+
 func TestPrivateLinkAccessFlowIntegration(t *testing.T) {
 	pool := dbtest.Open(t)
 	cfg, err := config.Load(func(key string) string {
@@ -41,6 +48,7 @@ func TestPrivateLinkAccessFlowIntegration(t *testing.T) {
 			"EMAIL_FROM":           "noreply@example.com",
 			"RESEND_API_KEY":       "test-resend-key",
 			"COOKIE_SECURE":        "false",
+			"RABBITMQ_URL":         "amqp://user:password@localhost:5672/",
 		}[key]
 	})
 	if err != nil {
@@ -50,7 +58,7 @@ func TestPrivateLinkAccessFlowIntegration(t *testing.T) {
 		t.Fatalf("link access session TTL = %v, want 30m", cfg.LinkAccessSession.TTL)
 	}
 
-	handlers, _, err := app.CompositionRoot(pool, cfg, nil, unexpectedPrivateLinkHeatTracker{t: t})
+	handlers, _, err := app.CompositionRoot(pool, cfg, nil, unexpectedPrivateLinkHeatTracker{t: t}, unavailableClickPublisher{})
 	if err != nil {
 		t.Fatalf("build application: %v", err)
 	}

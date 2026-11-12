@@ -24,7 +24,7 @@ func TestMeIntegration(t *testing.T) {
 	)
 
 	pool := dbtest.Open(t)
-	applicationHandlers, _, err := app.CompositionRoot(pool, testConfig(sessionTTL), unusedGoogleOIDCClient{}, noopHeatTracker{})
+	applicationHandlers, _, err := app.CompositionRoot(pool, testConfig(sessionTTL), unusedGoogleOIDCClient{}, noopHeatTracker{}, unavailableClickPublisher{})
 	if err != nil {
 		t.Fatalf("CompositionRoot() error = %v", err)
 	}

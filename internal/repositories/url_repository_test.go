@@ -433,7 +433,7 @@ func TestURLRepositoryFindPrivateByShortCodeIntegration(t *testing.T) {
 	}
 }
 
-func TestURLRepositoryResolvePublicAndCountClickIntegration(t *testing.T) {
+func TestURLRepositoryResolvePublicIntegration(t *testing.T) {
 	pool := dbtest.Open(t)
 	users := repositories.NewUserRepository(pool)
 	urls := repositories.NewURLRepository(pool)
@@ -478,15 +478,15 @@ func TestURLRepositoryResolvePublicAndCountClickIntegration(t *testing.T) {
 		return count
 	}
 
-	for wantCount := int64(1); wantCount <= 2; wantCount++ {
-		got, err := urls.ResolvePublicAndCountClick(t.Context(), public.ShortCode)
-		if err != nil || got != public.OriginalURL || clickCount(public.ShortCode) != wantCount {
-			t.Fatalf("public resolution %d = (%q, %v), count = %d; want URL %q and count %d",
-				wantCount, got, err, clickCount(public.ShortCode), public.OriginalURL, wantCount)
-		}
+	gotID, got, err := urls.ResolvePublic(t.Context(), public.ShortCode)
+	if err != nil || gotID != public.ID || got != public.OriginalURL {
+		t.Fatalf("public resolution = (%d, %q, %v), want (%d, %q, nil)", gotID, got, err, public.ID, public.OriginalURL)
+	}
+	if got := clickCount(public.ShortCode); got != 0 {
+		t.Errorf("public click count after resolution = %d, want 0: the click is counted separately", got)
 	}
 
-	if got, err := urls.ResolvePublicAndCountClick(t.Context(), private.ShortCode); got != "" || !errors.Is(err, repositories.ErrURLNotFound) {
+	if _, got, err := urls.ResolvePublic(t.Context(), private.ShortCode); got != "" || !errors.Is(err, repositories.ErrURLNotFound) {
 		t.Errorf("private resolution = (%q, %v), want empty URL and ErrURLNotFound", got, err)
 	}
 	if got := clickCount(private.ShortCode); got != 0 {
@@ -501,38 +501,12 @@ func TestURLRepositoryResolvePublicAndCountClickIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Generate(%d) for missing link error = %v", missingID, err)
 	}
-	if got, err := urls.ResolvePublicAndCountClick(t.Context(), missingCode); got != "" || !errors.Is(err, repositories.ErrURLNotFound) {
+	if _, got, err := urls.ResolvePublic(t.Context(), missingCode); got != "" || !errors.Is(err, repositories.ErrURLNotFound) {
 		t.Errorf("missing resolution = (%q, %v), want empty URL and ErrURLNotFound", got, err)
-	}
-
-	const workers = 20
-	type result struct {
-		originalURL string
-		err         error
-	}
-	results := make(chan result, workers)
-	var group sync.WaitGroup
-	for range workers {
-		group.Add(1)
-		go func() {
-			defer group.Done()
-			originalURL, err := urls.ResolvePublicAndCountClick(t.Context(), public.ShortCode)
-			results <- result{originalURL: originalURL, err: err}
-		}()
-	}
-	group.Wait()
-	close(results)
-	for got := range results {
-		if got.err != nil || got.originalURL != public.OriginalURL {
-			t.Errorf("concurrent resolution = (%q, %v), want %q", got.originalURL, got.err, public.OriginalURL)
-		}
-	}
-	if got := clickCount(public.ShortCode); got != 2+workers {
-		t.Errorf("click count after concurrent resolutions = %d, want %d", got, 2+workers)
 	}
 }
 
-func TestURLRepositoryResolvePrivateAndCountClickIntegration(t *testing.T) {
+func TestURLRepositoryResolvePrivateIntegration(t *testing.T) {
 	pool := dbtest.Open(t)
 	users := repositories.NewUserRepository(pool)
 	urls := repositories.NewURLRepository(pool)
@@ -613,47 +587,18 @@ func TestURLRepositoryResolvePrivateAndCountClickIntegration(t *testing.T) {
 		{name: "missing link", id: missingID, hash: validHash[:]},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := urls.ResolvePrivateAndCountClick(t.Context(), tt.id, tt.hash)
+			got, err := urls.ResolvePrivate(t.Context(), tt.id, tt.hash)
 			if got != "" || !errors.Is(err, repositories.ErrURLNotFound) {
-				t.Errorf("ResolvePrivateAndCountClick() = (%q, %v), want empty URL and ErrURLNotFound", got, err)
-			}
-			if count := clickCount(link.ID); count != 0 {
-				t.Errorf("private click count = %d, want 0", count)
+				t.Errorf("ResolvePrivate() = (%q, %v), want empty URL and ErrURLNotFound", got, err)
 			}
 		})
 	}
 
-	got, err := urls.ResolvePrivateAndCountClick(t.Context(), link.ID, validHash[:])
-	if err != nil || got != link.OriginalURL || clickCount(link.ID) != 1 {
-		t.Fatalf("valid resolution = (%q, %v), count = %d; want (%q, nil), count 1", got, err, clickCount(link.ID), link.OriginalURL)
+	got, err := urls.ResolvePrivate(t.Context(), link.ID, validHash[:])
+	if err != nil || got != link.OriginalURL {
+		t.Fatalf("valid resolution = (%q, %v), want (%q, nil)", got, err, link.OriginalURL)
 	}
-
-	const workers = 20
-	type result struct {
-		originalURL string
-		err         error
-	}
-	results := make(chan result, workers)
-	var group sync.WaitGroup
-	for range workers {
-		group.Add(1)
-		go func() {
-			defer group.Done()
-			originalURL, err := urls.ResolvePrivateAndCountClick(t.Context(), link.ID, validHash[:])
-			results <- result{originalURL: originalURL, err: err}
-		}()
-	}
-	group.Wait()
-	close(results)
-	for result := range results {
-		if result.err != nil || result.originalURL != link.OriginalURL {
-			t.Errorf("concurrent resolution = (%q, %v), want %q", result.originalURL, result.err, link.OriginalURL)
-		}
-	}
-	if count := clickCount(link.ID); count != 1+workers {
-		t.Errorf("click count after concurrent resolutions = %d, want %d", count, 1+workers)
-	}
-	if count := clickCount(otherLink.ID); count != 0 {
-		t.Errorf("other link click count = %d, want 0", count)
+	if count := clickCount(link.ID); count != 0 {
+		t.Errorf("private click count after resolution = %d, want 0: the click is counted separately", count)
 	}
 }

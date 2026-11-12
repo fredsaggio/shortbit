@@ -38,7 +38,7 @@ const (
 	passwordResetEmailRateLimitStaleAfter        = 30 * time.Minute
 )
 
-func CompositionRoot(pool db.DB, cfg config.Config, googleClient services.GoogleOIDCClient, heatTracker services.HeatTracker) (*server.Handlers, *jobs.PasswordRegistrationCleanup, error) {
+func CompositionRoot(pool db.DB, cfg config.Config, googleClient services.GoogleOIDCClient, heatTracker services.HeatTracker, clickPublisher services.ClickPublisher) (*server.Handlers, *jobs.PasswordRegistrationCleanup, error) {
 	passwordHasher := argon2.Argon2id{}
 	userRepository := repositories.NewUserRepository(pool)
 	passwordRegisterCleanup := jobs.NewPasswordRegistrationCleanup(userRepository)
@@ -83,7 +83,8 @@ func CompositionRoot(pool db.DB, cfg config.Config, googleClient services.Google
 	}
 
 	// O cliente Redis é criado na main, que é responsável por fechá-lo ao desligar a aplicação.
-	redirectService := services.NewRedirectService(urlRepository, urlRepository, heatTracker)
+	clickEventRepository := repositories.NewClickEventRepository(pool)
+	redirectService := services.NewRedirectService(urlRepository, urlRepository, heatTracker, clickPublisher, clickEventRepository)
 	urlHandler := handlers.NewURLHandler(urlService, redirectService)
 	linkAccessSessionRepository := repositories.NewLinkAccessSessionRepository(pool)
 	linkAccessSessionService := services.NewLinkAccessSessionService(urlRepository, linkAccessSessionRepository, cfg.LinkAccessSession.TTL, sessiontoken.Generate, passwordHasher)

@@ -86,7 +86,7 @@ func Run(ctx context.Context, getEnv func(string) string) error {
 		return fmt.Errorf("initialize Google OIDC client: %w", err)
 	}
 
-	handlers, registrationCleanup, err := app.CompositionRoot(pool, cfg, googleClient, heatTracker)
+	handlers, registrationCleanup, err := app.CompositionRoot(pool, cfg, googleClient, heatTracker, clickPublisher)
 	if err != nil {
 		return fmt.Errorf("initialize application handlers: %w", err)
 	}

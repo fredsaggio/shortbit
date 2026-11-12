@@ -163,29 +163,29 @@ func (r *URLRepository) GetByShortcode(ctx context.Context, userID uuid.UUID, sh
 	return url, nil
 }
 
-func (r *URLRepository) ResolvePublicAndCountClick(ctx context.Context, shortCode string) (string, error) {
+func (r *URLRepository) ResolvePublic(ctx context.Context, shortCode string) (int64, string, error) {
 	const q = `
-		UPDATE urls
-		SET click_count = click_count + 1
+		SELECT id, original_url
+		FROM urls
 		WHERE short_code = @shortCode AND visibility = 'public'
-		RETURNING original_url
 	`
 
 	args := pgx.StrictNamedArgs{
 		"shortCode": shortCode,
 	}
 
+	var id int64
 	var originalURL string
 
-	if err := r.db.QueryRow(ctx, q, args).Scan(&originalURL); err != nil {
+	if err := r.db.QueryRow(ctx, q, args).Scan(&id, &originalURL); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return "", ErrURLNotFound
+			return 0, "", ErrURLNotFound
 		}
 
-		return "", fmt.Errorf("resolve public URL and count click: %w", err)
+		return 0, "", fmt.Errorf("resolve public URL: %w", err)
 	}
 
-	return originalURL, nil
+	return id, originalURL, nil
 }
 
 func (r *URLRepository) FindPrivateByShortCode(ctx context.Context, shortCode string) (int64, string, error) {
@@ -215,10 +215,10 @@ func (r *URLRepository) FindPrivateByShortCode(ctx context.Context, shortCode st
 	return linkID, passwordHash, nil
 }
 
-func (r *URLRepository) ResolvePrivateAndCountClick(ctx context.Context, linkID int64, tokenHash []byte) (string, error) {
+func (r *URLRepository) ResolvePrivate(ctx context.Context, linkID int64, tokenHash []byte) (string, error) {
 	const q = `
-		UPDATE urls
-		SET click_count = click_count + 1
+		SELECT original_url
+		FROM urls
 		WHERE id = @linkID AND visibility = 'private'
 			AND EXISTS (
 				SELECT 1
@@ -227,7 +227,6 @@ func (r *URLRepository) ResolvePrivateAndCountClick(ctx context.Context, linkID 
 					AND token_hash = @tokenHash
 					AND expires_at > NOW()
 			)
-		RETURNING original_url
 	`
 
 	args := pgx.StrictNamedArgs{"linkID": linkID, "tokenHash": tokenHash}
@@ -237,7 +236,7 @@ func (r *URLRepository) ResolvePrivateAndCountClick(ctx context.Context, linkID 
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", ErrURLNotFound
 		}
-		return "", fmt.Errorf("resolve private URL and count click: %w", err)
+		return "", fmt.Errorf("resolve private URL: %w", err)
 	}
 
 	return originalURL, nil

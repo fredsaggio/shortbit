@@ -5,13 +5,17 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
+	"github.com/fredsaggio/url-shortener/internal/messaging"
 	"github.com/fredsaggio/url-shortener/internal/repositories"
 	"github.com/fredsaggio/url-shortener/internal/sessiontoken"
 )
 
+var ErrClickNotRecorded = errors.New("click could not be recorded")
+
 type PublicLinkResolver interface {
-	ResolvePublicAndCountClick(ctx context.Context, shortCode string) (string, error)
+	ResolvePublic(ctx context.Context, shortCode string) (int64, string, error)
 }
 
 type HeatTracker interface {
@@ -20,8 +24,12 @@ type HeatTracker interface {
 
 type PrivateLinkResolver interface {
 	FindPrivateByShortCode(ctx context.Context, shortCode string) (int64, string, error)
-	// ResolvePrivateAndCountClick must validate the token, link ID, and expiry before incrementing the click in the same database operation.
-	ResolvePrivateAndCountClick(ctx context.Context, linkID int64, tokenHash []byte) (string, error)
+	// ResolvePrivate must validate the token, link ID, and expiry in the same database operation.
+	ResolvePrivate(ctx context.Context, linkID int64, tokenHash []byte) (string, error)
+}
+
+type ClickPublisher interface {
+	Publish(ctx context.Context, event messaging.ClickEvent) error
 }
 
 type RedirectResult struct {
@@ -30,13 +38,16 @@ type RedirectResult struct {
 }
 
 type RedirectService struct {
-	public  PublicLinkResolver
-	private PrivateLinkResolver
-	heat    HeatTracker
+	public    PublicLinkResolver
+	private   PrivateLinkResolver
+	heat      HeatTracker
+	publisher ClickPublisher
+	clicks    ClickEventStore
+	now       func() time.Time
 }
 
-func NewRedirectService(public PublicLinkResolver, private PrivateLinkResolver, heat HeatTracker) *RedirectService {
-	return &RedirectService{public: public, private: private, heat: heat}
+func NewRedirectService(public PublicLinkResolver, private PrivateLinkResolver, heat HeatTracker, publisher ClickPublisher, clicks ClickEventStore) *RedirectService {
+	return &RedirectService{public: public, private: private, heat: heat, publisher: publisher, clicks: clicks, now: time.Now}
 }
 
 func (s *RedirectService) Resolve(ctx context.Context, shortCode, token string) (RedirectResult, error) {
@@ -59,7 +70,7 @@ func (s *RedirectService) Resolve(ctx context.Context, shortCode, token string) 
 		return RedirectResult{PasswordRequired: true}, nil
 	}
 
-	originalURL, err = s.private.ResolvePrivateAndCountClick(ctx, linkID, sessiontoken.Hash(token))
+	originalURL, err = s.private.ResolvePrivate(ctx, linkID, sessiontoken.Hash(token))
 	if err != nil {
 		if errors.Is(err, repositories.ErrURLNotFound) {
 			return RedirectResult{PasswordRequired: true}, nil
@@ -67,20 +78,50 @@ func (s *RedirectService) Resolve(ctx context.Context, shortCode, token string) 
 		return RedirectResult{}, fmt.Errorf("resolve private URL: %w", err)
 	}
 
+	if err := s.countClick(ctx, linkID); err != nil {
+		return RedirectResult{}, err
+	}
+
 	return RedirectResult{OriginalURL: originalURL}, nil
 }
 
 func (s *RedirectService) ResolvePublic(ctx context.Context, shortCode string) (string, error) {
-	originalURL, err := s.public.ResolvePublicAndCountClick(ctx, shortCode)
+	urlID, originalURL, err := s.public.ResolvePublic(ctx, shortCode)
 	if err != nil {
 		if errors.Is(err, repositories.ErrURLNotFound) {
 			return "", ErrURLNotFound
 		}
-		return "", fmt.Errorf("resolve public URL and count click: %w", err)
+		return "", fmt.Errorf("resolve public URL: %w", err)
+	}
+
+	if err := s.countClick(ctx, urlID); err != nil {
+		return "", err
 	}
 
 	if _, err := s.heat.Record(ctx, shortCode); err != nil {
 		slog.Warn("record public URL heat failed", "short_code", shortCode, "error", err)
 	}
 	return originalURL, nil
+}
+
+// The fallback reuses the event ID: if a publish that timed out still reaches
+// the queue, the worker finds the event already processed.
+func (s *RedirectService) countClick(ctx context.Context, urlID int64) error {
+	event := messaging.NewClickEvent(urlID, s.now())
+
+	publishErr := s.publisher.Publish(ctx, event)
+	if publishErr == nil {
+		return nil
+	}
+
+	slog.WarnContext(ctx, "publish click event failed; counting synchronously", "event_id", event.EventID, "url_id", urlID, "error", publishErr)
+
+	if _, err := s.clicks.CountClickOnce(ctx, event.EventID, urlID); err != nil {
+		if errors.Is(err, repositories.ErrURLNotFound) {
+			return ErrURLNotFound
+		}
+		return fmt.Errorf("%w: publish: %w; count synchronously: %w", ErrClickNotRecorded, publishErr, err)
+	}
+
+	return nil
 }
