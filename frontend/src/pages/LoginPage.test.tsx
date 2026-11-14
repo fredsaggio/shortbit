@@ -38,6 +38,33 @@ describe('LoginPage', () => {
     expect(screen.getByTestId('current-path')).toHaveTextContent('/entrar')
   })
 
+  it('shows its own messages for empty fields instead of calling the API', async () => {
+    const api = fakeApi(signedOut)
+    const { user: actions } = renderApp('/entrar')
+
+    await actions.click(await screen.findByRole('button', { name: 'Entrar' }))
+
+    expect(screen.getByText('Informe seu email.')).toBeInTheDocument()
+    expect(screen.getByText('Informe sua senha.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Email')).toHaveFocus()
+    expect(api.calls('POST', '/sessions')).toHaveLength(0)
+
+    await actions.type(screen.getByLabelText('Email'), 'ana')
+    expect(screen.queryByText('Informe seu email.')).not.toBeInTheDocument()
+  })
+
+  it('rejects a malformed email before calling the API', async () => {
+    const api = fakeApi(signedOut)
+    const { user: actions } = renderApp('/entrar')
+
+    await actions.type(await screen.findByLabelText('Email'), 'ana@')
+    await actions.type(screen.getByLabelText('Senha'), 'senha12345')
+    await actions.click(screen.getByRole('button', { name: 'Entrar' }))
+
+    expect(screen.getByText('Digite um email válido, como nome@exemplo.com.')).toBeInTheDocument()
+    expect(api.calls('POST', '/sessions')).toHaveLength(0)
+  })
+
   it('explains a failed Google login', async () => {
     fakeApi(signedOut)
     renderApp('/entrar?erro=google')

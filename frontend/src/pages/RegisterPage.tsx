@@ -7,8 +7,9 @@ import { Alert } from '../components/Alert.tsx'
 import { Button } from '../components/Button.tsx'
 import { GoogleButton } from '../components/GoogleButton.tsx'
 import { TextField } from '../components/TextField.tsx'
+import { useFieldErrors } from '../useFieldErrors.ts'
+import { checkCode, checkConfirmation, checkEmail, checkNewPassword, minPasswordLength } from '../validation.ts'
 
-const minPasswordLength = 8
 const resendCooldownSeconds = 30
 
 export function RegisterPage() {
@@ -26,6 +27,7 @@ export function RegisterPage() {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [resendIn, setResendIn] = useState(0)
+  const fields = useFieldErrors<'email' | 'password' | 'passwordConfirmation' | 'code'>()
 
   useEffect(() => {
     if (resendIn <= 0) {
@@ -38,16 +40,20 @@ export function RegisterPage() {
   async function handleDetails(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError('')
-    if (password !== passwordConfirmation) {
-      setError('As senhas não coincidem.')
+    const valid = fields.check(event.currentTarget, {
+      email: checkEmail(email),
+      password: checkNewPassword(password),
+      passwordConfirmation: checkConfirmation(password, passwordConfirmation),
+    })
+    if (!valid) {
       return
     }
 
     setSubmitting(true)
     try {
-      await startRegistration(email, password)
+      await startRegistration(email.trim(), password)
       setStep('code')
-      setNotice(`Enviamos um código de 6 dígitos para ${email}.`)
+      setNotice(`Enviamos um código de 6 dígitos para ${email.trim()}.`)
       setResendIn(resendCooldownSeconds)
     } catch (submitError) {
       setError(messageOf(submitError))
@@ -59,6 +65,10 @@ export function RegisterPage() {
   async function handleCode(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError('')
+    if (!fields.check(event.currentTarget, { code: checkCode(code, 6) })) {
+      return
+    }
+
     setSubmitting(true)
     try {
       await confirmRegistration(code)
@@ -71,10 +81,10 @@ export function RegisterPage() {
     // The account exists now; signing in with the password typed a moment
     // ago saves the visitor a second form.
     try {
-      await signIn(email, password, false)
+      await signIn(email.trim(), password, false)
       navigate('/painel', { replace: true })
     } catch {
-      navigate('/entrar', { replace: true, state: { email, message: 'Conta criada! Entre com seu email e senha.' } })
+      navigate('/entrar', { replace: true, state: { email: email.trim(), message: 'Conta criada! Entre com seu email e senha.' } })
     }
   }
 
@@ -83,7 +93,7 @@ export function RegisterPage() {
     setNotice('')
     try {
       await resendRegistrationCode()
-      setNotice(`Enviamos um novo código para ${email}.`)
+      setNotice(`Enviamos um novo código para ${email.trim()}.`)
       setResendIn(resendCooldownSeconds)
     } catch (resendError) {
       setError(messageOf(resendError))
@@ -113,32 +123,45 @@ export function RegisterPage() {
             <GoogleButton label="Criar conta com Google" />
             <div className="divider">ou com email</div>
 
-            <form className="form" onSubmit={handleDetails}>
+            <form className="form" onSubmit={handleDetails} noValidate>
               <TextField
                 label="Email"
+                name="email"
                 type="email"
                 autoComplete="email"
                 value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                error={fields.errors.email}
+                onChange={(event) => {
+                  setEmail(event.target.value)
+                  fields.clear('email')
+                }}
                 required
               />
               <TextField
                 label="Senha"
+                name="password"
                 type="password"
                 autoComplete="new-password"
-                minLength={minPasswordLength}
                 hint={`Mínimo de ${minPasswordLength} caracteres.`}
                 value={password}
-                onChange={(event) => setPassword(event.target.value)}
+                error={fields.errors.password}
+                onChange={(event) => {
+                  setPassword(event.target.value)
+                  fields.clear('password')
+                }}
                 required
               />
               <TextField
                 label="Confirme a senha"
+                name="passwordConfirmation"
                 type="password"
                 autoComplete="new-password"
-                minLength={minPasswordLength}
                 value={passwordConfirmation}
-                onChange={(event) => setPasswordConfirmation(event.target.value)}
+                error={fields.errors.passwordConfirmation}
+                onChange={(event) => {
+                  setPasswordConfirmation(event.target.value)
+                  fields.clear('passwordConfirmation')
+                }}
                 required
               />
               <Button type="submit" block loading={submitting}>
@@ -160,16 +183,20 @@ export function RegisterPage() {
             {notice && <Alert tone="success">{notice}</Alert>}
             {error && <Alert tone="error">{error}</Alert>}
 
-            <form className="form" onSubmit={handleCode}>
+            <form className="form" onSubmit={handleCode} noValidate>
               <TextField
                 label="Código de confirmação"
+                name="code"
                 inputMode="numeric"
                 autoComplete="one-time-code"
-                pattern="[0-9]{6}"
                 maxLength={6}
                 placeholder="000000"
                 value={code}
-                onChange={(event) => setCode(event.target.value.replace(/\D/g, ''))}
+                error={fields.errors.code}
+                onChange={(event) => {
+                  setCode(event.target.value.replace(/\D/g, ''))
+                  fields.clear('code')
+                }}
                 required
               />
               <Button type="submit" block loading={submitting}>

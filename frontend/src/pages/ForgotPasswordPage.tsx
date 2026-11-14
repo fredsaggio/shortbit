@@ -6,8 +6,8 @@ import { useAuth } from '../auth/AuthContext.ts'
 import { Alert } from '../components/Alert.tsx'
 import { Button } from '../components/Button.tsx'
 import { TextField } from '../components/TextField.tsx'
-
-const minPasswordLength = 8
+import { useFieldErrors } from '../useFieldErrors.ts'
+import { checkCode, checkConfirmation, checkEmail, checkNewPassword, minPasswordLength } from '../validation.ts'
 
 export function ForgotPasswordPage() {
   const { refresh } = useAuth()
@@ -19,13 +19,18 @@ export function ForgotPasswordPage() {
   const [passwordConfirmation, setPasswordConfirmation] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const fields = useFieldErrors<'email' | 'code' | 'password' | 'passwordConfirmation'>()
 
   async function handleEmail(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError('')
+    if (!fields.check(event.currentTarget, { email: checkEmail(email) })) {
+      return
+    }
+
     setSubmitting(true)
     try {
-      await startPasswordReset(email)
+      await startPasswordReset(email.trim())
       setStep('code')
     } catch (submitError) {
       setError(messageOf(submitError))
@@ -37,8 +42,12 @@ export function ForgotPasswordPage() {
   async function handleReset(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError('')
-    if (password !== passwordConfirmation) {
-      setError('As senhas não coincidem.')
+    const valid = fields.check(event.currentTarget, {
+      code: checkCode(code, 8),
+      password: checkNewPassword(password),
+      passwordConfirmation: checkConfirmation(password, passwordConfirmation),
+    })
+    if (!valid) {
       return
     }
 
@@ -53,7 +62,7 @@ export function ForgotPasswordPage() {
 
     // The reset revokes every session, including this browser's.
     await refresh()
-    navigate('/entrar', { replace: true, state: { email, message: 'Senha alterada. Entre com a nova senha.' } })
+    navigate('/entrar', { replace: true, state: { email: email.trim(), message: 'Senha alterada. Entre com a nova senha.' } })
   }
 
   return (
@@ -68,13 +77,18 @@ export function ForgotPasswordPage() {
 
             {error && <Alert tone="error">{error}</Alert>}
 
-            <form className="form" onSubmit={handleEmail}>
+            <form className="form" onSubmit={handleEmail} noValidate>
               <TextField
                 label="Email"
+                name="email"
                 type="email"
                 autoComplete="email"
                 value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                error={fields.errors.email}
+                onChange={(event) => {
+                  setEmail(event.target.value)
+                  fields.clear('email')
+                }}
                 required
               />
               <Button type="submit" block loading={submitting}>
@@ -86,41 +100,53 @@ export function ForgotPasswordPage() {
           <>
             <header className="auth-card__header">
               <h1>Nova senha</h1>
-              <p>Digite o código de 8 dígitos enviado para {email} e escolha a nova senha.</p>
+              <p>Digite o código de 8 dígitos enviado para {email.trim()} e escolha a nova senha.</p>
             </header>
 
             <Alert tone="info">Se o email não chegar em alguns minutos, confira o spam ou volte e tente de novo.</Alert>
             {error && <Alert tone="error">{error}</Alert>}
 
-            <form className="form" onSubmit={handleReset}>
+            <form className="form" onSubmit={handleReset} noValidate>
               <TextField
                 label="Código de recuperação"
+                name="code"
                 inputMode="numeric"
                 autoComplete="one-time-code"
-                pattern="[0-9]{8}"
                 maxLength={8}
                 placeholder="00000000"
                 value={code}
-                onChange={(event) => setCode(event.target.value.replace(/\D/g, ''))}
+                error={fields.errors.code}
+                onChange={(event) => {
+                  setCode(event.target.value.replace(/\D/g, ''))
+                  fields.clear('code')
+                }}
                 required
               />
               <TextField
                 label="Nova senha"
+                name="password"
                 type="password"
                 autoComplete="new-password"
-                minLength={minPasswordLength}
                 hint={`Mínimo de ${minPasswordLength} caracteres.`}
                 value={password}
-                onChange={(event) => setPassword(event.target.value)}
+                error={fields.errors.password}
+                onChange={(event) => {
+                  setPassword(event.target.value)
+                  fields.clear('password')
+                }}
                 required
               />
               <TextField
                 label="Confirme a nova senha"
+                name="passwordConfirmation"
                 type="password"
                 autoComplete="new-password"
-                minLength={minPasswordLength}
                 value={passwordConfirmation}
-                onChange={(event) => setPasswordConfirmation(event.target.value)}
+                error={fields.errors.passwordConfirmation}
+                onChange={(event) => {
+                  setPasswordConfirmation(event.target.value)
+                  fields.clear('passwordConfirmation')
+                }}
                 required
               />
               <Button type="submit" block loading={submitting}>

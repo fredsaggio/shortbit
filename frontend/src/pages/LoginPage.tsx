@@ -7,6 +7,8 @@ import { Button } from '../components/Button.tsx'
 import { GoogleButton } from '../components/GoogleButton.tsx'
 import { TextField } from '../components/TextField.tsx'
 import { returnPath } from '../navigation.ts'
+import { useFieldErrors } from '../useFieldErrors.ts'
+import { checkEmail, checkRequired } from '../validation.ts'
 
 type LoginLocationState = { message?: string; email?: string } | null
 
@@ -21,6 +23,7 @@ export function LoginPage() {
   const [password, setPassword] = useState('')
   const [rememberMe, setRememberMe] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const fields = useFieldErrors<'email' | 'password'>()
   const [error, setError] = useState(
     searchParams.get('erro') === 'google' ? 'Não foi possível entrar com o Google. Tente de novo.' : '',
   )
@@ -28,9 +31,17 @@ export function LoginPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError('')
+    const valid = fields.check(event.currentTarget, {
+      email: checkEmail(email),
+      password: checkRequired(password, 'Informe sua senha.'),
+    })
+    if (!valid) {
+      return
+    }
+
     setSubmitting(true)
     try {
-      await signIn(email, password, rememberMe)
+      await signIn(email.trim(), password, rememberMe)
       navigate(returnPath(location.state), { replace: true })
     } catch (submitError) {
       setError(messageOf(submitError))
@@ -52,21 +63,31 @@ export function LoginPage() {
         <GoogleButton />
         <div className="divider">ou com email</div>
 
-        <form className="form" onSubmit={handleSubmit}>
+        <form className="form" onSubmit={handleSubmit} noValidate>
           <TextField
             label="Email"
+            name="email"
             type="email"
             autoComplete="email"
             value={email}
-            onChange={(event) => setEmail(event.target.value)}
+            error={fields.errors.email}
+            onChange={(event) => {
+              setEmail(event.target.value)
+              fields.clear('email')
+            }}
             required
           />
           <TextField
             label="Senha"
+            name="password"
             type="password"
             autoComplete="current-password"
             value={password}
-            onChange={(event) => setPassword(event.target.value)}
+            error={fields.errors.password}
+            onChange={(event) => {
+              setPassword(event.target.value)
+              fields.clear('password')
+            }}
             required
           />
           <div className="row-between">

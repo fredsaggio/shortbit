@@ -43,7 +43,10 @@ describe('RegisterPage', () => {
 
     await fillDetails(actions, 'outra-senha1')
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('As senhas não coincidem.')
+    const confirmation = screen.getByLabelText('Confirme a senha')
+    expect(await screen.findByText('As senhas não coincidem.')).toBeInTheDocument()
+    expect(confirmation).toHaveAttribute('aria-invalid', 'true')
+    expect(confirmation).toHaveFocus()
     expect(api.calls('POST', '/registrations/password')).toHaveLength(0)
   })
 

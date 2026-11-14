@@ -10,14 +10,18 @@
   --blue-hover: #1f47ad;
   --blue-soft: #e8eefc;
 
-  --page: #f4f6fa;
+  /* Page background, as on bitly.com. Text placed directly on it must be
+     white or --on-blue-muted; orange text on it is only 1.8:1. */
+  --page: #2a5bd7;
+  --on-blue-muted: #dce6ff;
   --surface: #ffffff;
   --surface-muted: #f4f6fa;
   --text: var(--navy);
   --text-muted: #5b6478;
   --border: rgba(11, 23, 54, 0.12);
   --border-strong: rgba(11, 23, 54, 0.26);
-  --focus: 0 0 0 3px rgba(42, 91, 215, 0.45);
+  /* Two rings so focus shows on both the blue page and white cards. */
+  --focus: 0 0 0 2px #fff, 0 0 0 4px var(--navy);
 
   --error-bg: #fdecea;
   --error-text: #a3200f;
@@ -64,6 +68,17 @@ p {
 a {
   color: var(--blue);
   text-underline-offset: 2px;
+}
+
+/* Text that sits directly on the blue page, outside cards. */
+.on-blue,
+.on-blue a,
+.on-blue a:hover {
+  color: #fff;
+}
+
+.on-blue-muted {
+  color: var(--on-blue-muted);
 }
 
 a:hover {
@@ -304,7 +319,7 @@ a:hover {
   width: 28px;
   height: 28px;
   border-width: 3px;
-  color: var(--orange);
+  color: currentColor;
 }
 
 @keyframes spin {
@@ -325,6 +340,10 @@ a:hover {
   justify-content: center;
   gap: 12px;
   padding: 96px 16px;
+  color: #fff;
+}
+
+.card .page-loader {
   color: var(--text-muted);
 }
 
@@ -359,7 +378,29 @@ a:hover {
 .field__input:focus {
   outline: none;
   border-color: var(--blue);
-  box-shadow: var(--focus);
+  box-shadow: 0 0 0 3px rgba(42, 91, 215, 0.3);
+}
+
+.field--invalid .field__input {
+  border-color: var(--error-text);
+}
+
+.field--invalid .field__input:focus {
+  box-shadow: 0 0 0 3px rgba(163, 32, 15, 0.25);
+}
+
+.field__error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--error-text);
+}
+
+.field__error svg {
+  flex: none;
 }
 
 .field__hint {
@@ -520,9 +561,9 @@ a:hover {
 /* Home */
 
 .hero {
-  background: var(--navy);
+  background: transparent;
   color: #fff;
-  padding: 72px 0 88px;
+  padding: 72px 0 24px;
   overflow: hidden;
 }
 
@@ -550,7 +591,11 @@ a:hover {
 
 .hero__title em {
   font-style: normal;
-  color: var(--orange);
+  color: #fff;
+  text-decoration: underline;
+  text-decoration-color: var(--orange);
+  text-decoration-thickness: 0.12em;
+  text-underline-offset: 0.12em;
 }
 
 .hero__lead {
@@ -595,10 +640,11 @@ a:hover {
 .section__title {
   font-size: clamp(1.6rem, 3vw, 2.2rem);
   max-width: 24ch;
+  color: #fff;
 }
 
 .section__lead {
-  color: var(--text-muted);
+  color: var(--on-blue-muted);
   max-width: 60ch;
   margin-bottom: 32px;
 }
@@ -653,8 +699,8 @@ a:hover {
 }
 
 .cta {
-  background: var(--blue);
-  color: #fff;
+  background: var(--surface);
+  color: var(--navy);
   padding: 56px 0;
 }
 
@@ -670,11 +716,6 @@ a:hover {
   margin: 0;
 }
 
-.cta .button--secondary {
-  background: #fff;
-  border-color: #fff;
-}
-
 /* Dashboard */
 
 .page {
@@ -684,11 +725,24 @@ a:hover {
 
 .page__header {
   margin-bottom: 24px;
+  color: #fff;
 }
 
 .page__header p {
-  color: var(--text-muted);
+  color: var(--on-blue-muted);
   margin: 0;
+}
+
+.section-heading {
+  color: #fff;
+}
+
+.section-heading .button--ghost {
+  color: #fff;
+}
+
+.section-heading .button--ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.15);
 }
 
 .dashboard {
@@ -823,8 +877,12 @@ a:hover {
 
 .note {
   font-size: 0.85rem;
-  color: var(--text-muted);
+  color: var(--on-blue-muted);
   margin: 12px 0 0;
+}
+
+.card .note {
+  color: var(--text-muted);
 }
 
 /* Link detail */
@@ -833,6 +891,11 @@ a:hover {
   display: inline-block;
   margin-bottom: 16px;
   font-weight: 600;
+  color: #fff;
+}
+
+.back-link:hover {
+  color: var(--on-blue-muted);
 }
 
 .detail {
@@ -904,6 +967,7 @@ a:hover {
 .not-found {
   text-align: center;
   padding: 96px 16px;
+  color: #fff;
 }
 
 /* Responsive */
@@ -934,6 +998,6 @@ a:hover {
   }
 
   .hero {
-    padding: 48px 0 64px;
+    padding: 40px 0 16px;
   }
 }

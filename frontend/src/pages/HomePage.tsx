@@ -9,6 +9,8 @@ import { Button } from '../components/Button.tsx'
 import { CopyButton } from '../components/CopyButton.tsx'
 import { TextField } from '../components/TextField.tsx'
 import { savePendingLink } from '../pendingLink.ts'
+import { useFieldErrors } from '../useFieldErrors.ts'
+import { checkURL } from '../validation.ts'
 
 const features = [
   {
@@ -37,21 +39,25 @@ export function HomePage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [created, setCreated] = useState<CreatedLink | null>(null)
+  const fields = useFieldErrors<'url'>()
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError('')
     setCreated(null)
+    if (!fields.check(event.currentTarget, { url: checkURL(url) })) {
+      return
+    }
 
     if (state.status !== 'authenticated') {
-      savePendingLink(url)
+      savePendingLink(url.trim())
       navigate('/cadastro', { state: { message: 'Crie sua conta grátis para encurtar o seu link. Ele já vai estar no painel.' } })
       return
     }
 
     setSubmitting(true)
     try {
-      setCreated(await createLink({ url, visibility: 'public' }))
+      setCreated(await createLink({ url: url.trim(), visibility: 'public' }))
       setUrl('')
     } catch (submitError) {
       setError(messageOf(submitError))
@@ -76,14 +82,19 @@ export function HomePage() {
           </div>
 
           <div>
-            <form className="shorten" onSubmit={handleSubmit}>
+            <form className="shorten" onSubmit={handleSubmit} noValidate>
               <TextField
                 label="URL para encurtar"
+                name="url"
                 type="url"
                 inputMode="url"
                 placeholder="Cole aqui um link longo, como https://exemplo.com/artigo"
                 value={url}
-                onChange={(event) => setUrl(event.target.value)}
+                error={fields.errors.url}
+                onChange={(event) => {
+                  setUrl(event.target.value)
+                  fields.clear('url')
+                }}
                 required
               />
               <Button type="submit" loading={submitting}>
@@ -147,7 +158,7 @@ export function HomePage() {
         <section className="cta">
           <div className="container cta__inner">
             <h2>Pronto para encurtar o primeiro link?</h2>
-            <Link to="/cadastro" className="button button--secondary">
+            <Link to="/cadastro" className="button button--primary">
               Criar conta grátis
             </Link>
           </div>

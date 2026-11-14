@@ -12,8 +12,8 @@ import { TextField } from '../components/TextField.tsx'
 import { VisibilityBadge } from '../components/VisibilityBadge.tsx'
 import { clicksLabel, formatCount, formatDate } from '../format.ts'
 import { clearPendingLink, readPendingLink } from '../pendingLink.ts'
-
-const minLinkPasswordLength = 8
+import { useFieldErrors } from '../useFieldErrors.ts'
+import { checkLinkPassword, checkURL, minPasswordLength } from '../validation.ts'
 
 function CreateLinkCard({ onCreated }: { onCreated: () => void }) {
   const [url, setUrl] = useState(readPendingLink)
@@ -24,17 +24,26 @@ function CreateLinkCard({ onCreated }: { onCreated: () => void }) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [created, setCreated] = useState<CreatedLink | null>(null)
+  const fields = useFieldErrors<'url' | 'linkPassword'>()
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError('')
     setCreated(null)
+    const valid = fields.check(event.currentTarget, {
+      url: checkURL(url),
+      linkPassword: visibility === 'private' ? checkLinkPassword(password) : undefined,
+    })
+    if (!valid) {
+      return
+    }
+
     setSubmitting(true)
     try {
       const link =
         visibility === 'private'
-          ? await createLink({ url, visibility, password })
-          : await createLink({ url, visibility })
+          ? await createLink({ url: url.trim(), visibility, password })
+          : await createLink({ url: url.trim(), visibility })
       setCreated(link)
       setUrl('')
       setPassword('')
@@ -49,15 +58,20 @@ function CreateLinkCard({ onCreated }: { onCreated: () => void }) {
   return (
     <section className="card" aria-labelledby="create-link-title">
       <h2 id="create-link-title">Novo link</h2>
-      <form className="form" onSubmit={handleSubmit}>
+      <form className="form" onSubmit={handleSubmit} noValidate>
         <div className="create-form__row">
           <TextField
             label="URL de destino"
+            name="url"
             type="url"
             inputMode="url"
             placeholder="https://exemplo.com/um-link-bem-longo"
             value={url}
-            onChange={(event) => setUrl(event.target.value)}
+            error={fields.errors.url}
+            onChange={(event) => {
+              setUrl(event.target.value)
+              fields.clear('url')
+            }}
             required
           />
           <fieldset className="segmented" aria-label="Acesso">
@@ -67,7 +81,10 @@ function CreateLinkCard({ onCreated }: { onCreated: () => void }) {
                 name="visibility"
                 value="public"
                 checked={visibility === 'public'}
-                onChange={() => setVisibility('public')}
+                onChange={() => {
+                  setVisibility('public')
+                  fields.clear('linkPassword')
+                }}
               />
               <span>Público</span>
             </label>
@@ -87,12 +104,16 @@ function CreateLinkCard({ onCreated }: { onCreated: () => void }) {
         {visibility === 'private' && (
           <TextField
             label="Senha do link"
+            name="linkPassword"
             type="password"
             autoComplete="new-password"
-            minLength={minLinkPasswordLength}
-            hint={`Quem abrir o link precisa digitar essa senha. Mínimo de ${minLinkPasswordLength} caracteres.`}
+            hint={`Quem abrir o link precisa digitar essa senha. Mínimo de ${minPasswordLength} caracteres.`}
             value={password}
-            onChange={(event) => setPassword(event.target.value)}
+            error={fields.errors.linkPassword}
+            onChange={(event) => {
+              setPassword(event.target.value)
+              fields.clear('linkPassword')
+            }}
             required
           />
         )}
@@ -205,7 +226,7 @@ export function DashboardPage() {
         <CreateLinkCard onCreated={reload} />
 
         <section aria-labelledby="links-title">
-          <div className="row-between">
+          <div className="row-between section-heading">
             <h2 id="links-title">Seus links</h2>
             <Button type="button" variant="ghost" onClick={reload} disabled={list.status === 'loading'}>
               Atualizar

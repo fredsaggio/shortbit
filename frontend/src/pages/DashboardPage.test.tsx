@@ -93,6 +93,20 @@ describe('DashboardPage', () => {
     expect(api.calls('POST', '/urls')[0].body).toEqual({ url: 'https://example.com', visibility: 'public' })
   })
 
+  it('validates the URL and the link password before creating', async () => {
+    const api = fakeApi({ ...signedIn, 'GET /urls': { status: 200, body: { urls: [], next_cursor: null } } })
+    const { user: actions } = renderApp('/painel')
+
+    await actions.type(await screen.findByLabelText('URL de destino'), 'exemplo.com')
+    await actions.click(screen.getByLabelText('Com senha'))
+    await actions.type(screen.getByLabelText('Senha do link'), 'curta')
+    await actions.click(screen.getByRole('button', { name: 'Criar link curto' }))
+
+    expect(screen.getByText('Digite uma URL completa, começando com http:// ou https://.')).toBeInTheDocument()
+    expect(screen.getByText('A senha do link precisa ter pelo menos 8 caracteres.')).toBeInTheDocument()
+    expect(api.calls('POST', '/urls')).toHaveLength(0)
+  })
+
   it('fills the form with the URL typed on the home page before login', async () => {
     savePendingLink('https://example.com/da-home')
     fakeApi({ ...signedIn, 'GET /urls': { status: 200, body: { urls: [], next_cursor: null } } })
