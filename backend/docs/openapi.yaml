@@ -332,7 +332,10 @@ paths:
       description: |
         Callback chamado pelo Google. O navegador deve trazer os cookies
         temporários definidos por `/auth/google`. `code` e `state` são enviados
-        pelo Google; não são valores criados manualmente pelo cliente.
+        pelo Google; não são valores criados manualmente pelo cliente. Sempre
+        termina com redirect para o frontend configurado em `FRONTEND_URL`:
+        `/painel` no sucesso e `/entrar?erro=google` em qualquer falha. O
+        destino vem só da configuração, nunca da requisição.
       security:
         - googleState: []
           googleNonce: []
@@ -354,17 +357,22 @@ paths:
           schema:
             type: string
       responses:
-        '204':
-          description: Login concluído; cookie `user_session` definido; sem corpo.
+        '303':
+          description: |
+            Redirect para o frontend. No sucesso, define `user_session` e aponta
+            para `FRONTEND_URL/painel`; em falha (recusa, cookies ausentes,
+            state diferente, erro do Google ou interno), aponta para
+            `FRONTEND_URL/entrar?erro=google` sem criar sessão.
           headers:
-            Set-Cookie:
-              description: Cookie de sessão e remoção dos cookies temporários.
+            Location:
+              description: Página do frontend.
               schema:
                 type: string
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
+                format: uri
+            Set-Cookie:
+              description: Remoção dos cookies temporários e, no sucesso, cookie de sessão.
+              schema:
+                type: string
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -67,7 +68,7 @@ func TestGoogleAuthHandlerStart(t *testing.T) {
 				},
 			}
 
-			handler := handlers.NewGoogleAuthHandler(googleAuth, generator, cookieSecure)
+			handler := handlers.NewGoogleAuthHandler(googleAuth, generator, cookieSecure, testFrontendURL)
 			request := httptest.NewRequest(http.MethodGet, "/auth/google", nil)
 			response := httptest.NewRecorder()
 			beforeRequest := time.Now().UTC()
@@ -140,7 +141,7 @@ func TestGoogleAuthHandlerStartHandlesGeneratorError(t *testing.T) {
 		return googleoidc.AuthorizationValues{}, wantErr
 	}
 
-	handler := handlers.NewGoogleAuthHandler(googleAuth, generator, true)
+	handler := handlers.NewGoogleAuthHandler(googleAuth, generator, true, testFrontendURL)
 	request := httptest.NewRequest(http.MethodGet, "/auth/google", nil)
 	response := httptest.NewRecorder()
 
@@ -214,9 +215,7 @@ func TestGoogleAuthHandlerCallback(t *testing.T) {
 			result := response.Result()
 			defer result.Body.Close()
 
-			if result.StatusCode != http.StatusNoContent {
-				t.Errorf("status code = %d, want %d", result.StatusCode, http.StatusNoContent)
-			}
+			assertFrontendRedirect(t, result, googleLoginSucceededURL)
 			if len(result.Cookies()) != 4 {
 				t.Fatalf("cookie count = %d, want 4", len(result.Cookies()))
 			}
@@ -266,9 +265,7 @@ func TestGoogleAuthHandlerCallbackRejectsProviderError(t *testing.T) {
 	result := response.Result()
 	defer result.Body.Close()
 
-	if result.StatusCode != http.StatusBadRequest {
-		t.Errorf("status code = %d, want %d", result.StatusCode, http.StatusBadRequest)
-	}
+	assertFrontendRedirect(t, result, googleLoginFailedURL)
 	if len(result.Cookies()) != 3 {
 		t.Fatalf("cookie count = %d, want 3", len(result.Cookies()))
 	}
@@ -307,9 +304,7 @@ func TestGoogleAuthHandlerCallbackRejectsMissingQueryValues(t *testing.T) {
 			result := response.Result()
 			defer result.Body.Close()
 
-			if result.StatusCode != http.StatusBadRequest {
-				t.Errorf("status code = %d, want %d", result.StatusCode, http.StatusBadRequest)
-			}
+			assertFrontendRedirect(t, result, googleLoginFailedURL)
 			if len(result.Cookies()) != 3 {
 				t.Fatalf("cookie count = %d, want 3", len(result.Cookies()))
 			}
@@ -358,9 +353,7 @@ func TestGoogleAuthHandlerCallbackRejectsInvalidAuthorizationCookies(t *testing.
 			result := response.Result()
 			defer result.Body.Close()
 
-			if result.StatusCode != http.StatusBadRequest {
-				t.Errorf("status code = %d, want %d", result.StatusCode, http.StatusBadRequest)
-			}
+			assertFrontendRedirect(t, result, googleLoginFailedURL)
 			if len(result.Cookies()) != 3 {
 				t.Fatalf("cookie count = %d, want 3", len(result.Cookies()))
 			}
@@ -390,9 +383,7 @@ func TestGoogleAuthHandlerCallbackRejectsStateMismatch(t *testing.T) {
 	result := response.Result()
 	defer result.Body.Close()
 
-	if result.StatusCode != http.StatusBadRequest {
-		t.Errorf("status code = %d, want %d", result.StatusCode, http.StatusBadRequest)
-	}
+	assertFrontendRedirect(t, result, googleLoginFailedURL)
 	if len(result.Cookies()) != 3 {
 		t.Fatalf("cookie count = %d, want 3", len(result.Cookies()))
 	}
@@ -401,23 +392,11 @@ func TestGoogleAuthHandlerCallbackRejectsStateMismatch(t *testing.T) {
 
 func TestGoogleAuthHandlerCallbackHandlesServiceErrors(t *testing.T) {
 	tests := []struct {
-		name       string
-		err        error
-		wantStatus int
-		wantBody   string
+		name string
+		err  error
 	}{
-		{
-			name:       "invalid Google authentication",
-			err:        services.ErrGoogleAuthenticationFailed,
-			wantStatus: http.StatusUnauthorized,
-			wantBody:   "não foi possível autenticar com o Google\n",
-		},
-		{
-			name:       "unexpected error",
-			err:        errors.New("database unavailable"),
-			wantStatus: http.StatusInternalServerError,
-			wantBody:   "erro interno no servidor\n",
-		},
+		{name: "invalid Google authentication", err: services.ErrGoogleAuthenticationFailed},
+		{name: "unexpected error", err: errors.New("database unavailable")},
 	}
 
 	for _, test := range tests {
@@ -441,17 +420,32 @@ func TestGoogleAuthHandlerCallbackHandlesServiceErrors(t *testing.T) {
 			result := response.Result()
 			defer result.Body.Close()
 
-			if result.StatusCode != test.wantStatus {
-				t.Errorf("status code = %d, want %d", result.StatusCode, test.wantStatus)
-			}
-			if response.Body.String() != test.wantBody {
-				t.Errorf("response body = %q, want %q", response.Body.String(), test.wantBody)
+			assertFrontendRedirect(t, result, googleLoginFailedURL)
+			if strings.Contains(response.Body.String(), "database unavailable") {
+				t.Errorf("response body leaks the internal error: %q", response.Body.String())
 			}
 			if len(result.Cookies()) != 3 {
 				t.Fatalf("cookie count = %d, want 3", len(result.Cookies()))
 			}
 			assertGoogleAuthorizationCookiesRemoved(t, result.Cookies(), true)
 		})
+	}
+}
+
+const (
+	testFrontendURL         = "http://localhost:5173"
+	googleLoginSucceededURL = testFrontendURL + "/painel"
+	googleLoginFailedURL    = testFrontendURL + "/entrar?erro=google"
+)
+
+func assertFrontendRedirect(t *testing.T, result *http.Response, want string) {
+	t.Helper()
+
+	if result.StatusCode != http.StatusSeeOther {
+		t.Errorf("status code = %d, want %d", result.StatusCode, http.StatusSeeOther)
+	}
+	if got := result.Header.Get("Location"); got != want {
+		t.Errorf("Location = %q, want %q", got, want)
 	}
 }
 
@@ -463,7 +457,7 @@ func newGoogleCallbackHandler(t *testing.T, googleAuth googleAuthServiceStub, co
 		return googleoidc.AuthorizationValues{}, nil
 	}
 
-	return handlers.NewGoogleAuthHandler(googleAuth, generator, cookieSecure)
+	return handlers.NewGoogleAuthHandler(googleAuth, generator, cookieSecure, testFrontendURL)
 }
 
 func addGoogleAuthorizationCookies(request *http.Request, state, nonce, codeVerifier string) {

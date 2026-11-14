@@ -120,8 +120,10 @@ sequenceDiagram
     API->>API: Valida assinatura, issuer, audience,<br/>expiração, nonce e email_verified
     API->>DB: Encontra, cria ou vincula usuário pelo sub
     API->>DB: Cria user_session local com TTL lembrado
-    API-->>Browser: 204 + cookie user_session persistente
+    API-->>Browser: 303 para FRONTEND_URL/painel + cookie user_session persistente
 ```
+
+Qualquer falha no callback (recusa, cookies ausentes, state diferente, erro do Google ou interno) redireciona para `FRONTEND_URL/entrar?erro=google`, sem criar sessão. O destino é fixo e vem só da configuração; `FRONTEND_URL` precisa ser uma origem sem caminho nem query, para o callback não virar open redirect.
 
 ### Regra de localização e vinculação
 

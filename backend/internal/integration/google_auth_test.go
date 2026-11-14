@@ -227,8 +227,8 @@ func performGoogleLogin(t *testing.T, router http.Handler, googleClient *googleO
 	callbackResponse := callbackRecorder.Result()
 	defer callbackResponse.Body.Close()
 
-	if callbackResponse.StatusCode != http.StatusNoContent {
-		t.Fatalf("Google callback status code = %d, want %d; body = %q", callbackResponse.StatusCode, http.StatusNoContent, readResponseBody(t, callbackResponse))
+	if callbackResponse.StatusCode != http.StatusSeeOther || callbackResponse.Header.Get("Location") != "http://localhost:5173/painel" {
+		t.Fatalf("Google callback = (status %d, Location %q), want (303, frontend dashboard); body = %q", callbackResponse.StatusCode, callbackResponse.Header.Get("Location"), readResponseBody(t, callbackResponse))
 	}
 	if len(googleClient.exchanges) != exchangesBeforeCallback+1 {
 		t.Fatalf("OIDC exchanges after callback = %d, want %d", len(googleClient.exchanges), exchangesBeforeCallback+1)

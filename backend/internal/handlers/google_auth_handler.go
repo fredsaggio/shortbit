@@ -18,18 +18,31 @@ type GoogleAuthService interface {
 
 type GoogleAuthorizationValuesGenerator func() (googleoidc.AuthorizationValues, error)
 
+// The callback only redirects to these fixed frontend paths, never to a
+// destination taken from the request, so it cannot become an open redirect.
+const (
+	googleLoginSucceededPath = "/painel"
+	googleLoginFailedPath    = "/entrar?erro=google"
+)
+
 type GoogleAuthHandler struct {
 	googleAuth                  GoogleAuthService
 	generateAuthorizationValues GoogleAuthorizationValuesGenerator
 	cookieSecure                bool
+	frontendURL                 string
 }
 
-func NewGoogleAuthHandler(googleAuth GoogleAuthService, generateAuthorizationValues GoogleAuthorizationValuesGenerator, cookieSecure bool) *GoogleAuthHandler {
+func NewGoogleAuthHandler(googleAuth GoogleAuthService, generateAuthorizationValues GoogleAuthorizationValuesGenerator, cookieSecure bool, frontendURL string) *GoogleAuthHandler {
 	return &GoogleAuthHandler{
 		googleAuth:                  googleAuth,
 		generateAuthorizationValues: generateAuthorizationValues,
 		cookieSecure:                cookieSecure,
+		frontendURL:                 frontendURL,
 	}
+}
+
+func (h *GoogleAuthHandler) redirectToFrontend(w http.ResponseWriter, r *http.Request, path string) {
+	http.Redirect(w, r, h.frontendURL+path, http.StatusSeeOther)
 }
 
 func (h *GoogleAuthHandler) Start(w http.ResponseWriter, r *http.Request) {
@@ -58,7 +71,7 @@ func (h *GoogleAuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 
 	if providerError := query.Get("error"); providerError != "" {
 		slog.WarnContext(ctx, "Google authorization rejected", "provider_error", providerError)
-		http.Error(w, "autenticação com Google cancelada ou recusada", http.StatusBadRequest)
+		h.redirectToFrontend(w, r, googleLoginFailedPath)
 		return
 	}
 
@@ -66,13 +79,15 @@ func (h *GoogleAuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	receivedState := query.Get("state")
 
 	if code == "" || receivedState == "" {
-		http.Error(w, "resposta de autenticação do Google inválida", http.StatusBadRequest)
+		slog.WarnContext(ctx, "Google callback without code or state")
+		h.redirectToFrontend(w, r, googleLoginFailedPath)
 		return
 	}
 
 	authorizationCookies, err := readGoogleAuthorizationCookies(r)
 	if err != nil {
-		http.Error(w, "tentativa de autenticação inválida ou expirada", http.StatusBadRequest)
+		slog.WarnContext(ctx, "Google callback without authorization cookies")
+		h.redirectToFrontend(w, r, googleLoginFailedPath)
 		return
 	}
 
@@ -80,7 +95,8 @@ func (h *GoogleAuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		[]byte(receivedState),
 		[]byte(authorizationCookies.State),
 	) != 1 {
-		http.Error(w, "tentativa de autenticação inválida ou expirada", http.StatusBadRequest)
+		slog.WarnContext(ctx, "Google callback state mismatch")
+		h.redirectToFrontend(w, r, googleLoginFailedPath)
 		return
 	}
 
@@ -90,16 +106,15 @@ func (h *GoogleAuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, services.ErrGoogleAuthenticationFailed):
 			slog.WarnContext(ctx, "Google authentication failed", "error", err)
-			http.Error(w, "não foi possível autenticar com o Google", http.StatusUnauthorized)
 
 		default:
 			slog.ErrorContext(ctx, "Complete Google login failed", "error", err)
-			http.Error(w, "erro interno no servidor", http.StatusInternalServerError)
 		}
+		h.redirectToFrontend(w, r, googleLoginFailedPath)
 		return
 	}
 
 	// RememberMe como true porque é login utilizando Google OIDC.
 	setUserSessionCookie(w, login.Token, login.ExpiresAt, true, h.cookieSecure)
-	w.WriteHeader(http.StatusNoContent)
+	h.redirectToFrontend(w, r, googleLoginSucceededPath)
 }

@@ -34,6 +34,7 @@ func TestLoad(t *testing.T) {
 				"PASSWORD_RESET_CODE_TTL":           "8m",
 				"PASSWORD_RESET_ATTEMPT_TTL":        "25m",
 				"PUBLIC_BASE_URL":                   "https://shortbit.com.br",
+				"FRONTEND_URL":                      "https://app.shortbit.com.br/",
 				"REDIS_ADDR":                        "redis.example:6380",
 				"REDIS_OPERATION_TIMEOUT":           "350ms",
 				"RABBITMQ_URL":                      "amqps://user:password@rabbitmq.example:5671/shortbit",
@@ -76,6 +77,7 @@ func TestLoad(t *testing.T) {
 				PasswordReset: config.PasswordResetConfig{CodeTTL: 8 * time.Minute, AttemptTTL: 25 * time.Minute},
 				URL: config.URLConfig{
 					BaseURL:             "https://shortbit.com.br",
+					FrontendURL:         "https://app.shortbit.com.br",
 					MaxOriginalURLBytes: 8192,
 				},
 				Redis:    config.RedisConfig{Addr: "redis.example:6380", Timeout: 350 * time.Millisecond},
@@ -128,6 +130,7 @@ func TestLoad(t *testing.T) {
 				PasswordReset: config.PasswordResetConfig{CodeTTL: 10 * time.Minute, AttemptTTL: 30 * time.Minute},
 				URL: config.URLConfig{
 					BaseURL:             "http://localhost:8080",
+					FrontendURL:         "http://localhost:5173",
 					MaxOriginalURLBytes: 8192,
 				},
 				Redis:    config.RedisConfig{Addr: "127.0.0.1:6379", Timeout: 200 * time.Millisecond},
@@ -327,6 +330,10 @@ func TestLoad(t *testing.T) {
 			env:             map[string]string{"RABBITMQ_PUBLISH_TIMEOUT": "0s"},
 			wantErrContains: "RABBITMQ_PUBLISH_TIMEOUT must be greater than zero",
 		},
+		{name: "rejects frontend URL with another scheme", env: rabbitMQEnv("amqp://user:password@localhost:5672/", "FRONTEND_URL", "javascript:alert(1)"), wantErrContains: "FRONTEND_URL must use the http or https scheme"},
+		{name: "rejects frontend URL with a path", env: rabbitMQEnv("amqp://user:password@localhost:5672/", "FRONTEND_URL", "https://evil.example/painel"), wantErrContains: "FRONTEND_URL must be an origin"},
+		{name: "rejects frontend URL with a query", env: rabbitMQEnv("amqp://user:password@localhost:5672/", "FRONTEND_URL", "https://app.example?next=https://evil.example"), wantErrContains: "FRONTEND_URL must be an origin"},
+		{name: "rejects frontend URL with credentials", env: rabbitMQEnv("amqp://user:password@localhost:5672/", "FRONTEND_URL", "https://user:secret@app.example"), wantErrContains: "FRONTEND_URL must be an origin"},
 		{
 			name:            "rejects missing RabbitMQ URL",
 			env:             rabbitMQEnv(""),
@@ -392,8 +399,8 @@ func TestLoad(t *testing.T) {
 	}
 }
 
-func rabbitMQEnv(rabbitMQURL string) map[string]string {
-	return map[string]string{
+func rabbitMQEnv(rabbitMQURL string, extra ...string) map[string]string {
+	env := map[string]string{
 		"DATABASE_URL":         "postgres://localhost/app",
 		"GOOGLE_CLIENT_ID":     "test-client-id",
 		"GOOGLE_CLIENT_SECRET": "test-client-secret",
@@ -402,6 +409,10 @@ func rabbitMQEnv(rabbitMQURL string) map[string]string {
 		"RESEND_API_KEY":       "re_test_api_key",
 		"RABBITMQ_URL":         rabbitMQURL,
 	}
+	for i := 0; i+1 < len(extra); i += 2 {
+		env[extra[i]] = extra[i+1]
+	}
+	return env
 }
 
 func TestLoadWorker(t *testing.T) {

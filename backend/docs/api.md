@@ -205,16 +205,18 @@ Não recebe `remember_me`. O login Google cria uma sessão lembrada por padrão.
 
 ### `GET /auth/google/callback`
 
-O Google envia `code` e `state`. Em sucesso:
+O Google envia `code` e `state`. O callback sempre termina com redirect para o frontend configurado em `FRONTEND_URL`:
 
 ```text
-204 No Content
+303 See Other
+Location: http://localhost:5173/painel          sucesso
 Set-Cookie: user_session=...
+
+303 See Other
+Location: http://localhost:5173/entrar?erro=google   qualquer falha
 ```
 
-O cookie `user_session` é persistente e acompanha o TTL lembrado, de 30 dias por padrão.
-
-Atualmente não há frontend para receber um redirect final, por isso o callback termina em uma página vazia.
+O cookie `user_session` é persistente e acompanha o TTL lembrado, de 30 dias por padrão. A falha não diz o motivo ao navegador (recusa, cookies ausentes, state diferente, erro do Google ou interno); o motivo fica no log. O destino vem só de `FRONTEND_URL`, nunca da requisição, para o callback não virar open redirect.
 
 ## Recuperação de senha ✅
 

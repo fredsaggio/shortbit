@@ -197,7 +197,7 @@ func testConfig(sessionTTL time.Duration) config.Config {
 			AttemptTTL: 30 * time.Minute,
 		},
 		PasswordReset: config.PasswordResetConfig{CodeTTL: 10 * time.Minute, AttemptTTL: 30 * time.Minute},
-		URL:           config.URLConfig{BaseURL: "http://localhost:8080", MaxOriginalURLBytes: 8192},
+		URL:           config.URLConfig{BaseURL: "http://localhost:8080", FrontendURL: "http://localhost:5173", MaxOriginalURLBytes: 8192},
 	}
 }
 

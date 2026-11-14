@@ -39,6 +39,7 @@ GOOGLE_CLIENT_SECRET=...
 GOOGLE_REDIRECT_URL=http://localhost:8080/auth/google/callback
 
 PUBLIC_BASE_URL=http://localhost:8080
+FRONTEND_URL=http://localhost:5173
 
 RABBITMQ_USER=shortbit
 RABBITMQ_PASSWORD=...
@@ -53,6 +54,8 @@ RABBITMQ_PUBLISH_TIMEOUT=500ms
 RABBITMQ_PREFETCH=10
 PROCESSED_CLICK_EVENT_RETENTION=168h
 ```
+
+`FRONTEND_URL` é opcional e assume `http://localhost:5173`, onde o Vite roda o frontend. É o destino do redirect do login com Google e precisa ser só a origem (esquema, host e porta), sem caminho nem query. Em produção, use a origem pública do frontend.
 
 `PUBLIC_BASE_URL` é opcional e assume `http://localhost:8080` no desenvolvimento; é usado para compor o `short_url` devolvido por `POST /urls`. Em produção, configure o domínio público, `COOKIE_SECURE=true` e callback Google com HTTPS.
 
@@ -146,13 +149,11 @@ Com a API ativa, abra:
 http://localhost:8080/auth/google
 ```
 
-Depois do consentimento, o callback atualmente responde `204 No Content`. A página vazia é esperada enquanto não existe frontend. No mesmo navegador, acesse:
+Depois do consentimento, o callback redireciona para `FRONTEND_URL/painel` (padrão `http://localhost:5173/painel`). Com o frontend rodando (`make front/dev`), o painel abre já logado. Sem ele, o navegador mostra erro de conexão, mas a sessão foi criada; confira em:
 
 ```text
 http://localhost:8080/me
 ```
-
-Uma resposta `200` confirma que o cookie e a sessão local foram criados.
 
 ## Serviços externos
 

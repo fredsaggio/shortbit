@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -27,6 +28,7 @@ const (
 	defaultPasswordResetAttemptTTL        = 30 * time.Minute
 
 	defaultBaseURL             = "http://localhost:8080"
+	defaultFrontendURL         = "http://localhost:5173"
 	defaultMaxOriginalURLBytes = 8192
 
 	defaultRedisAddr             = "127.0.0.1:6379"
@@ -75,6 +77,7 @@ type EmailConfig struct {
 
 type URLConfig struct {
 	BaseURL             string
+	FrontendURL         string
 	MaxOriginalURLBytes int
 }
 
@@ -281,6 +284,7 @@ func Load(getEnv func(string) string) (Config, error) {
 		},
 		URL: URLConfig{
 			BaseURL:             envOrDefault(getEnv, "PUBLIC_BASE_URL", defaultBaseURL),
+			FrontendURL:         strings.TrimSuffix(envOrDefault(getEnv, "FRONTEND_URL", defaultFrontendURL), "/"),
 			MaxOriginalURLBytes: defaultMaxOriginalURLBytes,
 		},
 		Redis: RedisConfig{
@@ -320,6 +324,10 @@ func Load(getEnv func(string) string) (Config, error) {
 
 	if cfg.Resend.APIKey == "" {
 		return Config{}, errors.New("RESEND_API_KEY is required")
+	}
+
+	if err := validateFrontendURL(cfg.URL.FrontendURL); err != nil {
+		return Config{}, err
 	}
 
 	if cfg.RabbitMQ.URL == "" {
@@ -370,6 +378,25 @@ func LoadWorker(getEnv func(string) string) (WorkerConfig, error) {
 	}
 
 	return cfg, nil
+}
+
+// FRONTEND_URL is the only destination of the Google callback redirect, so it
+// must be a bare origin: no path, query, fragment, or credentials.
+func validateFrontendURL(value string) error {
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return errors.New("FRONTEND_URL must be a valid URL")
+	}
+
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return errors.New("FRONTEND_URL must use the http or https scheme")
+	}
+
+	if parsed.Host == "" || parsed.User != nil || parsed.Path != "" || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return errors.New("FRONTEND_URL must be an origin such as https://shortbit.example, without path or query")
+	}
+
+	return nil
 }
 
 func validateAMQPURL(value string) error {

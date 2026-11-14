@@ -64,7 +64,7 @@ func CompositionRoot(pool db.DB, cfg config.Config, googleClient services.Google
 	authService := services.NewAuthService(userRepository, userSessionRepository, passwordHasher, sessiontoken.Generate, cfg.Session.TTL, cfg.Session.RememberedTTL)
 
 	googleAuthService := services.NewGoogleAuthService(userRepository, authService, googleClient)
-	googleAuthHandler := handlers.NewGoogleAuthHandler(googleAuthService, googleoidc.GenerateAuthorizationValues, cfg.Session.CookieSecure)
+	googleAuthHandler := handlers.NewGoogleAuthHandler(googleAuthService, googleoidc.GenerateAuthorizationValues, cfg.Session.CookieSecure, cfg.URL.FrontendURL)
 
 	loginEmailRateLimiter := middleware.NewRateLimiter(loginEmailRateLimitRequestsPerSecond, loginEmailRateLimitBurst, loginEmailRateLimitMaxEntries, loginEmailRateLimitStaleAfter)
 	sessionHandler := handlers.NewSessionHandler(authService, loginEmailRateLimiter, cfg.Session.CookieSecure)
