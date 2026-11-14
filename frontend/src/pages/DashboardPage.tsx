@@ -4,7 +4,6 @@ import { Link } from 'react-router'
 import { isAbortError, messageOf } from '../api/client.ts'
 import { createLink, listLinks, shortLinkURL } from '../api/links.ts'
 import type { CreatedLink, ShortLink, Visibility } from '../api/types.ts'
-import { useAuth } from '../auth/AuthContext.ts'
 import { Alert } from '../components/Alert.tsx'
 import { Button } from '../components/Button.tsx'
 import { CopyButton } from '../components/CopyButton.tsx'
@@ -213,7 +212,6 @@ type ListState = {
 const initialList: ListState = { links: [], nextCursor: null, status: 'loading', error: '' }
 
 export function DashboardPage() {
-  const { state: auth } = useAuth()
   const [list, setList] = useState<ListState>(initialList)
   const [reloadKey, setReloadKey] = useState(0)
 
@@ -253,13 +251,13 @@ export function DashboardPage() {
     }
   }
 
-  const firstName = auth.status === 'authenticated' ? auth.user.full_name?.split(' ')[0] : undefined
-
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-12">
       <header className="mb-8">
-        <h1 className="text-[clamp(1.875rem,4vw,2.5rem)] font-extrabold">{firstName ? `Olá, ${firstName}!` : 'Seus links'}</h1>
-        {auth.status === 'authenticated' && <p className="mt-1 text-muted-foreground">Conectado como {auth.user.email}.</p>}
+        <h1 className="text-[clamp(1.875rem,4vw,2.5rem)] leading-tight font-extrabold">
+          Link curto, alcance <span className="text-brand-700">longo</span>.
+        </h1>
+        <p className="mt-2 text-muted-foreground">Cole, encurte e veja quem clicou.</p>
       </header>
 
       <div className="grid grid-cols-[minmax(0,1fr)] gap-8">

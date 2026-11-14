@@ -23,7 +23,7 @@ describe('LoginPage', () => {
 
     await waitFor(() => expect(screen.getByTestId('current-path')).toHaveTextContent('/painel'))
     expect(api.calls('POST', '/sessions')[0].body).toEqual({ email: user.email, password: 'senha12345', remember_me: true })
-    expect(await screen.findByText(/Conectado como ana@example.com/)).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Menu da conta de Ana' })).toBeInTheDocument()
   })
 
   it('shows the API message when the password is wrong', async () => {
