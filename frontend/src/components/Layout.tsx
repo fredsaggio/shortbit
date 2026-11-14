@@ -51,7 +51,7 @@ export function Layout() {
                   Entrar
                 </NavLink>
                 <Link to="/cadastro" className="button button--primary">
-                  Criar conta grátis
+                  Criar conta
                 </Link>
               </>
             ) : null}

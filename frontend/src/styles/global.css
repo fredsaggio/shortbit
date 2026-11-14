@@ -282,6 +282,12 @@ a:hover {
   width: 100%;
 }
 
+.button--small {
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 0.85rem;
+}
+
 .spinner {
   width: 16px;
   height: 16px;
@@ -535,7 +541,7 @@ a:hover {
 
 .hero__title {
   font-size: clamp(2.2rem, 5vw, 3.6rem);
-  max-width: 14ch;
+  max-width: 20ch;
   margin-bottom: 16px;
 }
 
@@ -669,7 +675,8 @@ a:hover {
 /* Dashboard */
 
 .page {
-  padding: 40px 0 64px;
+  padding-top: 40px;
+  padding-bottom: 64px;
 }
 
 .page__header {
@@ -901,6 +908,14 @@ a:hover {
 @media (max-width: 720px) {
   .header__user {
     display: none;
+  }
+
+  .header__nav {
+    gap: 4px;
+  }
+
+  .header__nav .button {
+    padding: 0 12px;
   }
 
   .shorten {

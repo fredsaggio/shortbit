@@ -138,7 +138,7 @@ function LinkItem({ link }: { link: ShortLink }) {
       <div className="link-item__meta">
         <VisibilityBadge visibility={link.visibility} />
         <span>Criado em {formatDate(link.created_at)}</span>
-        <CopyButton text={shortURL} />
+        <CopyButton text={shortURL} small />
       </div>
     </li>
   )

@@ -3,7 +3,7 @@ import { Button } from './Button.tsx'
 
 const resetDelayMs = 2000
 
-export function CopyButton({ text, label = 'Copiar' }: { text: string; label?: string }) {
+export function CopyButton({ text, label = 'Copiar', small = false }: { text: string; label?: string; small?: boolean }) {
   const [status, setStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
 
   useEffect(() => {
@@ -24,7 +24,7 @@ export function CopyButton({ text, label = 'Copiar' }: { text: string; label?: s
   }
 
   return (
-    <Button type="button" variant="secondary" onClick={copy} aria-live="polite">
+    <Button type="button" variant="secondary" small={small} onClick={copy} aria-live="polite">
       {status === 'copied' ? 'Copiado!' : status === 'failed' ? 'Não deu para copiar' : label}
     </Button>
   )
