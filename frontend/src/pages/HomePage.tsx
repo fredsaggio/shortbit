@@ -312,10 +312,9 @@ export function HomePage() {
                 <span className="inline-flex items-center gap-2 text-sm font-bold tracking-wide text-brand uppercase">
                   <Zap className="size-5 transition-transform duration-300 group-hover:scale-125 group-hover:-rotate-6" aria-hidden="true" /> Desempenho
                 </span>
-                <h3 className="mt-3 text-2xl font-bold">Rápido mesmo quando o link viraliza</h3>
+                <h3 className="mt-3 text-2xl font-bold">Rápido para quem clica</h3>
                 <p className="mt-2 max-w-2xl text-navy-300">
-                  Os links mais acessados saem direto da memória, e a contagem roda em segundo plano para o redirecionamento não
-                  esperar.
+                  Quem abre o seu link vai direto para o destino, sem tela intermediária e sem espera.
                 </p>
               </div>
               <Link

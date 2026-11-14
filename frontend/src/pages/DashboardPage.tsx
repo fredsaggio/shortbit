@@ -339,7 +339,7 @@ export function DashboardPage() {
                 </div>
               )}
               <p className="mt-6 text-center text-sm text-muted-foreground">
-                Os cliques são contados em segundo plano e podem levar alguns segundos para aparecer.
+                Os cliques podem levar alguns segundos para aparecer.
               </p>
             </>
           )}
