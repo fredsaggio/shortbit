@@ -84,14 +84,13 @@ describe('RegisterPage', () => {
 
     await actions.type(screen.getByLabelText('Senha'), 'senha12345')
     expect(rule('Pelo menos 8 caracteres')).toHaveAttribute('data-state', 'met')
-    expect(rule('15 ou mais caracteres')).toHaveAttribute('data-state', 'pending')
 
     await actions.type(screen.getByLabelText('Confirme a senha'), 'senha12345')
     expect(rule('As duas senhas são iguais')).toHaveAttribute('data-state', 'met')
     expect(screen.getByLabelText('Senha')).toHaveAccessibleDescription(/Pelo menos 8 caracteres/)
   })
 
-  it('does not block sign-up on the recommended length', async () => {
+  it('accepts a password of exactly 8 characters', async () => {
     const api = fakeApi({ ...signedOut, 'POST /registrations/password': { status: 202 } })
     const { user: actions } = renderApp('/cadastro')
 

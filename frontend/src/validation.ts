@@ -9,9 +9,6 @@ export type FieldErrors<Field extends string> = Partial<Record<Field, string>>
 // impose them, and length is what makes a password strong.
 export const minPasswordLength = 8
 export const maxPasswordBytes = 1024
-// OWASP considers passwords under 15 characters weak without MFA, so the
-// checklist recommends it, without requiring it.
-export const recommendedPasswordLength = 15
 export const maxFullNameLength = 100
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -62,8 +59,6 @@ export function checkLinkPassword(value: string): string | undefined {
 export type PasswordRule = {
   label: string
   met: boolean
-  /** Recommended, not required: never blocks the form. */
-  optional?: boolean
 }
 
 type PasswordRuleInput = {
@@ -74,8 +69,8 @@ type PasswordRuleInput = {
   current?: string
 }
 
-// The live checklist under password fields: only what the API enforces, plus
-// the recommended length. The byte limit shows up only once it is broken.
+// The live checklist under account password fields: exactly what the API
+// enforces. The byte limit shows up only once it is broken.
 export function passwordRules({ password, confirmation, current }: PasswordRuleInput): PasswordRule[] {
   const rules: PasswordRule[] = [{ label: `Pelo menos ${minPasswordLength} caracteres`, met: characterCount(password) >= minPasswordLength }]
 
@@ -88,12 +83,6 @@ export function passwordRules({ password, confirmation, current }: PasswordRuleI
   if (confirmation !== undefined) {
     rules.push({ label: 'As duas senhas são iguais', met: confirmation !== '' && confirmation === password })
   }
-
-  rules.push({
-    label: `${recommendedPasswordLength} ou mais caracteres`,
-    met: characterCount(password) >= recommendedPasswordLength,
-    optional: true,
-  })
 
   return rules
 }

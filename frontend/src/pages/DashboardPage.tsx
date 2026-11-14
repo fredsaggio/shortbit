@@ -9,14 +9,14 @@ import { Alert } from '../components/Alert.tsx'
 import { Button } from '../components/Button.tsx'
 import { CopyButton } from '../components/CopyButton.tsx'
 import { LinkListSkeleton } from '../components/PageLoader.tsx'
-import { PasswordChecklist } from '../components/PasswordChecklist.tsx'
+import { PasswordStrength } from '../components/PasswordStrength.tsx'
 import { TextField } from '../components/TextField.tsx'
 import { VisibilityBadge } from '../components/VisibilityBadge.tsx'
 import { VisibilityToggle } from '../components/VisibilityToggle.tsx'
 import { clicksLabel, formatCount, formatDate } from '../format.ts'
 import { clearPendingLink, readPendingLink } from '../pendingLink.ts'
 import { useFieldErrors } from '../useFieldErrors.ts'
-import { checkLinkPassword, checkURL, passwordRules } from '../validation.ts'
+import { checkLinkPassword, checkURL } from '../validation.ts'
 import { cn } from '@/lib/utils'
 
 function CreateLinkCard({ onCreated }: { onCreated: () => void }) {
@@ -38,7 +38,7 @@ function CreateLinkCard({ onCreated }: { onCreated: () => void }) {
   )
   const [created, setCreated] = useState<CreatedLink | null>(null)
   const fields = useFieldErrors<'url' | 'linkPassword'>()
-  const checklistId = useId()
+  const strengthId = useId()
 
   useEffect(() => {
     // React runs effects twice in development; the ref keeps it to one link.
@@ -142,7 +142,7 @@ function CreateLinkCard({ onCreated }: { onCreated: () => void }) {
               type="password"
               autoComplete="new-password"
               hint="Quem abrir o link precisa digitar essa senha."
-              describedBy={checklistId}
+              describedBy={strengthId}
               value={password}
               error={fields.errors.linkPassword}
               onChange={(event) => {
@@ -151,7 +151,7 @@ function CreateLinkCard({ onCreated }: { onCreated: () => void }) {
               }}
               required
             />
-            <PasswordChecklist id={checklistId} rules={passwordRules({ password })} />
+            <PasswordStrength id={strengthId} password={password} />
           </div>
         )}
 

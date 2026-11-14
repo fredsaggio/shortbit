@@ -13,13 +13,13 @@ import { ClickBars } from '../components/home/ClickBars.tsx'
 import { FloatingLinks } from '../components/home/FloatingLinks.tsx'
 import { LinkShrinkDemo } from '../components/home/LinkShrinkDemo.tsx'
 import { Reveal } from '../components/Reveal.tsx'
-import { PasswordChecklist } from '../components/PasswordChecklist.tsx'
+import { PasswordStrength } from '../components/PasswordStrength.tsx'
 import { TextField } from '../components/TextField.tsx'
 import { VisibilityToggle } from '../components/VisibilityToggle.tsx'
 import { useInView } from '../motion.ts'
 import { savePendingLink } from '../pendingLink.ts'
 import { useFieldErrors } from '../useFieldErrors.ts'
-import { checkLinkPassword, checkURL, passwordRules } from '../validation.ts'
+import { checkLinkPassword, checkURL } from '../validation.ts'
 import { cn } from '@/lib/utils'
 
 const steps = [
@@ -38,7 +38,7 @@ function ShortenCard() {
   const [error, setError] = useState('')
   const [created, setCreated] = useState<CreatedLink | null>(null)
   const fields = useFieldErrors<'url' | 'linkPassword'>()
-  const checklistId = useId()
+  const strengthId = useId()
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -94,7 +94,7 @@ function ShortenCard() {
             }}
             required
           />
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
             <VisibilityToggle
               value={visibility}
               onChange={(value) => {
@@ -103,29 +103,29 @@ function ShortenCard() {
               }}
             />
             {visibility === 'private' && (
-              <TextField
-                label="Senha do link"
-                name="linkPassword"
-                type="password"
-                autoComplete="new-password"
-                describedBy={checklistId}
-                className="flex-1 animate-in fade-in slide-in-from-left-2 duration-200"
-                value={password}
-                error={fields.errors.linkPassword}
-                onChange={(event) => {
-                  setPassword(event.target.value)
-                  fields.clear('linkPassword')
-                }}
-                required
-              />
+              <div className="grid flex-1 gap-2.5 animate-in fade-in slide-in-from-left-2 duration-200">
+                <TextField
+                  label="Senha do link"
+                  name="linkPassword"
+                  type="password"
+                  autoComplete="new-password"
+                  describedBy={strengthId}
+                  value={password}
+                  error={fields.errors.linkPassword}
+                  onChange={(event) => {
+                    setPassword(event.target.value)
+                    fields.clear('linkPassword')
+                  }}
+                  required
+                />
+                <PasswordStrength id={strengthId} password={password} />
+              </div>
             )}
-            <Button type="submit" size="lg" loading={submitting} className="sm:ml-auto sm:min-w-44">
+            {/* sm:mt-7 lines the button up with the inputs below their labels. */}
+            <Button type="submit" size="lg" loading={submitting} className="sm:mt-7 sm:ml-auto sm:min-w-44">
               Encurtar
             </Button>
           </div>
-          {visibility === 'private' && (
-            <PasswordChecklist id={checklistId} rules={passwordRules({ password })} />
-          )}
         </form>
         {error && <Alert tone="error" className="mt-4">{error}</Alert>}
         {created && (

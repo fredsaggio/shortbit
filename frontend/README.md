@@ -83,6 +83,11 @@ Contraste (WCAG 2.2 AA): branco sobre `#0058DD` dá 6,1:1; o texto secundário `
 
 Interações: transições de 150 a 300 ms, desligadas com `prefers-reduced-motion`; foco visível em laranja; alvos de toque de 44 px; carregamento com skeleton; avisos de sucesso em toast (sonner).
 
+## Senhas
+
+- **Senha da conta** (cadastro, recuperação e troca): checklist ao vivo só com o que a API exige: pelo menos 8 caracteres, as duas senhas iguais e, na troca, diferente da atual. Não há regras de composição (maiúscula, símbolo), como recomenda o NIST SP 800-63B.
+- **Senha do link** (home e painel): barra de força de 5 níveis calculada pelo [zxcvbn-ts](https://zxcvbn-ts.github.io/zxcvbn/), com dicionários comum e pt-BR. Abaixo de 8 caracteres a barra avisa o mínimo, que a API exige. Os dicionários (cerca de 500 KB comprimidos) ficam em arquivos à parte e só são baixados quando alguém escolhe "Com senha".
+
 ## Produção
 
 Em produção não há servidor só para o frontend: a API serve o build (`FRONTEND_DIST_DIR`), então app, API e links curtos ficam na mesma origem. O `Dockerfile` da raiz faz o build. Veja `backend/docs/deployment.md`.

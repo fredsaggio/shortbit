@@ -39,18 +39,14 @@ describe('validation', () => {
     expect(checkLinkPassword('a'.repeat(1025))).toBe('A senha do link está longa demais. Use uma mais curta.')
   })
 
-  it('lists only the rules the API enforces, plus the recommended length', () => {
-    const state = (rules: ReturnType<typeof passwordRules>) => rules.map((rule) => [rule.label, rule.met, rule.optional ?? false])
+  it('lists exactly the rules the API enforces', () => {
+    const state = (rules: ReturnType<typeof passwordRules>) => rules.map((rule) => [rule.label, rule.met])
 
-    expect(state(passwordRules({ password: 'curta' }))).toEqual([
-      ['Pelo menos 8 caracteres', false, false],
-      ['15 ou mais caracteres', false, true],
-    ])
+    expect(state(passwordRules({ password: 'curta' }))).toEqual([['Pelo menos 8 caracteres', false]])
     expect(state(passwordRules({ password: 'uma senha bem comprida', confirmation: 'uma senha bem comprida', current: 'antiga123' }))).toEqual([
-      ['Pelo menos 8 caracteres', true, false],
-      ['Diferente da senha atual', true, false],
-      ['As duas senhas são iguais', true, false],
-      ['15 ou mais caracteres', true, true],
+      ['Pelo menos 8 caracteres', true],
+      ['Diferente da senha atual', true],
+      ['As duas senhas são iguais', true],
     ])
     expect(passwordRules({ password: 'antiga123', current: 'antiga123' })[1]).toEqual({ label: 'Diferente da senha atual', met: false })
     expect(passwordRules({ password: '', confirmation: '' })[1].met).toBe(false)

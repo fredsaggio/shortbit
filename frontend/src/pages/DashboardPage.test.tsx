@@ -171,4 +171,25 @@ describe('DashboardPage', () => {
     expect(api.calls('POST', '/urls')).toHaveLength(0)
     expect(sessionStorage.getItem('shortbit:pending-link')).toBeNull()
   })
+
+  it('rates the link password on a strength bar instead of a checklist', async () => {
+    fakeApi({ ...signedIn, 'GET /urls': { status: 200, body: { urls: [], next_cursor: null } } })
+    const { user: actions } = renderApp('/painel')
+
+    await actions.click(await screen.findByRole('radio', { name: 'Com senha' }))
+    const field = screen.getByLabelText('Senha do link')
+    expect(screen.queryByRole('list', { name: 'Requisitos da senha' })).not.toBeInTheDocument()
+
+    await actions.type(field, 'curta')
+    expect(screen.getByText('Curta demais · mínimo de 8 caracteres')).toBeInTheDocument()
+
+    await actions.clear(field)
+    await actions.type(field, 'password')
+    expect(await screen.findByText('Muito fraca')).toBeInTheDocument()
+
+    await actions.clear(field)
+    await actions.type(field, 'cavalo correto bateria grampeador')
+    expect(await screen.findByText('Muito forte', {}, { timeout: 5000 })).toBeInTheDocument()
+    expect(field).toHaveAccessibleDescription(/Força da senha: Muito forte/)
+  })
 })
