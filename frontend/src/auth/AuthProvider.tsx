@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { getCurrentUser, login, logout } from '../api/auth.ts'
 import { ApiError, isAbortError } from '../api/client.ts'
-import type { User } from '../api/types.ts'
+import type { Account } from '../api/types.ts'
 import { AuthContext, type AuthState } from './AuthContext.ts'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({ status: 'loading' })
 
-  const loadUser = useCallback(async (signal?: AbortSignal): Promise<User | null> => {
+  const loadUser = useCallback(async (signal?: AbortSignal): Promise<Account | null> => {
     try {
       const user = await getCurrentUser(signal)
       setState({ status: 'authenticated', user })
@@ -55,9 +55,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const replaceAccount = useCallback((account: Account) => {
+    setState({ status: 'authenticated', user: account })
+  }, [])
+
   const value = useMemo(
-    () => ({ state, refresh: () => loadUser(), signIn, signOut }),
-    [state, loadUser, signIn, signOut],
+    () => ({ state, refresh: () => loadUser(), replaceAccount, signIn, signOut }),
+    [state, loadUser, replaceAccount, signIn, signOut],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

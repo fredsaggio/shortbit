@@ -3,6 +3,13 @@ export type User = {
   email: string
 }
 
+export type Account = User & {
+  full_name: string | null
+  has_password: boolean
+  has_google: boolean
+  created_at: string
+}
+
 export type Visibility = 'public' | 'private'
 
 export type ShortLink = {

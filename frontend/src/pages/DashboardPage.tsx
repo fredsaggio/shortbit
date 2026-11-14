@@ -10,7 +10,7 @@ import { CopyButton } from '../components/CopyButton.tsx'
 import { PageLoader } from '../components/PageLoader.tsx'
 import { TextField } from '../components/TextField.tsx'
 import { VisibilityBadge } from '../components/VisibilityBadge.tsx'
-import { clicksLabel, formatCount, formatDate } from '../format.ts'
+import { clicksLabel, displayName, formatCount, formatDate } from '../format.ts'
 import { clearPendingLink, readPendingLink } from '../pendingLink.ts'
 import { useFieldErrors } from '../useFieldErrors.ts'
 import { checkLinkPassword, checkURL, minPasswordLength } from '../validation.ts'
@@ -219,7 +219,11 @@ export function DashboardPage() {
     <div className="container page">
       <header className="page__header">
         <h1>Meus links</h1>
-        {auth.status === 'authenticated' && <p>Conectado como {auth.user.email}</p>}
+        {auth.status === 'authenticated' && (
+          <p>
+            Olá, {displayName(auth.user.full_name, auth.user.email)}! Conectado como {auth.user.email}.
+          </p>
+        )}
       </header>
 
       <div className="dashboard">

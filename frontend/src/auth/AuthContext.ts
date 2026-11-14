@@ -1,14 +1,15 @@
 import { createContext, useContext } from 'react'
-import type { User } from '../api/types.ts'
+import type { Account } from '../api/types.ts'
 
 export type AuthState =
   | { status: 'loading' }
   | { status: 'anonymous' }
-  | { status: 'authenticated'; user: User }
+  | { status: 'authenticated'; user: Account }
 
 export type AuthContextValue = {
   state: AuthState
-  refresh: () => Promise<User | null>
+  refresh: () => Promise<Account | null>
+  replaceAccount: (account: Account) => void
   signIn: (email: string, password: string, rememberMe: boolean) => Promise<void>
   signOut: () => Promise<void>
 }

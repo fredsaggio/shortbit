@@ -8,7 +8,7 @@ import { Button } from '../components/Button.tsx'
 import { GoogleButton } from '../components/GoogleButton.tsx'
 import { TextField } from '../components/TextField.tsx'
 import { useFieldErrors } from '../useFieldErrors.ts'
-import { checkCode, checkConfirmation, checkEmail, checkNewPassword, minPasswordLength } from '../validation.ts'
+import { checkCode, checkConfirmation, checkEmail, checkFullName, checkNewPassword, maxFullNameLength, minPasswordLength } from '../validation.ts'
 
 const resendCooldownSeconds = 30
 
@@ -19,6 +19,7 @@ export function RegisterPage() {
   const introMessage = (location.state as { message?: string } | null)?.message
 
   const [step, setStep] = useState<'details' | 'code'>('details')
+  const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [passwordConfirmation, setPasswordConfirmation] = useState('')
@@ -27,7 +28,7 @@ export function RegisterPage() {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [resendIn, setResendIn] = useState(0)
-  const fields = useFieldErrors<'email' | 'password' | 'passwordConfirmation' | 'code'>()
+  const fields = useFieldErrors<'fullName' | 'email' | 'password' | 'passwordConfirmation' | 'code'>()
 
   useEffect(() => {
     if (resendIn <= 0) {
@@ -41,6 +42,7 @@ export function RegisterPage() {
     event.preventDefault()
     setError('')
     const valid = fields.check(event.currentTarget, {
+      fullName: checkFullName(fullName),
       email: checkEmail(email),
       password: checkNewPassword(password),
       passwordConfirmation: checkConfirmation(password, passwordConfirmation),
@@ -51,7 +53,7 @@ export function RegisterPage() {
 
     setSubmitting(true)
     try {
-      await startRegistration(email.trim(), password)
+      await startRegistration(email.trim(), password, fullName.trim())
       setStep('code')
       setNotice(`Enviamos um código de 6 dígitos para ${email.trim()}.`)
       setResendIn(resendCooldownSeconds)
@@ -124,6 +126,19 @@ export function RegisterPage() {
             <div className="divider">ou com email</div>
 
             <form className="form" onSubmit={handleDetails} noValidate>
+              <TextField
+                label="Nome completo"
+                name="fullName"
+                autoComplete="name"
+                maxLength={maxFullNameLength}
+                value={fullName}
+                error={fields.errors.fullName}
+                onChange={(event) => {
+                  setFullName(event.target.value)
+                  fields.clear('fullName')
+                }}
+                required
+              />
               <TextField
                 label="Email"
                 name="email"

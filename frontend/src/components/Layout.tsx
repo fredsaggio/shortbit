@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router'
 import { useAuth } from '../auth/AuthContext.ts'
+import { displayName } from '../format.ts'
 import { Logo } from './Logo.tsx'
 
 const currentYear = new Date().getFullYear()
@@ -38,9 +39,10 @@ export function Layout() {
                 <NavLink to="/painel" className="nav-link">
                   Meus links
                 </NavLink>
-                <span className="header__user" title={state.user.email}>
-                  {state.user.email}
-                </span>
+                <NavLink to="/conta" className="nav-link" title={state.user.email}>
+                  Minha conta
+                </NavLink>
+                <span className="header__user">Olá, {displayName(state.user.full_name, state.user.email)}</span>
                 <button type="button" className="button button--ghost" onClick={handleSignOut} disabled={signingOut}>
                   Sair
                 </button>

@@ -4,7 +4,8 @@ import { fakeApi, signedOut, user } from '../test/fakeApi.ts'
 import { renderApp } from '../test/renderApp.tsx'
 
 async function fillDetails(actions: ReturnType<typeof renderApp>['user'], confirmation = 'senha12345') {
-  await actions.type(await screen.findByLabelText('Email'), user.email)
+  await actions.type(await screen.findByLabelText('Nome completo'), user.full_name)
+  await actions.type(screen.getByLabelText('Email'), user.email)
   await actions.type(screen.getByLabelText('Senha'), 'senha12345')
   await actions.type(screen.getByLabelText('Confirme a senha'), confirmation)
   await actions.click(screen.getByRole('button', { name: 'Continuar' }))
@@ -32,7 +33,7 @@ describe('RegisterPage', () => {
     await actions.click(screen.getByRole('button', { name: 'Confirmar e entrar' }))
 
     await waitFor(() => expect(screen.getByTestId('current-path')).toHaveTextContent('/painel'))
-    expect(api.calls('POST', '/registrations/password')[0].body).toEqual({ email: user.email, password: 'senha12345' })
+    expect(api.calls('POST', '/registrations/password')[0].body).toEqual({ email: user.email, password: 'senha12345', full_name: 'Ana Souza' })
     expect(api.calls('POST', '/registrations/password/confirm')[0].body).toEqual({ code: '123456' })
     expect(api.calls('POST', '/sessions')[0].body).toEqual({ email: user.email, password: 'senha12345', remember_me: false })
   })
@@ -47,6 +48,18 @@ describe('RegisterPage', () => {
     expect(await screen.findByText('As senhas não coincidem.')).toBeInTheDocument()
     expect(confirmation).toHaveAttribute('aria-invalid', 'true')
     expect(confirmation).toHaveFocus()
+    expect(api.calls('POST', '/registrations/password')).toHaveLength(0)
+  })
+
+  it('requires the full name', async () => {
+    const api = fakeApi(signedOut)
+    const { user: actions } = renderApp('/cadastro')
+
+    await actions.type(await screen.findByLabelText('Email'), user.email)
+    await actions.click(screen.getByRole('button', { name: 'Continuar' }))
+
+    expect(screen.getByText('Informe seu nome completo.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Nome completo')).toHaveFocus()
     expect(api.calls('POST', '/registrations/password')).toHaveLength(0)
   })
 

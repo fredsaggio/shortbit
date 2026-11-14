@@ -2,6 +2,7 @@ import { Route, Routes } from 'react-router'
 import { AuthProvider } from './auth/AuthProvider.tsx'
 import { Layout } from './components/Layout.tsx'
 import { GuestOnly, RequireAuth } from './components/RouteGuards.tsx'
+import { AccountPage } from './pages/AccountPage.tsx'
 import { DashboardPage } from './pages/DashboardPage.tsx'
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage.tsx'
 import { HomePage } from './pages/HomePage.tsx'
@@ -38,6 +39,14 @@ export function App() {
             element={
               <RequireAuth>
                 <DashboardPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="conta"
+            element={
+              <RequireAuth>
+                <AccountPage />
               </RequireAuth>
             }
           />

@@ -41,4 +41,11 @@ export function fakeApi(routes: Record<string, Handler>) {
 }
 
 export const signedOut = { 'GET /me': { status: 401, body: 'autenticação necessária' } }
-export const user = { id: '0194d3b2-0000-7000-8000-000000000001', email: 'ana@example.com' }
+export const user = {
+  id: '0194d3b2-0000-7000-8000-000000000001',
+  email: 'ana@example.com',
+  full_name: 'Ana Souza',
+  has_password: true,
+  has_google: false,
+  created_at: '2026-11-14T12:00:00Z',
+}

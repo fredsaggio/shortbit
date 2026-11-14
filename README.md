@@ -6,13 +6,13 @@ ShortBit is a URL shortener for public or password-protected links. It tracks cl
 
 | Parte | O que faz |
 | --- | --- |
-| **Contas** | Cadastro com senha e confirmação por email, login com senha ou Google OIDC, recuperação de senha por código, `/me` e logout |
+| **Contas** | Cadastro com nome completo, senha e confirmação por email; login com senha ou Google OIDC (o nome vem do Google); recuperação de senha por código; `/me`, edição do nome, troca de senha com renovação da sessão; logout |
 | **Sessões** | Sessões opacas em cookies, com `remember_me` opcional no login por senha e sessão lembrada por padrão no Google |
 | **Links** | Criação de links públicos e privados com shortcodes Sqids, listagem com paginação por cursor (até 20 por página) e consulta individual com metadados e contador de cliques |
 | **Redirect** | Redirect público e privado; o clique vai para o RabbitMQ e um worker incrementa o contador, com fallback síncrono no PostgreSQL; links privados exigem senha e criam uma sessão temporária por link |
 | **Cache** | Links públicos com 20 acessos em 60 segundos têm o destino guardado no Redis por 5 minutos; sem Redis, a leitura volta ao PostgreSQL |
 | **Proteções** | Rate limiting, limite de tamanho do corpo e limpeza de cadastros pendentes |
-| **Frontend** | Landing page, cadastro, login (senha ou Google), recuperação de senha, painel para criar e listar links e detalhe com cliques ([`frontend/`](frontend/README.md)) |
+| **Frontend** | Landing page, cadastro com nome, login (senha ou Google), recuperação de senha, painel para criar e listar links, detalhe com cliques e página Minha conta ([`frontend/`](frontend/README.md)) |
 
 ---
 

@@ -2,16 +2,19 @@
 
 Interface web do ShortBit em React 19, TypeScript e Vite, sem biblioteca de componentes: o visual vem de `src/styles/global.css`.
 
+Os formulários usam `noValidate` e mensagens próprias (`src/validation.ts` e `src/useFieldErrors.ts`) em vez dos balões do navegador. A API valida tudo de novo.
+
 ## Telas
 
 | Rota | Tela | Acesso |
 | --- | --- | --- |
 | `/` | Landing page com campo para encurtar | Livre |
 | `/entrar` | Login com senha ou Google | Só sem sessão |
-| `/cadastro` | Cadastro com código de confirmação por email | Só sem sessão |
+| `/cadastro` | Cadastro com nome completo e código de confirmação por email | Só sem sessão |
 | `/recuperar-senha` | Recuperação de senha por código | Livre |
 | `/painel` | Criar links (público ou com senha) e listar os seus | Com sessão |
 | `/painel/links/:code` | Detalhe de um link e total de cliques | Com sessão |
+| `/conta` | Minha conta: dados, nome completo e troca de senha (contas com senha) | Com sessão |
 
 A página de senha do link privado e o redirect (`/{code}`) continuam na API, porque são abertos por quem recebe o link curto.
 
@@ -69,7 +72,7 @@ Inspirada no Bitly: azul-marinho, laranja e azul sobre branco. As cores são var
 | `--orange` | `#EE6123` | Laranja da marca: logo, destaques, detalhes |
 | `--orange-strong` | `#C74A16` | Fundo dos botões principais |
 | `--blue` | `#2A5BD7` | Links, ícones, seletor ativo, faixa de chamada |
-| `--page` | `#F4F6FA` | Fundo das páginas |
+| `--page` | `#2A5BD7` | Fundo das páginas, como no bitly.com; texto direto sobre ele é branco |
 | `--surface` | `#FFFFFF` | Cabeçalho e cards |
 
 Os botões usam `--orange-strong` porque texto branco sobre `#EE6123` tem contraste de 3,3:1, abaixo do mínimo de 4,5:1 (WCAG AA). Com `#C74A16` fica em 4,75:1.
