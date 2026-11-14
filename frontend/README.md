@@ -1,6 +1,6 @@
 # ShortBit — Frontend
 
-Interface web do ShortBit em React 19, TypeScript e Vite, com Tailwind CSS v4 e componentes do shadcn/ui (Radix). A fonte é a Plus Jakarta Sans, e o logo usa a Nunito; as duas são servidas pelo próprio app (`@fontsource-variable`), sem chamar o Google Fonts.
+Interface web do ShortBit em React 19, TypeScript e Vite, com Tailwind CSS v4 e componentes do shadcn/ui (Radix). A fonte é a Plus Jakarta Sans, e o logo usa a Sora; as duas são servidas pelo próprio app (`@fontsource-variable`), sem chamar o Google Fonts.
 
 Os formulários usam `noValidate` e mensagens próprias (`src/validation.ts` e `src/useFieldErrors.ts`) em vez dos balões do navegador. A API valida tudo de novo.
 

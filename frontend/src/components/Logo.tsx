@@ -6,12 +6,12 @@ type LogoProps = {
 }
 
 // The wordmark alone: "short" in the surface color and "bit" in orange, set in
-// Nunito for its rounded terminals.
+// Sora for its wide, geometric letters.
 export function Logo({ tone = 'dark', className }: LogoProps) {
   return (
     <span
       className={cn(
-        'inline-flex items-baseline font-logo text-[26px] leading-none font-[850] tracking-[-0.02em]',
+        'inline-flex items-baseline font-logo text-[25px] leading-none font-bold tracking-[-0.04em]',
         tone === 'light' ? 'text-white' : 'text-navy',
         className,
       )}
