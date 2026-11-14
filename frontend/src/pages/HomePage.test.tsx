@@ -8,7 +8,7 @@ describe('HomePage', () => {
     fakeApi(signedOut)
     renderApp('/')
 
-    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Links curtos que mostram quem clicou')
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Encurte, proteja e conte cada clique')
     expect(screen.queryByText(/plano grátis/i)).not.toBeInTheDocument()
   })
 

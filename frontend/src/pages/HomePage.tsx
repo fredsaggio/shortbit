@@ -142,9 +142,9 @@ function ShortenCard() {
   )
 }
 
-const headlineWords = ['Links', 'curtos', 'que', 'mostram', 'quem']
+const headlineWords = ['Encurte,', 'proteja', 'e', 'conte', 'cada']
 
-// Each word rises in turn, then an orange stroke is drawn under "clicou".
+// Each word rises in turn, then an orange stroke is drawn under "clique".
 function HeroTitle() {
   return (
     <h1 className="mx-auto max-w-4xl text-[clamp(2.25rem,6vw,4.25rem)] leading-[1.05] font-extrabold tracking-tight">
@@ -162,7 +162,7 @@ function HeroTitle() {
         className="relative inline-block text-brand motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-4 motion-safe:duration-700 motion-safe:[animation-fill-mode:both]"
         style={{ animationDelay: `${headlineWords.length * 70}ms` }}
       >
-        clicou
+        clique
         <svg aria-hidden="true" viewBox="0 0 200 20" preserveAspectRatio="none" className="absolute -bottom-1 left-0 h-3 w-full overflow-visible sm:-bottom-2 sm:h-4">
           <path
             d="M3 15 C 55 3, 130 3, 197 11"
@@ -266,7 +266,7 @@ export function HomePage() {
         <div className="relative mx-auto max-w-7xl px-4 pt-14 pb-16 text-center sm:px-6 sm:pt-20 sm:pb-20">
           <HeroTitle />
           <p className="mx-auto mt-6 max-w-2xl text-lg text-navy-300 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-700 motion-safe:[animation-delay:300ms] motion-safe:[animation-fill-mode:both] sm:text-xl">
-            Transforme URLs enormes em links fáceis de compartilhar, proteja os que precisam de senha e acompanhe cada clique.
+            Cole uma URL enorme e receba um link curto, público ou privado, com os acessos contados no seu painel.
           </p>
 
           <ShortenCard />
