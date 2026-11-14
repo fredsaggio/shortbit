@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { fakeApi, signedOut, user } from '../test/fakeApi.ts'
 import { renderApp } from '../test/renderApp.tsx'
@@ -70,5 +70,37 @@ describe('RegisterPage', () => {
     await fillDetails(actions)
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Email já está em uso')
+  })
+
+  it('lights up each password requirement as it is met', async () => {
+    fakeApi(signedOut)
+    const { user: actions } = renderApp('/cadastro')
+
+    const checklist = await screen.findByRole('list', { name: 'Requisitos da senha' })
+    const rule = (name: string) => within(checklist).getByText(name).closest('li')
+
+    expect(rule('Pelo menos 8 caracteres')).toHaveAttribute('data-state', 'pending')
+    expect(rule('As duas senhas são iguais')).toHaveAttribute('data-state', 'pending')
+
+    await actions.type(screen.getByLabelText('Senha'), 'senha12345')
+    expect(rule('Pelo menos 8 caracteres')).toHaveAttribute('data-state', 'met')
+    expect(rule('15 ou mais caracteres')).toHaveAttribute('data-state', 'pending')
+
+    await actions.type(screen.getByLabelText('Confirme a senha'), 'senha12345')
+    expect(rule('As duas senhas são iguais')).toHaveAttribute('data-state', 'met')
+    expect(screen.getByLabelText('Senha')).toHaveAccessibleDescription(/Pelo menos 8 caracteres/)
+  })
+
+  it('does not block sign-up on the recommended length', async () => {
+    const api = fakeApi({ ...signedOut, 'POST /registrations/password': { status: 202 } })
+    const { user: actions } = renderApp('/cadastro')
+
+    await actions.type(await screen.findByLabelText('Nome completo'), 'Ana Souza')
+    await actions.type(screen.getByLabelText('Email'), 'ana@example.com')
+    await actions.type(screen.getByLabelText('Senha'), 'senha123')
+    await actions.type(screen.getByLabelText('Confirme a senha'), 'senha123')
+    await actions.click(screen.getByRole('button', { name: 'Continuar' }))
+
+    await waitFor(() => expect(api.calls('POST', '/registrations/password')).toHaveLength(1))
   })
 })

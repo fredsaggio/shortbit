@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useId, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { confirmPasswordReset, startPasswordReset } from '../api/auth.ts'
 import { messageOf } from '../api/client.ts'
@@ -6,9 +6,10 @@ import { useAuth } from '../auth/AuthContext.ts'
 import { Alert } from '../components/Alert.tsx'
 import { AuthCard, textLinkClass } from '../components/AuthCard.tsx'
 import { Button } from '../components/Button.tsx'
+import { PasswordChecklist } from '../components/PasswordChecklist.tsx'
 import { TextField } from '../components/TextField.tsx'
 import { useFieldErrors } from '../useFieldErrors.ts'
-import { checkCode, checkConfirmation, checkEmail, checkNewPassword, minPasswordLength } from '../validation.ts'
+import { checkCode, checkConfirmation, checkEmail, checkNewPassword, passwordRules } from '../validation.ts'
 
 export function ForgotPasswordPage() {
   const { refresh } = useAuth()
@@ -21,6 +22,7 @@ export function ForgotPasswordPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const fields = useFieldErrors<'email' | 'code' | 'password' | 'passwordConfirmation'>()
+  const checklistId = useId()
 
   const footer = (
     <>
@@ -137,7 +139,7 @@ export function ForgotPasswordPage() {
           name="password"
           type="password"
           autoComplete="new-password"
-          hint={`Mínimo de ${minPasswordLength} caracteres.`}
+          describedBy={checklistId}
           value={password}
           error={fields.errors.password}
           onChange={(event) => {
@@ -151,6 +153,7 @@ export function ForgotPasswordPage() {
           name="passwordConfirmation"
           type="password"
           autoComplete="new-password"
+          describedBy={checklistId}
           value={passwordConfirmation}
           error={fields.errors.passwordConfirmation}
           onChange={(event) => {
@@ -159,6 +162,7 @@ export function ForgotPasswordPage() {
           }}
           required
         />
+        <PasswordChecklist id={checklistId} rules={passwordRules({ password, confirmation: passwordConfirmation })} />
         <Button type="submit" size="lg" block loading={submitting}>
           Trocar senha
         </Button>

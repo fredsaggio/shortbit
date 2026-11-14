@@ -1,5 +1,5 @@
 import { MailCheck } from 'lucide-react'
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useId, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
 import { confirmRegistration, resendRegistrationCode, startRegistration } from '../api/auth.ts'
 import { messageOf } from '../api/client.ts'
@@ -8,9 +8,10 @@ import { Alert } from '../components/Alert.tsx'
 import { AuthCard, OrDivider, textLinkClass } from '../components/AuthCard.tsx'
 import { Button } from '../components/Button.tsx'
 import { GoogleButton } from '../components/GoogleButton.tsx'
+import { PasswordChecklist } from '../components/PasswordChecklist.tsx'
 import { TextField } from '../components/TextField.tsx'
 import { useFieldErrors } from '../useFieldErrors.ts'
-import { checkCode, checkConfirmation, checkEmail, checkFullName, checkNewPassword, maxFullNameLength, minPasswordLength } from '../validation.ts'
+import { checkCode, checkConfirmation, checkEmail, checkFullName, checkNewPassword, maxFullNameLength, passwordRules } from '../validation.ts'
 
 const resendCooldownSeconds = 30
 
@@ -44,6 +45,7 @@ export function RegisterPage() {
   const [notice, setNotice] = useState('')
   const [resendIn, setResendIn] = useState(0)
   const fields = useFieldErrors<'fullName' | 'email' | 'password' | 'passwordConfirmation' | 'code'>()
+  const checklistId = useId()
 
   useEffect(() => {
     if (resendIn <= 0) {
@@ -231,7 +233,7 @@ export function RegisterPage() {
           name="password"
           type="password"
           autoComplete="new-password"
-          hint={`Mínimo de ${minPasswordLength} caracteres.`}
+          describedBy={checklistId}
           value={password}
           error={fields.errors.password}
           onChange={(event) => {
@@ -245,6 +247,7 @@ export function RegisterPage() {
           name="passwordConfirmation"
           type="password"
           autoComplete="new-password"
+          describedBy={checklistId}
           value={passwordConfirmation}
           error={fields.errors.passwordConfirmation}
           onChange={(event) => {
@@ -253,6 +256,7 @@ export function RegisterPage() {
           }}
           required
         />
+        <PasswordChecklist id={checklistId} rules={passwordRules({ password, confirmation: passwordConfirmation })} />
         <Button type="submit" size="lg" block loading={submitting}>
           Continuar
         </Button>

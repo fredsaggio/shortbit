@@ -1,5 +1,5 @@
 import { BarChart3, ChevronRight, CircleCheck, Globe, Link2, LinkIcon, Lock, RotateCw } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { Link } from 'react-router'
 import { isAbortError, messageOf } from '../api/client.ts'
@@ -9,13 +9,14 @@ import { Alert } from '../components/Alert.tsx'
 import { Button } from '../components/Button.tsx'
 import { CopyButton } from '../components/CopyButton.tsx'
 import { LinkListSkeleton } from '../components/PageLoader.tsx'
+import { PasswordChecklist } from '../components/PasswordChecklist.tsx'
 import { TextField } from '../components/TextField.tsx'
 import { VisibilityBadge } from '../components/VisibilityBadge.tsx'
 import { VisibilityToggle } from '../components/VisibilityToggle.tsx'
 import { clicksLabel, formatCount, formatDate } from '../format.ts'
 import { clearPendingLink, readPendingLink } from '../pendingLink.ts'
 import { useFieldErrors } from '../useFieldErrors.ts'
-import { checkLinkPassword, checkURL, minPasswordLength } from '../validation.ts'
+import { checkLinkPassword, checkURL, passwordRules } from '../validation.ts'
 import { cn } from '@/lib/utils'
 
 function CreateLinkCard({ onCreated }: { onCreated: () => void }) {
@@ -37,6 +38,7 @@ function CreateLinkCard({ onCreated }: { onCreated: () => void }) {
   )
   const [created, setCreated] = useState<CreatedLink | null>(null)
   const fields = useFieldErrors<'url' | 'linkPassword'>()
+  const checklistId = useId()
 
   useEffect(() => {
     // React runs effects twice in development; the ref keeps it to one link.
@@ -139,7 +141,8 @@ function CreateLinkCard({ onCreated }: { onCreated: () => void }) {
               name="linkPassword"
               type="password"
               autoComplete="new-password"
-              hint={`Quem abrir o link precisa digitar essa senha. Mínimo de ${minPasswordLength} caracteres.`}
+              hint="Quem abrir o link precisa digitar essa senha."
+              describedBy={checklistId}
               value={password}
               error={fields.errors.linkPassword}
               onChange={(event) => {
@@ -148,6 +151,7 @@ function CreateLinkCard({ onCreated }: { onCreated: () => void }) {
               }}
               required
             />
+            <PasswordChecklist id={checklistId} rules={passwordRules({ password })} />
           </div>
         )}
 

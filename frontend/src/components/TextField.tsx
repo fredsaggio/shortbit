@@ -10,14 +10,16 @@ type TextFieldProps = InputHTMLAttributes<HTMLInputElement> & {
   error?: string
   hideLabel?: boolean
   leading?: ReactNode
+  /** Ids of extra descriptions, such as a password checklist. */
+  describedBy?: string
 }
 
-export function TextField({ label, hint, error, hideLabel = false, leading, id, className, ...props }: TextFieldProps) {
+export function TextField({ label, hint, error, hideLabel = false, leading, describedBy: extraDescribedBy, id, className, ...props }: TextFieldProps) {
   const generatedId = useId()
   const inputId = id ?? generatedId
   const hintId = hint ? `${inputId}-hint` : undefined
   const errorId = error ? `${inputId}-error` : undefined
-  const describedBy = [errorId, hintId].filter(Boolean).join(' ') || undefined
+  const describedBy = [errorId, hintId, extraDescribedBy].filter(Boolean).join(' ') || undefined
 
   return (
     <div className={cn('grid gap-2', className)}>

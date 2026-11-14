@@ -1,5 +1,5 @@
 import { KeyRound, Mail, ShieldCheck, UserRound } from 'lucide-react'
-import { useState, type FormEvent } from 'react'
+import { useId, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { changePassword, updateFullName } from '../api/auth.ts'
 import { messageOf } from '../api/client.ts'
@@ -8,10 +8,11 @@ import { useAuth } from '../auth/AuthContext.ts'
 import { Alert } from '../components/Alert.tsx'
 import { Button } from '../components/Button.tsx'
 import { PageLoader } from '../components/PageLoader.tsx'
+import { PasswordChecklist } from '../components/PasswordChecklist.tsx'
 import { TextField } from '../components/TextField.tsx'
 import { formatLongDate } from '../format.ts'
 import { useFieldErrors } from '../useFieldErrors.ts'
-import { checkConfirmation, checkFullName, checkNewPassword, checkRequired, maxFullNameLength, minPasswordLength } from '../validation.ts'
+import { checkConfirmation, checkFullName, checkNewPassword, checkRequired, maxFullNameLength, passwordRules } from '../validation.ts'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -109,6 +110,7 @@ function PasswordCard() {
   const [error, setError] = useState('')
   const [changed, setChanged] = useState(false)
   const fields = useFieldErrors<PasswordField>()
+  const checklistId = useId()
 
   function update(field: keyof typeof emptyPasswords, errorField: PasswordField, value: string) {
     setPasswords((current) => ({ ...current, [field]: value }))
@@ -167,7 +169,7 @@ function PasswordCard() {
             name="newPassword"
             type="password"
             autoComplete="new-password"
-            hint={`Mínimo de ${minPasswordLength} caracteres.`}
+            describedBy={checklistId}
             value={passwords.next}
             error={fields.errors.newPassword}
             onChange={(event) => update('next', 'newPassword', event.target.value)}
@@ -178,12 +180,17 @@ function PasswordCard() {
             name="newPasswordConfirmation"
             type="password"
             autoComplete="new-password"
+            describedBy={checklistId}
             value={passwords.confirmation}
             error={fields.errors.newPasswordConfirmation}
             onChange={(event) => update('confirmation', 'newPasswordConfirmation', event.target.value)}
             required
           />
         </div>
+        <PasswordChecklist
+          id={checklistId}
+          rules={passwordRules({ password: passwords.next, confirmation: passwords.confirmation, current: passwords.current })}
+        />
         {error && <Alert tone="error">{error}</Alert>}
         {changed && <Alert tone="success">Senha alterada. Os outros aparelhos foram desconectados.</Alert>}
         <div>

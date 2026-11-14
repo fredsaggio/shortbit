@@ -1,5 +1,5 @@
 import { ArrowRight, BarChart3, CircleCheck, Lock, Zap } from 'lucide-react'
-import { useState, type FormEvent } from 'react'
+import { useId, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { messageOf } from '../api/client.ts'
 import { createLink } from '../api/links.ts'
@@ -13,12 +13,13 @@ import { ClickBars } from '../components/home/ClickBars.tsx'
 import { FloatingLinks } from '../components/home/FloatingLinks.tsx'
 import { LinkShrinkDemo } from '../components/home/LinkShrinkDemo.tsx'
 import { Reveal } from '../components/Reveal.tsx'
+import { PasswordChecklist } from '../components/PasswordChecklist.tsx'
 import { TextField } from '../components/TextField.tsx'
 import { VisibilityToggle } from '../components/VisibilityToggle.tsx'
 import { useInView } from '../motion.ts'
 import { savePendingLink } from '../pendingLink.ts'
 import { useFieldErrors } from '../useFieldErrors.ts'
-import { checkLinkPassword, checkURL, minPasswordLength } from '../validation.ts'
+import { checkLinkPassword, checkURL, passwordRules } from '../validation.ts'
 import { cn } from '@/lib/utils'
 
 const steps = [
@@ -37,6 +38,7 @@ function ShortenCard() {
   const [error, setError] = useState('')
   const [created, setCreated] = useState<CreatedLink | null>(null)
   const fields = useFieldErrors<'url' | 'linkPassword'>()
+  const checklistId = useId()
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -106,7 +108,7 @@ function ShortenCard() {
                 name="linkPassword"
                 type="password"
                 autoComplete="new-password"
-                placeholder={`Mínimo de ${minPasswordLength} caracteres`}
+                describedBy={checklistId}
                 className="flex-1 animate-in fade-in slide-in-from-left-2 duration-200"
                 value={password}
                 error={fields.errors.linkPassword}
@@ -121,6 +123,9 @@ function ShortenCard() {
               Encurtar
             </Button>
           </div>
+          {visibility === 'private' && (
+            <PasswordChecklist id={checklistId} rules={passwordRules({ password })} />
+          )}
         </form>
         {error && <Alert tone="error" className="mt-4">{error}</Alert>}
         {created && (
