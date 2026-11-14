@@ -11,37 +11,49 @@ import { CopyButton } from '../components/CopyButton.tsx'
 import { LinkListSkeleton } from '../components/PageLoader.tsx'
 import { TextField } from '../components/TextField.tsx'
 import { VisibilityBadge } from '../components/VisibilityBadge.tsx'
+import { VisibilityToggle } from '../components/VisibilityToggle.tsx'
 import { clicksLabel, formatCount, formatDate } from '../format.ts'
 import { clearPendingLink, readPendingLink } from '../pendingLink.ts'
 import { useFieldErrors } from '../useFieldErrors.ts'
 import { checkLinkPassword, checkURL, minPasswordLength } from '../validation.ts'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
 
-const visibilityItemClass =
-  'h-11 flex-1 gap-2 rounded-md px-4 text-[15px] font-semibold text-muted-foreground transition-colors hover:bg-surface hover:text-navy data-[state=on]:bg-navy data-[state=on]:text-white data-[state=on]:shadow-sm sm:flex-none'
-
 function CreateLinkCard({ onCreated }: { onCreated: () => void }) {
-  // A URL typed on the home page before signing in is shortened as soon as
-  // the dashboard opens, so the visitor lands on a link ready to copy.
-  const [pendingURL] = useState(readPendingLink)
+  // A link asked for on the home page before signing in is created as soon
+  // as the dashboard opens, so the visitor lands on a link ready to copy. A
+  // private one whose password was lost to a page load (the Google sign-in)
+  // is never created public: the form comes back filled, asking for it.
+  const [pending] = useState(readPendingLink)
+  const canAutoCreate = pending !== null && (pending.visibility === 'public' || Boolean(pending.password))
+  const needsPassword = pending !== null && !canAutoCreate
   const autoCreateStarted = useRef(false)
-  const [url, setUrl] = useState('')
-  const [visibility, setVisibility] = useState<Visibility>('public')
+  const [url, setUrl] = useState(needsPassword ? pending.url : '')
+  const [visibility, setVisibility] = useState<Visibility>(needsPassword ? 'private' : 'public')
   const [password, setPassword] = useState('')
-  const [submitting, setSubmitting] = useState(pendingURL !== '')
+  const [submitting, setSubmitting] = useState(canAutoCreate)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState(
+    needsPassword ? 'Digite de novo a senha do link. Por segurança, ela não fica salva no navegador.' : '',
+  )
   const [created, setCreated] = useState<CreatedLink | null>(null)
   const fields = useFieldErrors<'url' | 'linkPassword'>()
 
   useEffect(() => {
     // React runs effects twice in development; the ref keeps it to one link.
-    if (!pendingURL || autoCreateStarted.current) {
+    if (!pending || autoCreateStarted.current) {
       return
     }
     autoCreateStarted.current = true
     clearPendingLink()
-    createLink({ url: pendingURL, visibility: 'public' })
+    if (!canAutoCreate) {
+      return
+    }
+
+    const request =
+      pending.visibility === 'private' && pending.password
+        ? createLink({ url: pending.url, visibility: 'private', password: pending.password })
+        : createLink({ url: pending.url, visibility: 'public' })
+    request
       .then(
         (link) => {
           setCreated(link)
@@ -49,12 +61,14 @@ function CreateLinkCard({ onCreated }: { onCreated: () => void }) {
           onCreated()
         },
         (createError: unknown) => {
-          setUrl(pendingURL)
+          setUrl(pending.url)
+          setVisibility(pending.visibility)
+          setPassword(pending.password ?? '')
           setError(messageOf(createError))
         },
       )
       .finally(() => setSubmitting(false))
-  }, [pendingURL, onCreated])
+  }, [pending, canAutoCreate, onCreated])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -77,6 +91,7 @@ function CreateLinkCard({ onCreated }: { onCreated: () => void }) {
       setCreated(link)
       setUrl('')
       setPassword('')
+      setNotice('')
       onCreated()
     } catch (submitError) {
       setError(messageOf(submitError))
@@ -107,36 +122,19 @@ function CreateLinkCard({ onCreated }: { onCreated: () => void }) {
           required
         />
 
-        <div className="grid gap-2">
-          <span id="visibility-label" className="text-sm font-semibold text-navy">
-            Quem pode abrir
-          </span>
-          <ToggleGroup
-            type="single"
-            value={visibility}
-            onValueChange={(value) => {
-              if (value) {
-                setVisibility(value as Visibility)
-                fields.clear('linkPassword')
-              }
-            }}
-            aria-labelledby="visibility-label"
-            className="flex w-full gap-1 rounded-lg border bg-surface p-1 sm:w-fit sm:justify-self-start"
-          >
-            <ToggleGroupItem value="public" className={visibilityItemClass}>
-              <Globe className="size-4" aria-hidden="true" />
-              Público
-            </ToggleGroupItem>
-            <ToggleGroupItem value="private" className={visibilityItemClass}>
-              <Lock className="size-4" aria-hidden="true" />
-              Com senha
-            </ToggleGroupItem>
-          </ToggleGroup>
-        </div>
+        <VisibilityToggle
+          value={visibility}
+          onChange={(value) => {
+            setVisibility(value)
+            fields.clear('linkPassword')
+          }}
+        />
 
         {visibility === 'private' && (
-          <div className="animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="grid gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
+            {notice && <Alert tone="info">{notice}</Alert>}
             <TextField
+              autoFocus={needsPassword}
               label="Senha do link"
               name="linkPassword"
               type="password"

@@ -109,7 +109,7 @@ describe('DashboardPage', () => {
   })
 
   it('shortens the URL typed on the home page before login, once', async () => {
-    savePendingLink('https://example.com/da-home')
+    savePendingLink({ url: 'https://example.com/da-home', visibility: 'public' })
     const api = fakeApi({
       ...signedIn,
       'GET /urls': { status: 200, body: { urls: [], next_cursor: null } },
@@ -121,12 +121,12 @@ describe('DashboardPage', () => {
     expect(result).toBeInTheDocument()
     expect(api.calls('POST', '/urls')).toHaveLength(1)
     expect(api.calls('POST', '/urls')[0].body).toEqual({ url: 'https://example.com/da-home', visibility: 'public' })
-    expect(sessionStorage.getItem('shortbit:pending-url')).toBeNull()
+    expect(sessionStorage.getItem('shortbit:pending-link')).toBeNull()
     expect(screen.getByLabelText('URL de destino')).toHaveValue('')
   })
 
   it('keeps the home page URL in the form when creating it fails', async () => {
-    savePendingLink('https://example.com/da-home')
+    savePendingLink({ url: 'https://example.com/da-home', visibility: 'public' })
     fakeApi({
       ...signedIn,
       'GET /urls': { status: 200, body: { urls: [], next_cursor: null } },
@@ -136,5 +136,39 @@ describe('DashboardPage', () => {
 
     expect(await screen.findByRole('alert')).toBeInTheDocument()
     expect(screen.getByLabelText('URL de destino')).toHaveValue('https://example.com/da-home')
+  })
+
+  it('creates a private link from the home page with the password kept in memory', async () => {
+    savePendingLink({ url: 'https://example.com/segredo', visibility: 'private', password: 'senha-do-link' })
+    expect(sessionStorage.getItem('shortbit:pending-link')).not.toContain('senha-do-link')
+    const api = fakeApi({
+      ...signedIn,
+      'GET /urls': { status: 200, body: { urls: [], next_cursor: null } },
+      'POST /urls': { status: 201, body: { short_code: 'Qz7Rt2', short_url: 'http://localhost:8080/Qz7Rt2' } },
+    })
+    renderApp('/painel')
+
+    expect(await screen.findByRole('link', { name: 'http://localhost:8080/Qz7Rt2' })).toBeInTheDocument()
+    expect(api.calls('POST', '/urls')).toHaveLength(1)
+    expect(api.calls('POST', '/urls')[0].body).toEqual({
+      url: 'https://example.com/segredo',
+      visibility: 'private',
+      password: 'senha-do-link',
+    })
+  })
+
+  it('asks again for a private link password lost to a page load, without creating the link', async () => {
+    // What survives a full page load, such as the Google sign-in: storage
+    // only, never the password.
+    sessionStorage.setItem('shortbit:pending-link', JSON.stringify({ url: 'https://example.com/segredo', visibility: 'private' }))
+    const api = fakeApi({ ...signedIn, 'GET /urls': { status: 200, body: { urls: [], next_cursor: null } } })
+    renderApp('/painel')
+
+    expect(await screen.findByText(/Digite de novo a senha do link/)).toBeInTheDocument()
+    expect(screen.getByLabelText('URL de destino')).toHaveValue('https://example.com/segredo')
+    expect(screen.getByRole('radio', { name: 'Com senha' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByLabelText('Senha do link')).toHaveValue('')
+    expect(api.calls('POST', '/urls')).toHaveLength(0)
+    expect(sessionStorage.getItem('shortbit:pending-link')).toBeNull()
   })
 })

@@ -1,27 +1,66 @@
-// A URL typed on the home page before signing in waits here, per tab, and is
-// shortened by the dashboard right after login. Storage can be unavailable (private
-// mode, blocked site data), so every access is guarded.
-const key = 'shortbit:pending-url'
+import type { Visibility } from './api/types.ts'
 
-export function savePendingLink(url: string): void {
+// A link asked for on the home page before signing in waits here and is
+// created by the dashboard right after login.
+//
+// The URL and the visibility go to sessionStorage (per tab), so they survive
+// the round trip to Google. The link password never does: web storage is
+// readable by any script on the page (OWASP HTML5 Security Cheat Sheet), so it
+// stays in memory. It survives navigation inside the app, as with email
+// sign-in, but not a full page load; then the dashboard asks for it again.
+const key = 'shortbit:pending-link'
+
+export type PendingLink = {
+  url: string
+  visibility: Visibility
+  /** Only for private links, and only while the page has not reloaded. */
+  password?: string
+}
+
+let pendingPassword: string | undefined
+
+export function savePendingLink(link: PendingLink): void {
+  pendingPassword = link.visibility === 'private' ? link.password : undefined
   try {
-    sessionStorage.setItem(key, url)
+    sessionStorage.setItem(key, JSON.stringify({ url: link.url, visibility: link.visibility }))
   } catch {
     // Without storage the visitor just types the URL again.
   }
 }
 
+function isStoredLink(value: unknown): value is { url: string; visibility: Visibility } {
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+  const { url, visibility } = value as Record<string, unknown>
+  return typeof url === 'string' && url !== '' && (visibility === 'public' || visibility === 'private')
+}
+
 // Reading and clearing are separate because React may call a state
 // initializer twice in development.
-export function readPendingLink(): string {
+export function readPendingLink(): PendingLink | null {
+  let stored: unknown
   try {
-    return sessionStorage.getItem(key) ?? ''
+    const raw = sessionStorage.getItem(key)
+    if (!raw) {
+      return null
+    }
+    stored = JSON.parse(raw)
   } catch {
-    return ''
+    return null
   }
+
+  if (!isStoredLink(stored)) {
+    return null
+  }
+
+  return stored.visibility === 'private'
+    ? { url: stored.url, visibility: 'private', password: pendingPassword }
+    : { url: stored.url, visibility: 'public' }
 }
 
 export function clearPendingLink(): void {
+  pendingPassword = undefined
   try {
     sessionStorage.removeItem(key)
   } catch {

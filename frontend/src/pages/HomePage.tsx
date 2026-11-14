@@ -3,7 +3,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { messageOf } from '../api/client.ts'
 import { createLink } from '../api/links.ts'
-import type { CreatedLink } from '../api/types.ts'
+import type { CreatedLink, Visibility } from '../api/types.ts'
 import { useAuth } from '../auth/AuthContext.ts'
 import { Alert } from '../components/Alert.tsx'
 import { Button } from '../components/Button.tsx'
@@ -14,10 +14,11 @@ import { FloatingLinks } from '../components/home/FloatingLinks.tsx'
 import { LinkShrinkDemo } from '../components/home/LinkShrinkDemo.tsx'
 import { Reveal } from '../components/Reveal.tsx'
 import { TextField } from '../components/TextField.tsx'
+import { VisibilityToggle } from '../components/VisibilityToggle.tsx'
 import { useInView } from '../motion.ts'
 import { savePendingLink } from '../pendingLink.ts'
 import { useFieldErrors } from '../useFieldErrors.ts'
-import { checkURL } from '../validation.ts'
+import { checkLinkPassword, checkURL, minPasswordLength } from '../validation.ts'
 import { cn } from '@/lib/utils'
 
 const steps = [
@@ -30,29 +31,40 @@ function ShortenCard() {
   const { state } = useAuth()
   const navigate = useNavigate()
   const [url, setUrl] = useState('')
+  const [visibility, setVisibility] = useState<Visibility>('public')
+  const [password, setPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [created, setCreated] = useState<CreatedLink | null>(null)
-  const fields = useFieldErrors<'url'>()
+  const fields = useFieldErrors<'url' | 'linkPassword'>()
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError('')
     setCreated(null)
-    if (!fields.check(event.currentTarget, { url: checkURL(url) })) {
+    const valid = fields.check(event.currentTarget, {
+      url: checkURL(url),
+      linkPassword: visibility === 'private' ? checkLinkPassword(password) : undefined,
+    })
+    if (!valid) {
       return
     }
 
     if (state.status !== 'authenticated') {
-      savePendingLink(url.trim())
+      savePendingLink({ url: url.trim(), visibility, password: visibility === 'private' ? password : undefined })
       navigate('/cadastro', { state: { message: 'Crie sua conta grátis ou entre: o seu link curto fica pronto assim que você entrar.' } })
       return
     }
 
     setSubmitting(true)
     try {
-      setCreated(await createLink({ url: url.trim(), visibility: 'public' }))
+      const link =
+        visibility === 'private'
+          ? await createLink({ url: url.trim(), visibility, password })
+          : await createLink({ url: url.trim(), visibility })
+      setCreated(link)
       setUrl('')
+      setPassword('')
     } catch (submitError) {
       setError(messageOf(submitError))
     } finally {
@@ -64,7 +76,7 @@ function ShortenCard() {
     <div className="mx-auto mt-10 w-full max-w-4xl rounded-[28px] border border-white/10 bg-white/5 p-1.5 shadow-raised motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-6 motion-safe:duration-700 motion-safe:[animation-delay:450ms] motion-safe:[animation-fill-mode:both] sm:mt-12 sm:p-2">
       <div className="rounded-[22px] bg-card p-5 text-left sm:p-8">
         <h2 className="text-xl font-bold text-navy sm:text-2xl">Encurte um link longo de graça</h2>
-        <form className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start" onSubmit={handleSubmit} noValidate>
+        <form className="mt-4 grid gap-4" onSubmit={handleSubmit} noValidate>
           <TextField
             label="URL para encurtar"
             hideLabel
@@ -72,7 +84,6 @@ function ShortenCard() {
             type="url"
             inputMode="url"
             placeholder="Cole aqui o seu link longo"
-            className="flex-1"
             value={url}
             error={fields.errors.url}
             onChange={(event) => {
@@ -81,9 +92,35 @@ function ShortenCard() {
             }}
             required
           />
-          <Button type="submit" size="lg" loading={submitting} className="sm:min-w-44">
-            Encurtar
-          </Button>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+            <VisibilityToggle
+              value={visibility}
+              onChange={(value) => {
+                setVisibility(value)
+                fields.clear('linkPassword')
+              }}
+            />
+            {visibility === 'private' && (
+              <TextField
+                label="Senha do link"
+                name="linkPassword"
+                type="password"
+                autoComplete="new-password"
+                placeholder={`Mínimo de ${minPasswordLength} caracteres`}
+                className="flex-1 animate-in fade-in slide-in-from-left-2 duration-200"
+                value={password}
+                error={fields.errors.linkPassword}
+                onChange={(event) => {
+                  setPassword(event.target.value)
+                  fields.clear('linkPassword')
+                }}
+                required
+              />
+            )}
+            <Button type="submit" size="lg" loading={submitting} className="sm:ml-auto sm:min-w-44">
+              Encurtar
+            </Button>
+          </div>
         </form>
         {error && <Alert tone="error" className="mt-4">{error}</Alert>}
         {created && (

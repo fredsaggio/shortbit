@@ -20,7 +20,40 @@ describe('HomePage', () => {
     await actions.click(screen.getByRole('button', { name: 'Encurtar' }))
 
     await waitFor(() => expect(screen.getByTestId('current-path')).toHaveTextContent('/cadastro'))
-    expect(sessionStorage.getItem('shortbit:pending-url')).toBe('https://example.com/um-link-bem-longo')
+    expect(JSON.parse(sessionStorage.getItem('shortbit:pending-link') ?? '')).toEqual({
+      url: 'https://example.com/um-link-bem-longo',
+      visibility: 'public',
+    })
     expect(api.calls('POST', '/urls')).toHaveLength(0)
+  })
+
+  it('lets a visitor ask for a password-protected link without storing the password', async () => {
+    const api = fakeApi(signedOut)
+    const { user: actions } = renderApp('/')
+
+    await actions.type(await screen.findByLabelText('URL para encurtar'), 'https://example.com/segredo')
+    await actions.click(screen.getByRole('radio', { name: 'Com senha' }))
+    await actions.type(screen.getByLabelText('Senha do link'), 'senha-do-link')
+    await actions.click(screen.getByRole('button', { name: 'Encurtar' }))
+
+    await waitFor(() => expect(screen.getByTestId('current-path')).toHaveTextContent('/cadastro'))
+    const stored = sessionStorage.getItem('shortbit:pending-link') ?? ''
+    expect(JSON.parse(stored)).toEqual({ url: 'https://example.com/segredo', visibility: 'private' })
+    expect(stored).not.toContain('senha-do-link')
+    expect(api.calls('POST', '/urls')).toHaveLength(0)
+  })
+
+  it('checks the link password before leaving the home page', async () => {
+    fakeApi(signedOut)
+    const { user: actions } = renderApp('/')
+
+    await actions.type(await screen.findByLabelText('URL para encurtar'), 'https://example.com/segredo')
+    await actions.click(screen.getByRole('radio', { name: 'Com senha' }))
+    await actions.type(screen.getByLabelText('Senha do link'), 'curta')
+    await actions.click(screen.getByRole('button', { name: 'Encurtar' }))
+
+    expect(await screen.findByText('A senha do link precisa ter pelo menos 8 caracteres.')).toBeInTheDocument()
+    expect(screen.getByTestId('current-path')).toHaveTextContent('/')
+    expect(sessionStorage.getItem('shortbit:pending-link')).toBeNull()
   })
 })

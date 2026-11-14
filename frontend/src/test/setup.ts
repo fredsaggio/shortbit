@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
 import { afterEach } from 'vitest'
+import { clearPendingLink } from '../pendingLink.ts'
 
 // Browser APIs that Radix primitives use and jsdom does not implement.
 class ResizeObserverStub {
@@ -29,5 +30,6 @@ window.matchMedia ??= (query: string) =>
 
 afterEach(() => {
   cleanup()
+  clearPendingLink()
   sessionStorage.clear()
 })
