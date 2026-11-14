@@ -1,36 +1,39 @@
-/* Palette: "Chocolate truffle" plus one blue accent for links. */
+/* Palette: Bitly-like navy, orange and blue on white. */
 :root {
-  --brown: #713600;
-  --caramel: #c05800;
-  --caramel-hover: #a14a00;
-  --cream: #fdfbd4;
-  --espresso: #38240d;
+  --navy: #0b1736;
+  --orange: #ee6123;
+  /* Buttons use a deeper orange: white text on #ee6123 is only 3.3:1. */
+  --orange-strong: #c74a16;
+  --orange-strong-hover: #a93d10;
+  --orange-soft: #fdede4;
   --blue: #2a5bd7;
   --blue-hover: #1f47ad;
+  --blue-soft: #e8eefc;
 
-  --surface: #fffef4;
-  --surface-muted: #f6f2c6;
-  --text: var(--espresso);
-  --text-muted: #6b5640;
-  --border: rgba(56, 36, 13, 0.16);
-  --border-strong: rgba(56, 36, 13, 0.32);
+  --page: #f4f6fa;
+  --surface: #ffffff;
+  --surface-muted: #f4f6fa;
+  --text: var(--navy);
+  --text-muted: #5b6478;
+  --border: rgba(11, 23, 54, 0.12);
+  --border-strong: rgba(11, 23, 54, 0.26);
   --focus: 0 0 0 3px rgba(42, 91, 215, 0.45);
 
-  --error-bg: #fde8e4;
-  --error-text: #8a1c0b;
-  --success-bg: #e6f2df;
-  --success-text: #2f5a1b;
-  --info-bg: #e5ecfb;
+  --error-bg: #fdecea;
+  --error-text: #a3200f;
+  --success-bg: #e7f5ec;
+  --success-text: #1d6b3a;
+  --info-bg: var(--blue-soft);
   --info-text: #1f3f8a;
 
   --radius: 12px;
   --radius-small: 8px;
-  --shadow: 0 1px 2px rgba(56, 36, 13, 0.08), 0 8px 24px rgba(56, 36, 13, 0.08);
+  --shadow: 0 1px 2px rgba(11, 23, 54, 0.08), 0 8px 24px rgba(11, 23, 54, 0.08);
 
   font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   line-height: 1.5;
   color: var(--text);
-  background: var(--cream);
+  background: var(--page);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -43,7 +46,7 @@
 body {
   margin: 0;
   min-width: 320px;
-  background: var(--cream);
+  background: var(--page);
 }
 
 h1,
@@ -86,8 +89,8 @@ a:hover {
   top: 8px;
   z-index: 10;
   padding: 8px 12px;
-  background: var(--espresso);
-  color: var(--cream);
+  background: var(--navy);
+  color: #fff;
   border-radius: var(--radius-small);
 }
 
@@ -125,7 +128,7 @@ a:hover {
 
 .header__brand {
   text-decoration: none;
-  color: var(--espresso);
+  color: var(--navy);
 }
 
 .header__nav {
@@ -145,7 +148,7 @@ a:hover {
 }
 
 .nav-link {
-  color: var(--espresso);
+  color: var(--navy);
   font-weight: 600;
   text-decoration: none;
   padding: 8px 4px;
@@ -153,12 +156,12 @@ a:hover {
 
 .nav-link:hover,
 .nav-link.active {
-  color: var(--caramel-hover);
+  color: var(--blue);
 }
 
 .footer {
-  background: var(--espresso);
-  color: var(--cream);
+  background: var(--navy);
+  color: #fff;
   padding: 32px 0;
 }
 
@@ -170,11 +173,11 @@ a:hover {
 }
 
 .footer__inner .logo {
-  color: var(--brown);
+  color: var(--orange);
 }
 
 .footer__inner .logo__text {
-  color: var(--cream);
+  color: #fff;
 }
 
 .footer__text {
@@ -193,7 +196,7 @@ a:hover {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: var(--espresso);
+  color: var(--navy);
 }
 
 .logo__mark {
@@ -205,11 +208,11 @@ a:hover {
   font-weight: 800;
   font-size: 1.3rem;
   letter-spacing: -0.03em;
-  color: var(--espresso);
+  color: var(--navy);
 }
 
 .logo__accent {
-  color: var(--caramel);
+  color: var(--orange);
 }
 
 /* Buttons */
@@ -237,29 +240,29 @@ a:hover {
 }
 
 .button--primary {
-  background: var(--caramel);
+  background: var(--orange-strong);
   color: #fff;
 }
 
 .button--primary:hover:not(:disabled) {
-  background: var(--caramel-hover);
+  background: var(--orange-strong-hover);
   color: #fff;
 }
 
 .button--secondary {
   background: var(--surface);
-  color: var(--espresso);
+  color: var(--navy);
   border-color: var(--border-strong);
 }
 
 .button--secondary:hover:not(:disabled) {
-  border-color: var(--espresso);
-  color: var(--espresso);
+  border-color: var(--blue);
+  color: var(--blue);
 }
 
 .button--ghost {
   background: transparent;
-  color: var(--espresso);
+  color: var(--navy);
   padding: 0 12px;
 }
 
@@ -301,7 +304,7 @@ a:hover {
   width: 28px;
   height: 28px;
   border-width: 3px;
-  color: var(--caramel);
+  color: var(--orange);
 }
 
 @keyframes spin {
@@ -375,7 +378,7 @@ a:hover {
 .checkbox input {
   width: 18px;
   height: 18px;
-  accent-color: var(--caramel);
+  accent-color: var(--blue);
 }
 
 .alert {
@@ -447,7 +450,7 @@ a:hover {
 }
 
 .segmented label:has(input:checked) {
-  background: var(--brown);
+  background: var(--blue);
   color: #fff;
 }
 
@@ -517,8 +520,8 @@ a:hover {
 /* Home */
 
 .hero {
-  background: var(--espresso);
-  color: var(--cream);
+  background: var(--navy);
+  color: #fff;
   padding: 72px 0 88px;
   overflow: hidden;
 }
@@ -533,8 +536,8 @@ a:hover {
   margin-bottom: 16px;
   padding: 4px 12px;
   border-radius: 999px;
-  background: rgba(253, 251, 212, 0.12);
-  color: var(--cream);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
   font-size: 0.85rem;
   font-weight: 600;
 }
@@ -547,7 +550,7 @@ a:hover {
 
 .hero__title em {
   font-style: normal;
-  color: #f08a2c;
+  color: var(--orange);
 }
 
 .hero__lead {
@@ -614,8 +617,8 @@ a:hover {
   height: 44px;
   margin-bottom: 12px;
   border-radius: 10px;
-  background: var(--surface-muted);
-  color: var(--brown);
+  background: var(--blue-soft);
+  color: var(--blue);
 }
 
 .feature p {
@@ -636,7 +639,7 @@ a:hover {
 .steps li {
   counter-increment: step;
   padding: 20px;
-  border-left: 4px solid var(--caramel);
+  border-left: 4px solid var(--orange);
   background: var(--surface);
   border-radius: 0 var(--radius-small) var(--radius-small) 0;
 }
@@ -646,11 +649,11 @@ a:hover {
   display: block;
   font-size: 1.6rem;
   font-weight: 800;
-  color: var(--caramel);
+  color: var(--orange-strong);
 }
 
 .cta {
-  background: var(--caramel);
+  background: var(--blue);
   color: #fff;
   padding: 56px 0;
 }
@@ -668,8 +671,8 @@ a:hover {
 }
 
 .cta .button--secondary {
-  background: var(--cream);
-  border-color: var(--cream);
+  background: #fff;
+  border-color: #fff;
 }
 
 /* Dashboard */
@@ -777,7 +780,7 @@ a:hover {
   display: block;
   font-size: 1.4rem;
   font-weight: 800;
-  color: var(--brown);
+  color: var(--navy);
   line-height: 1;
 }
 
@@ -802,8 +805,8 @@ a:hover {
 }
 
 .badge--private {
-  background: var(--surface-muted);
-  color: var(--brown);
+  background: var(--orange-soft);
+  color: var(--orange-strong-hover);
 }
 
 .empty-state {
@@ -842,7 +845,7 @@ a:hover {
   font-size: clamp(1.4rem, 3vw, 2rem);
   font-weight: 800;
   word-break: break-all;
-  color: var(--espresso);
+  color: var(--navy);
   margin-bottom: 16px;
 }
 
@@ -870,9 +873,9 @@ a:hover {
 
 .stat {
   text-align: center;
-  background: var(--brown);
-  color: var(--cream);
-  border-color: var(--brown);
+  background: var(--navy);
+  color: #fff;
+  border-color: var(--navy);
 }
 
 .stat__value {
@@ -889,13 +892,13 @@ a:hover {
 
 .stat .button--secondary {
   background: transparent;
-  color: var(--cream);
-  border-color: rgba(253, 251, 212, 0.5);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.5);
 }
 
 .stat .button--secondary:hover:not(:disabled) {
-  color: var(--cream);
-  border-color: var(--cream);
+  color: #fff;
+  border-color: #fff;
 }
 
 .not-found {

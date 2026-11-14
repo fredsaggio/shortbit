@@ -61,12 +61,15 @@ src/
 
 ## Paleta
 
-Base "Chocolate truffle" com um azul de destaque para links, definidas como variáveis em `:root`:
+Inspirada no Bitly: azul-marinho, laranja e azul sobre branco. As cores são variáveis em `:root`, em `src/styles/global.css`.
 
 | Variável | Cor | Uso |
 | --- | --- | --- |
-| `--brown` | `#713600` | Destaques, seletor ativo, card de cliques |
-| `--caramel` | `#C05800` | Botões principais |
-| `--cream` | `#FDFBD4` | Fundo |
-| `--espresso` | `#38240D` | Texto, hero e rodapé |
-| `--blue` | `#2A5BD7` | Links |
+| `--navy` | `#0B1736` | Texto, hero, rodapé e card de cliques |
+| `--orange` | `#EE6123` | Laranja da marca: logo, destaques, detalhes |
+| `--orange-strong` | `#C74A16` | Fundo dos botões principais |
+| `--blue` | `#2A5BD7` | Links, ícones, seletor ativo, faixa de chamada |
+| `--page` | `#F4F6FA` | Fundo das páginas |
+| `--surface` | `#FFFFFF` | Cabeçalho e cards |
+
+Os botões usam `--orange-strong` porque texto branco sobre `#EE6123` tem contraste de 3,3:1, abaixo do mínimo de 4,5:1 (WCAG AA). Com `#C74A16` fica em 4,75:1.
