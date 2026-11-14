@@ -11,12 +11,20 @@ export function savePendingLink(url: string): void {
   }
 }
 
-export function takePendingLink(): string {
+// Reading and clearing are separate because React may call a state
+// initializer twice in development.
+export function readPendingLink(): string {
   try {
-    const url = sessionStorage.getItem(key) ?? ''
-    sessionStorage.removeItem(key)
-    return url
+    return sessionStorage.getItem(key) ?? ''
   } catch {
     return ''
+  }
+}
+
+export function clearPendingLink(): void {
+  try {
+    sessionStorage.removeItem(key)
+  } catch {
+    // Nothing to clear without storage.
   }
 }

@@ -413,6 +413,8 @@ a:hover {
   display: inline-grid;
   grid-auto-flow: column;
   gap: 4px;
+  margin: 0;
+  min-width: 0;
   padding: 4px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-small);
@@ -420,6 +422,7 @@ a:hover {
 }
 
 .segmented label {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
