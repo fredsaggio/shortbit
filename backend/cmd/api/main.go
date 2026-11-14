@@ -14,6 +14,7 @@ import (
 	"github.com/fredsaggio/url-shortener/internal/cache"
 	"github.com/fredsaggio/url-shortener/internal/config"
 	"github.com/fredsaggio/url-shortener/internal/db"
+	"github.com/fredsaggio/url-shortener/internal/frontend"
 	"github.com/fredsaggio/url-shortener/internal/googleoidc"
 	"github.com/fredsaggio/url-shortener/internal/messaging"
 	"github.com/fredsaggio/url-shortener/internal/server"
@@ -39,17 +40,24 @@ func Run(ctx context.Context, getEnv func(string) string) error {
 		return err
 	}
 
+	if cfg.RunMigrations {
+		if err := db.Migrate(ctx, cfg.DatabaseURL); err != nil {
+			return err
+		}
+		slog.Info("database migrations up to date")
+	}
+
 	pool, err := db.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return err
 	}
 	defer pool.Close()
 
-	redisClient := redis.NewClient(&redis.Options{
-		Addr:                  cfg.Redis.Addr,
-		ContextTimeoutEnabled: true,
-		MaxRetries:            -1,
-	})
+	redisOptions, err := newRedisOptions(cfg.Redis)
+	if err != nil {
+		return err
+	}
+	redisClient := redis.NewClient(redisOptions)
 
 	heatTracker := cache.NewRedisHeatTracker(redisClient, cfg.Redis.Timeout, cfg.HotURL.Window)
 	destinationCache := cache.NewRedisDestinationCache(redisClient, cfg.Redis.Timeout, cfg.HotURL.CacheTTL)
@@ -90,7 +98,16 @@ func Run(ctx context.Context, getEnv func(string) string) error {
 	if err != nil {
 		return fmt.Errorf("initialize application handlers: %w", err)
 	}
-	srv := server.NewServer(handlers, pool)
+	serverOptions := []server.Option{server.WithClientIPHeader(cfg.HTTP.ClientIPHeader)}
+	if cfg.HTTP.FrontendDir != "" {
+		web, err := frontend.NewHandler(cfg.HTTP.FrontendDir)
+		if err != nil {
+			return err
+		}
+		serverOptions = append(serverOptions, server.WithFrontend(web))
+		slog.Info("serving the web app", "dir", cfg.HTTP.FrontendDir)
+	}
+	srv := server.NewServer(handlers, pool, serverOptions...)
 
 	handler := srv.NewRouterHTTP()
 
@@ -125,6 +142,21 @@ func Run(ctx context.Context, getEnv func(string) string) error {
 		<-jobDone
 	}()
 
+	if cfg.ClickWorker.RunInAPI {
+		workerCtx, stopWorker := context.WithCancel(ctx)
+		workerDone := make(chan struct{})
+
+		go func() {
+			defer close(workerDone)
+			app.RunClickWorker(workerCtx, pool, cfg.RabbitMQ.URL, cfg.ClickWorker.RabbitMQPrefetch, cfg.ClickWorker.ProcessedClickEventRetention)
+		}()
+
+		defer func() {
+			stopWorker()
+			<-workerDone
+		}()
+	}
+
 	select {
 	case err := <-serverErr:
 		if errors.Is(err, http.ErrServerClosed) {
@@ -154,4 +186,24 @@ func Run(ctx context.Context, getEnv func(string) string) error {
 
 		return err
 	}
+}
+
+// newRedisOptions builds the client options from REDIS_URL (hosted Redis,
+// with password and TLS) or from the plain REDIS_ADDR used locally.
+func newRedisOptions(cfg config.RedisConfig) (*redis.Options, error) {
+	options := &redis.Options{Addr: cfg.Addr}
+	if cfg.URL != "" {
+		parsed, err := redis.ParseURL(cfg.URL)
+		if err != nil {
+			return nil, fmt.Errorf("parse REDIS_URL: %w", err)
+		}
+		options = parsed
+	}
+
+	// Cache calls must never hold a redirect: honor the per-call timeout and
+	// fail fast instead of retrying (see the cache package).
+	options.ContextTimeoutEnabled = true
+	options.MaxRetries = -1
+
+	return options, nil
 }

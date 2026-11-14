@@ -5,15 +5,11 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 
+	"github.com/fredsaggio/url-shortener/internal/app"
 	"github.com/fredsaggio/url-shortener/internal/config"
 	"github.com/fredsaggio/url-shortener/internal/db"
-	"github.com/fredsaggio/url-shortener/internal/jobs"
-	"github.com/fredsaggio/url-shortener/internal/messaging"
-	"github.com/fredsaggio/url-shortener/internal/repositories"
-	"github.com/fredsaggio/url-shortener/internal/services"
 )
 
 func main() {
@@ -40,24 +36,7 @@ func Run(ctx context.Context, getEnv func(string) string) error {
 	}
 	defer pool.Close()
 
-	clickEventRepository := repositories.NewClickEventRepository(pool)
-	clickCountService := services.NewClickCountService(clickEventRepository)
-	consumer := messaging.NewClickConsumer(cfg.RabbitMQURL, cfg.RabbitMQPrefetch, clickCountService)
-	cleanup := jobs.NewProcessedClickEventCleanup(clickEventRepository, cfg.ProcessedClickEventRetention)
-
-	var wg sync.WaitGroup
-
-	wg.Go(func() {
-		slog.Info("click worker started")
-		consumer.Run(ctx)
-		slog.Info("click worker stopped")
-	})
-
-	wg.Go(func() {
-		cleanup.Run(ctx)
-	})
-
-	wg.Wait()
+	app.RunClickWorker(ctx, pool, cfg.RabbitMQURL, cfg.RabbitMQPrefetch, cfg.ProcessedClickEventRetention)
 
 	return nil
 }

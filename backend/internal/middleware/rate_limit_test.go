@@ -210,7 +210,7 @@ func TestRateLimiterHandlesConcurrentRequests(t *testing.T) {
 	}
 }
 
-func TestClientIP(t *testing.T) {
+func TestClientIPFromPeer(t *testing.T) {
 	tests := []struct {
 		name       string
 		remoteAddr string

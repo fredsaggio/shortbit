@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"math"
-	"net"
 	"net/http"
 	"strconv"
 	"sync"
@@ -152,17 +151,4 @@ func (l *RateLimiter) removeOldestEntry() {
 	if found {
 		delete(l.entries, oldestKey)
 	}
-}
-
-func clientIP(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err == nil {
-		return host
-	}
-
-	if ip := net.ParseIP(r.RemoteAddr); ip != nil {
-		return ip.String()
-	}
-
-	return "unknown"
 }

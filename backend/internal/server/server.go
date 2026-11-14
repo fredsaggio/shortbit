@@ -64,9 +64,29 @@ type Handlers struct {
 	ChangePasswordHandler    http.Handler
 }
 
+// Frontend registers the web app routes; frontend.Handler implements it.
+type Frontend interface {
+	Register(mux *http.ServeMux)
+}
+
+type Option func(*Server)
+
+// WithFrontend makes the API also serve the built web app.
+func WithFrontend(frontend Frontend) Option {
+	return func(srv *Server) { srv.frontend = frontend }
+}
+
+// WithClientIPHeader makes the rate limiters read the client address from a
+// header that the proxy in front of the API overwrites (see middleware.ClientIP).
+func WithClientIPHeader(header string) Option {
+	return func(srv *Server) { srv.clientIPHeader = header }
+}
+
 type Server struct {
 	h                           *Handlers
 	database                    DatabasePinger
+	frontend                    Frontend
+	clientIPHeader              string
 	rateLimiter                 *middleware.RateLimiter
 	loginRateLimiter            *middleware.RateLimiter
 	registrationStartLimiter    *middleware.RateLimiter
@@ -77,8 +97,8 @@ type Server struct {
 	linkAccessLimiter           *middleware.RateLimiter
 }
 
-func NewServer(h *Handlers, database DatabasePinger) *Server {
-	return &Server{
+func NewServer(h *Handlers, database DatabasePinger, options ...Option) *Server {
+	srv := &Server{
 		h:                           h,
 		database:                    database,
 		rateLimiter:                 middleware.NewRateLimiter(globalRateLimitRequestsPerSecond, globalRateLimitBurst, globalRateLimitMaxClients, globalRateLimitStaleAfter),
@@ -90,6 +110,12 @@ func NewServer(h *Handlers, database DatabasePinger) *Server {
 		passwordResetConfirmLimiter: middleware.NewRateLimiter(passwordResetConfirmRateLimitRequestsPerSecond, passwordResetConfirmRateLimitBurst, registrationRateLimitMaxClients, registrationRateLimitStaleAfter),
 		linkAccessLimiter:           middleware.NewRateLimiter(linkAccessRateLimitRequestsPerSecond, linkAccessRateLimitBurst, linkAccessRateLimitMaxEntries, linkAccessRateLimitStaleAfter),
 	}
+
+	for _, option := range options {
+		option(srv)
+	}
+
+	return srv
 }
 
 func (srv *Server) registerRoutes(mux *http.ServeMux) {
@@ -153,6 +179,10 @@ func (srv *Server) registerRoutes(mux *http.ServeMux) {
 	linkAccessHandler := srv.linkAccessLimiter.MiddlewareByIPAndPathValue("code", http.HandlerFunc(srv.h.LinkAccessSessionHandler.RedirectPrivateLink))
 	mux.Handle("POST /{code}/access", linkAccessHandler)
 	mux.HandleFunc("GET /{code}", srv.h.URLHandler.Redirect)
+
+	if srv.frontend != nil {
+		srv.frontend.Register(mux)
+	}
 }
 
 func (srv *Server) NewRouterHTTP() http.Handler {
@@ -164,6 +194,7 @@ func (srv *Server) NewRouterHTTP() http.Handler {
 
 	handler = middleware.LimitRequestBody(handler)
 	handler = srv.rateLimiter.MiddlewareByIP(handler)
+	handler = middleware.ClientIP(srv.clientIPHeader)(handler)
 	handler = middleware.Recovery(handler)
 	handler = middleware.AccessLog(handler)
 	handler = middleware.RequestID(handler)

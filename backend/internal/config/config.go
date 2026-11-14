@@ -3,7 +3,9 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -47,6 +49,7 @@ const (
 
 type Config struct {
 	DatabaseURL          string
+	RunMigrations        bool
 	HTTP                 HTTPConfig
 	Session              SessionConfig
 	LinkAccessSession    LinkAccessSessionConfig
@@ -59,6 +62,7 @@ type Config struct {
 	Redis                RedisConfig
 	HotURL               HotURLConfig
 	RabbitMQ             RabbitMQConfig
+	ClickWorker          ClickWorkerConfig
 }
 
 type SessionConfig struct {
@@ -85,7 +89,10 @@ type ResendConfig struct {
 	APIKey string
 }
 
+// RedisConfig takes either URL (redis:// or rediss://, with password and TLS,
+// as hosted Redis services hand out) or a plain Addr for a local server.
 type RedisConfig struct {
+	URL     string
 	Addr    string
 	Timeout time.Duration
 }
@@ -108,6 +115,15 @@ type WorkerConfig struct {
 	ProcessedClickEventRetention time.Duration
 }
 
+// ClickWorkerConfig lets the API run the click worker in its own process, for
+// hosts where a separate worker service is not available. The standalone
+// worker (cmd/worker) reads the same prefetch and retention settings.
+type ClickWorkerConfig struct {
+	RunInAPI                     bool
+	RabbitMQPrefetch             int
+	ProcessedClickEventRetention time.Duration
+}
+
 type PasswordRegistrationConfig struct {
 	CodeTTL    time.Duration
 	AttemptTTL time.Duration
@@ -126,6 +142,8 @@ type GoogleConfig struct {
 
 type HTTPConfig struct {
 	Addr              string
+	ClientIPHeader    string
+	FrontendDir       string
 	ReadHeaderTimeout time.Duration
 	ReadTimeout       time.Duration
 	WriteTimeout      time.Duration
@@ -248,10 +266,33 @@ func Load(getEnv func(string) string) (Config, error) {
 		return Config{}, errors.New("PASSWORD_RESET_CODE_TTL must not be greater than PASSWORD_RESET_ATTEMPT_TTL")
 	}
 
+	runMigrations, err := boolEnvOrDefault(getEnv, "RUN_MIGRATIONS", false)
+	if err != nil {
+		return Config{}, err
+	}
+
+	runClickWorker, err := boolEnvOrDefault(getEnv, "RUN_CLICK_WORKER", false)
+	if err != nil {
+		return Config{}, err
+	}
+
+	prefetch, retention, err := loadClickWorkerSettings(getEnv)
+	if err != nil {
+		return Config{}, err
+	}
+
+	clientIPHeader, err := clientIPHeaderEnv(getEnv)
+	if err != nil {
+		return Config{}, err
+	}
+
 	cfg := Config{
-		DatabaseURL: getEnv("DATABASE_URL"),
+		DatabaseURL:   getEnv("DATABASE_URL"),
+		RunMigrations: runMigrations,
 		HTTP: HTTPConfig{
 			Addr:              envOrDefault(getEnv, "HTTP_ADDR", defaultHTTPAddr),
+			ClientIPHeader:    clientIPHeader,
+			FrontendDir:       getEnv("FRONTEND_DIST_DIR"),
 			ReadHeaderTimeout: defaultReadHeaderTimeout,
 			ReadTimeout:       defaultReadTimeout,
 			WriteTimeout:      defaultWriteTimeout,
@@ -288,6 +329,7 @@ func Load(getEnv func(string) string) (Config, error) {
 			MaxOriginalURLBytes: defaultMaxOriginalURLBytes,
 		},
 		Redis: RedisConfig{
+			URL:     getEnv("REDIS_URL"),
 			Addr:    envOrDefault(getEnv, "REDIS_ADDR", defaultRedisAddr),
 			Timeout: redisOperationTimeout,
 		},
@@ -299,6 +341,11 @@ func Load(getEnv func(string) string) (Config, error) {
 		RabbitMQ: RabbitMQConfig{
 			URL:            getEnv("RABBITMQ_URL"),
 			PublishTimeout: rabbitMQPublishTimeout,
+		},
+		ClickWorker: ClickWorkerConfig{
+			RunInAPI:                     runClickWorker,
+			RabbitMQPrefetch:             prefetch,
+			ProcessedClickEventRetention: retention,
 		},
 	}
 
@@ -338,24 +385,19 @@ func Load(getEnv func(string) string) (Config, error) {
 		return Config{}, err
 	}
 
+	if cfg.Redis.URL != "" {
+		if err := validateRedisURL(cfg.Redis.URL); err != nil {
+			return Config{}, err
+		}
+	}
+
 	return cfg, nil
 }
 
 func LoadWorker(getEnv func(string) string) (WorkerConfig, error) {
-	prefetch, err := intEnvOrDefault(getEnv, "RABBITMQ_PREFETCH", defaultRabbitMQPrefetch)
+	prefetch, retention, err := loadClickWorkerSettings(getEnv)
 	if err != nil {
 		return WorkerConfig{}, err
-	}
-	if prefetch <= 0 || prefetch > maxRabbitMQPrefetch {
-		return WorkerConfig{}, fmt.Errorf("RABBITMQ_PREFETCH must be between 1 and %d", maxRabbitMQPrefetch)
-	}
-
-	retention, err := durationEnvOrDefault(getEnv, "PROCESSED_CLICK_EVENT_RETENTION", defaultProcessedClickEventRetention)
-	if err != nil {
-		return WorkerConfig{}, err
-	}
-	if retention <= 0 {
-		return WorkerConfig{}, errors.New("PROCESSED_CLICK_EVENT_RETENTION must be greater than zero")
 	}
 
 	cfg := WorkerConfig{
@@ -378,6 +420,66 @@ func LoadWorker(getEnv func(string) string) (WorkerConfig, error) {
 	}
 
 	return cfg, nil
+}
+
+func loadClickWorkerSettings(getEnv func(string) string) (int, time.Duration, error) {
+	prefetch, err := intEnvOrDefault(getEnv, "RABBITMQ_PREFETCH", defaultRabbitMQPrefetch)
+	if err != nil {
+		return 0, 0, err
+	}
+	if prefetch <= 0 || prefetch > maxRabbitMQPrefetch {
+		return 0, 0, fmt.Errorf("RABBITMQ_PREFETCH must be between 1 and %d", maxRabbitMQPrefetch)
+	}
+
+	retention, err := durationEnvOrDefault(getEnv, "PROCESSED_CLICK_EVENT_RETENTION", defaultProcessedClickEventRetention)
+	if err != nil {
+		return 0, 0, err
+	}
+	if retention <= 0 {
+		return 0, 0, errors.New("PROCESSED_CLICK_EVENT_RETENTION must be greater than zero")
+	}
+
+	return prefetch, retention, nil
+}
+
+var headerNamePattern = regexp.MustCompile(`^[A-Za-z0-9-]+$`)
+
+// CLIENT_IP_HEADER names a header that the proxy in front of the API always
+// overwrites with the client address. X-Forwarded-For is refused: it is a list
+// that clients can prefill, so its first entry is whatever they want.
+func clientIPHeaderEnv(getEnv func(string) string) (string, error) {
+	value := strings.TrimSpace(getEnv("CLIENT_IP_HEADER"))
+	if value == "" {
+		return "", nil
+	}
+
+	if !headerNamePattern.MatchString(value) {
+		return "", errors.New("CLIENT_IP_HEADER must be an HTTP header name such as True-Client-IP")
+	}
+
+	header := http.CanonicalHeaderKey(value)
+	if header == "X-Forwarded-For" {
+		return "", errors.New("CLIENT_IP_HEADER must not be X-Forwarded-For, which clients can forge; use a header the proxy overwrites, such as True-Client-IP")
+	}
+
+	return header, nil
+}
+
+func validateRedisURL(value string) error {
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return errors.New("REDIS_URL must be a valid URL")
+	}
+
+	if parsed.Scheme != "redis" && parsed.Scheme != "rediss" {
+		return errors.New("REDIS_URL must use the redis or rediss scheme")
+	}
+
+	if parsed.Host == "" {
+		return errors.New("REDIS_URL must include a host")
+	}
+
+	return nil
 }
 
 // FRONTEND_URL is the only destination of the Google callback redirect, so it

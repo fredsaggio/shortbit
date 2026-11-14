@@ -77,7 +77,7 @@ test:
 # Exemplo: make test/integration
 .PHONY: test/integration
 test/integration:
-	@go -C $(BACKEND_DIR) test -tags=integration ./internal/repositories ./internal/integration ./internal/messaging ./internal/server ./internal/cache -v -count=1
+	@go -C $(BACKEND_DIR) test -tags=integration ./internal/db ./internal/repositories ./internal/integration ./internal/messaging ./internal/server ./internal/cache -v -count=1
 
 # Exemplo: make run
 .PHONY: run

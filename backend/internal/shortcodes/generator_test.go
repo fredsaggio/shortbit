@@ -124,3 +124,17 @@ func TestGeneratorGenerateRejectsUninitializedGenerator(t *testing.T) {
 		t.Error("nil Generator.Generate(1) error = nil, want an error")
 	}
 }
+
+func TestIsReserved(t *testing.T) {
+	for _, code := range []string{"entrar", "cadastro", "painel", "assets"} {
+		if !shortcodes.IsReserved(code) {
+			t.Errorf("IsReserved(%q) = false, want true", code)
+		}
+	}
+
+	for _, code := range []string{"Painel", "Ab3dX9", "conta"} {
+		if shortcodes.IsReserved(code) {
+			t.Errorf("IsReserved(%q) = true, want false", code)
+		}
+	}
+}
