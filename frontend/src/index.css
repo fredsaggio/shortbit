@@ -1,0 +1,123 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/plus-jakarta-sans";
+
+/*
+ * Design tokens modeled on Bitly's public design system (navy, orange, warm
+ * off-white surfaces, 8/16/24px radii, two-layer shadows). Contrast checked:
+ * every text pair is at least 4.5:1, input borders 3.4:1.
+ */
+
+@theme inline {
+  --font-sans: "Plus Jakarta Sans Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-sans);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Brand palette, usable as bg-navy, text-brand, bg-surface... */
+  --color-navy: #031f39;
+  --color-navy-800: #1d364f;
+  --color-navy-700: #374f67;
+  --color-navy-300: #abbaca;
+  --color-navy-100: #ebf5ff;
+  --color-brand: #f36600;
+  --color-brand-700: #b34900;
+  --color-brand-100: #fff0ea;
+  --color-action: #0058dd;
+  --color-action-hover: #0041a3;
+  --color-surface: #f6f4ef;
+  --color-surface-200: #e9e8e3;
+  --color-success: #257640;
+  --color-success-soft: #e6f4e6;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
+  --radius-3xl: 32px;
+  --radius-4xl: 40px;
+
+  --shadow-card: 0 1px 2px 0 rgb(24 24 23 / 0.12), 0 4px 12px 0 rgb(24 24 23 / 0.08);
+  --shadow-raised: 0 4px 4px 0 rgb(24 24 23 / 0.1), 0 12px 32px 0 rgb(24 24 23 / 0.14);
+}
+
+:root {
+  --radius: 0.75rem;
+
+  --background: #f6f4ef;
+  --foreground: #031f39;
+  --card: #fffffd;
+  --card-foreground: #031f39;
+  --popover: #fffffd;
+  --popover-foreground: #031f39;
+  --primary: #0058dd;
+  --primary-foreground: #fffffd;
+  --secondary: #031f39;
+  --secondary-foreground: #fffffd;
+  --muted: #e9e8e3;
+  --muted-foreground: #62615f;
+  --accent: #f6f4ef;
+  --accent-foreground: #031f39;
+  --destructive: #c32813;
+  --border: #d7d5d0;
+  --input: #8c8a86;
+  /* Orange focus ring, as on bitly.com. */
+  --ring: #f36600;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    @apply font-sans antialiased;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    min-width: 320px;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-heading tracking-tight text-balance;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
