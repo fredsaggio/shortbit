@@ -17,7 +17,7 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 const tabTriggerClass =
-  'h-10 flex-none gap-2 rounded-md px-4 text-[15px] font-semibold text-muted-foreground transition-colors hover:bg-card/70 hover:text-navy data-[state=active]:bg-card data-[state=active]:text-navy data-[state=active]:shadow-card'
+  'h-10 flex-1 gap-2 rounded-md sm:flex-none px-4 text-[15px] font-semibold text-muted-foreground transition-colors hover:bg-card/70 hover:text-navy data-[state=active]:bg-card data-[state=active]:text-navy data-[state=active]:shadow-card'
 
 function SignInMethods({ account }: { account: Account }) {
   return (
@@ -257,7 +257,7 @@ export function AccountPage() {
       </section>
 
       <Tabs defaultValue="perfil" className="mt-8 gap-5">
-        <TabsList className="h-auto w-full justify-start gap-1 rounded-lg bg-surface-200 p-1 sm:w-auto">
+        <TabsList className="h-auto w-full justify-start gap-1 rounded-lg bg-surface-200 p-1 sm:w-fit sm:self-start">
           <TabsTrigger value="perfil" className={tabTriggerClass}>
             <UserRound className="size-4" aria-hidden="true" />
             Perfil

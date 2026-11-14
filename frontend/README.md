@@ -1,6 +1,6 @@
 # ShortBit — Frontend
 
-Interface web do ShortBit em React 19, TypeScript e Vite, sem biblioteca de componentes: o visual vem de `src/styles/global.css`.
+Interface web do ShortBit em React 19, TypeScript e Vite, com Tailwind CSS v4 e componentes do shadcn/ui (Radix). A fonte é a Plus Jakarta Sans, servida pelo próprio app (`@fontsource-variable`), sem chamar o Google Fonts.
 
 Os formulários usam `noValidate` e mensagens próprias (`src/validation.ts` e `src/useFieldErrors.ts`) em vez dos balões do navegador. A API valida tudo de novo.
 
@@ -57,22 +57,28 @@ src/
 ├── api/          # Cliente HTTP e chamadas da API (auth, links)
 ├── auth/         # Estado da sessão (AuthProvider + useAuth)
 ├── components/   # Layout, botões, campos, alertas, guardas de rota
+│   └── ui/       # Componentes gerados pelo shadcn (npx shadcn@latest add <nome>)
+├── lib/          # cn(), para juntar classes do Tailwind
 ├── pages/        # Uma tela por arquivo, com os testes ao lado
-├── styles/       # CSS global e paleta de cores
 └── test/         # Setup do Vitest, API falsa e helper de renderização
 ```
 
-## Paleta
+`src/index.css` guarda os tokens (cores, raios, sombras) e o tema do shadcn. Os arquivos de `components/ui/` são gerados: o lint ignora neles a regra de hot reload, e a aparência do projeto fica nos wrappers de `components/` (`Button`, `TextField`, `Alert`...).
 
-Inspirada no Bitly: azul-marinho, laranja e azul sobre branco. As cores são variáveis em `:root`, em `src/styles/global.css`.
+## Identidade visual
 
-| Variável | Cor | Uso |
+Copiada da do Bitly: cabeçalho, hero e rodapé azul-marinho, páginas em creme, cards brancos, laranja de destaque e azul nas ações. Só tema claro. Os tokens ficam em `src/index.css` e viram classes do Tailwind (`bg-navy`, `text-brand`, `bg-action`...).
+
+| Token | Cor | Uso |
 | --- | --- | --- |
-| `--navy` | `#0B1736` | Texto, hero, rodapé e card de cliques |
-| `--orange` | `#EE6123` | Laranja da marca: logo, destaques, detalhes |
-| `--orange-strong` | `#C74A16` | Fundo dos botões principais |
-| `--blue` | `#2A5BD7` | Links, ícones, seletor ativo, faixa de chamada |
-| `--page` | `#2A5BD7` | Fundo das páginas, como no bitly.com; texto direto sobre ele é branco |
-| `--surface` | `#FFFFFF` | Cabeçalho e cards |
+| `navy` | `#031F39` | Texto, cabeçalho, hero, rodapé, card de cliques |
+| `brand` | `#F36600` | Logo, ícones, avatar, anel de foco |
+| `brand-700` | `#B34900` | Texto laranja sobre fundo claro (rótulos, 404) |
+| `action` / `action-hover` | `#0058DD` / `#0041A3` | Botões principais e links |
+| `surface` | `#F6F4EF` | Fundo das páginas |
+| `card` | `#FFFFFD` | Cards e menus |
+| `input` | `#8C8A86` | Borda dos campos |
 
-Os botões usam `--orange-strong` porque texto branco sobre `#EE6123` tem contraste de 3,3:1, abaixo do mínimo de 4,5:1 (WCAG AA). Com `#C74A16` fica em 4,75:1.
+Contraste (WCAG 2.2 AA): branco sobre `#0058DD` dá 6,1:1; o texto secundário `#62615F` sobre o creme dá 5,6:1; laranja sobre o azul-marinho dá 5,3:1. O laranja `#F36600` não leva texto branco nem vira texto sobre fundo claro (3,0:1); nesses casos entra o `brand-700`.
+
+Interações: transições de 150 a 300 ms, desligadas com `prefers-reduced-motion`; foco visível em laranja; alvos de toque de 44 px; carregamento com skeleton; avisos de sucesso em toast (sonner).

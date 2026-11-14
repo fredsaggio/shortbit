@@ -82,7 +82,7 @@ export function LinkDetailPage() {
       )}
 
       {state.status === 'ready' && (
-        <div className="grid gap-5 lg:grid-cols-[2fr_1fr]">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
           <section aria-labelledby="detail-title" className="rounded-3xl border bg-card p-6 shadow-card sm:p-8">
             <VisibilityBadge visibility={state.link.visibility} />
             <h1 id="detail-title" className="mt-4 text-[clamp(1.5rem,3.5vw,2.25rem)] font-extrabold break-all">

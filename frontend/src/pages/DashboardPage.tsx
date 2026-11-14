@@ -66,7 +66,7 @@ function CreateLinkCard({ onCreated }: { onCreated: () => void }) {
       <h2 id="create-link-title" className="text-xl font-bold">
         Criar link curto
       </h2>
-      <form className="mt-5 grid gap-5" onSubmit={handleSubmit} noValidate>
+      <form className="mt-5 grid grid-cols-[minmax(0,1fr)] gap-5" onSubmit={handleSubmit} noValidate>
         <TextField
           label="URL de destino"
           name="url"
@@ -97,7 +97,7 @@ function CreateLinkCard({ onCreated }: { onCreated: () => void }) {
               }
             }}
             aria-labelledby="visibility-label"
-            className="flex w-full gap-1 rounded-lg border bg-surface p-1 sm:inline-flex sm:w-auto"
+            className="flex w-full gap-1 rounded-lg border bg-surface p-1 sm:w-fit sm:justify-self-start"
           >
             <ToggleGroupItem value="public" className={visibilityItemClass}>
               <Globe className="size-4" aria-hidden="true" />
@@ -160,7 +160,7 @@ function LinkItem({ link }: { link: ShortLink }) {
 
   return (
     <li className="group rounded-2xl border bg-card p-5 shadow-card transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-navy/20 hover:shadow-raised">
-      <div className="flex items-start gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
         <span
           className={cn(
             'hidden size-11 shrink-0 items-center justify-center rounded-xl sm:inline-flex',
@@ -188,13 +188,13 @@ function LinkItem({ link }: { link: ShortLink }) {
           </div>
         </div>
 
-        <div className="flex shrink-0 flex-col items-end gap-3">
-          <div className="text-right">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t pt-4 sm:flex-col sm:items-end sm:border-t-0 sm:pt-0">
+          <div className="flex items-baseline gap-1.5 sm:block sm:text-right">
             <span className="inline-flex items-center gap-1.5 text-2xl leading-none font-extrabold text-navy">
               <BarChart3 className="size-5 text-brand" aria-hidden="true" />
               {formatCount(link.click_count)}
             </span>
-            <span className="mt-1 block text-xs font-medium text-muted-foreground">{clicksLabel(link.click_count)}</span>
+            <span className="text-xs font-medium text-muted-foreground sm:mt-1 sm:block">{clicksLabel(link.click_count)}</span>
           </div>
           <CopyButton text={shortURL} size="sm" />
         </div>
@@ -262,7 +262,7 @@ export function DashboardPage() {
         {auth.status === 'authenticated' && <p className="mt-1 text-muted-foreground">Conectado como {auth.user.email}.</p>}
       </header>
 
-      <div className="grid gap-8">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-8">
         <CreateLinkCard onCreated={reload} />
 
         <section aria-labelledby="links-title">
@@ -300,7 +300,7 @@ export function DashboardPage() {
             </div>
           ) : (
             <>
-              <ul className="grid gap-3" aria-labelledby="links-title">
+              <ul className="grid grid-cols-[minmax(0,1fr)] gap-3" aria-labelledby="links-title">
                 {list.links.map((link) => (
                   <LinkItem key={link.short_code} link={link} />
                 ))}

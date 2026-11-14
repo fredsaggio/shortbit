@@ -203,18 +203,24 @@ export function Layout() {
           <div>
             <h2 className="text-sm font-semibold tracking-wide text-white uppercase">Produto</h2>
             <ul className="mt-4 grid gap-2.5 text-sm">
+              {(state.status === 'authenticated'
+                ? [
+                    { to: '/painel', label: 'Meus links' },
+                    { to: '/conta', label: 'Minha conta' },
+                  ]
+                : [
+                    { to: '/cadastro', label: 'Criar conta' },
+                    { to: '/entrar', label: 'Entrar' },
+                  ]
+              ).map((item) => (
+                <li key={item.to}>
+                  <Link to={item.to} className="rounded-sm transition-colors hover:text-white">
+                    {item.label}
+                  </Link>
+                </li>
+              ))}
               <li>
-                <Link to="/cadastro" className="transition-colors hover:text-white">
-                  Criar conta
-                </Link>
-              </li>
-              <li>
-                <Link to="/entrar" className="transition-colors hover:text-white">
-                  Entrar
-                </Link>
-              </li>
-              <li>
-                <a href="/docs" className="transition-colors hover:text-white">
+                <a href="/docs" className="rounded-sm transition-colors hover:text-white">
                   Documentação da API
                 </a>
               </li>
