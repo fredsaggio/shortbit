@@ -24,7 +24,7 @@ import { cn } from '@/lib/utils'
 
 const steps = [
   { title: 'Cole a URL', text: 'Qualquer endereço http ou https, do tamanho que for.' },
-  { title: 'Escolha o acesso', text: 'Aberto para todo mundo ou liberado só com senha.' },
+  { title: 'Escolha o acesso', text: 'Público para todo mundo, ou privado: abre só com a senha.' },
   { title: 'Compartilhe e acompanhe', text: 'Copie o link curto e veja os cliques no painel.' },
 ]
 
@@ -227,7 +227,7 @@ function VisibilityPills() {
   const [ref, inView] = useInView<HTMLDivElement>({ threshold: 0.6 })
   const pills = [
     { label: 'shortbit/Ab3dX9 · público', className: 'bg-navy-100 text-navy' },
-    { label: 'shortbit/Qz7Rt2 · com senha', className: 'bg-brand-100 text-brand-700' },
+    { label: 'shortbit/Qz7Rt2 · privado', className: 'bg-brand-100 text-brand-700' },
   ]
 
   return (
@@ -286,7 +286,7 @@ export function HomePage() {
               <span className="inline-flex items-center gap-2 text-sm font-bold tracking-wide text-brand-700 uppercase">
                 <Lock className="size-5 text-brand transition-transform duration-300 group-hover:-rotate-12" aria-hidden="true" /> Privacidade
               </span>
-              <h3 className="mt-3 text-2xl font-bold">Público ou com senha</h3>
+              <h3 className="mt-3 text-2xl font-bold">Público ou privado</h3>
               <p className="mt-2 max-w-lg text-muted-foreground">
                 Compartilhe um link aberto para todo mundo ou proteja o destino com uma senha. Quem não souber a senha não vê para
                 onde o link leva.

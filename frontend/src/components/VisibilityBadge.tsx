@@ -6,7 +6,7 @@ export function VisibilityBadge({ visibility }: { visibility: Visibility }) {
   return visibility === 'private' ? (
     <Badge variant="outline" className="gap-1 border-brand/30 bg-brand-100 text-brand-700">
       <Lock className="size-3" aria-hidden="true" />
-      Com senha
+      Privado
     </Badge>
   ) : (
     <Badge variant="outline" className="gap-1 border-action/20 bg-navy-100 text-navy">

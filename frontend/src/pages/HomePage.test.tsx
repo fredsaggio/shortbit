@@ -32,7 +32,7 @@ describe('HomePage', () => {
     const { user: actions } = renderApp('/')
 
     await actions.type(await screen.findByLabelText('URL para encurtar'), 'https://example.com/segredo')
-    await actions.click(screen.getByRole('radio', { name: 'Com senha' }))
+    await actions.click(screen.getByRole('radio', { name: 'Privado' }))
     await actions.type(screen.getByLabelText('Senha do link'), 'senha-do-link')
     await actions.click(screen.getByRole('button', { name: 'Encurtar' }))
 
@@ -48,7 +48,7 @@ describe('HomePage', () => {
     const { user: actions } = renderApp('/')
 
     await actions.type(await screen.findByLabelText('URL para encurtar'), 'https://example.com/segredo')
-    await actions.click(screen.getByRole('radio', { name: 'Com senha' }))
+    await actions.click(screen.getByRole('radio', { name: 'Privado' }))
     await actions.type(screen.getByLabelText('Senha do link'), 'curta')
     await actions.click(screen.getByRole('button', { name: 'Encurtar' }))
 

@@ -12,7 +12,7 @@ Os formulários usam `noValidate` e mensagens próprias (`src/validation.ts` e `
 | `/entrar` | Login com senha ou Google | Só sem sessão |
 | `/cadastro` | Cadastro com nome completo e código de confirmação por email | Só sem sessão |
 | `/recuperar-senha` | Recuperação de senha por código | Livre |
-| `/painel` | Criar links (público ou com senha) e listar os seus | Com sessão |
+| `/painel` | Criar links (públicos ou privados, com senha) e listar os seus | Com sessão |
 | `/painel/links/:code` | Detalhe de um link e total de cliques | Com sessão |
 | `/conta` | Minha conta: dados, nome completo e troca de senha (contas com senha) | Com sessão |
 
@@ -86,7 +86,7 @@ Interações: transições de 150 a 300 ms, desligadas com `prefers-reduced-moti
 ## Senhas
 
 - **Senha da conta** (cadastro, recuperação e troca): checklist ao vivo só com o que a API exige: pelo menos 8 caracteres, as duas senhas iguais e, na troca, diferente da atual. Não há regras de composição (maiúscula, símbolo), como recomenda o NIST SP 800-63B.
-- **Senha do link** (home e painel): barra de força de 5 níveis calculada pelo [zxcvbn-ts](https://zxcvbn-ts.github.io/zxcvbn/), com dicionários comum e pt-BR. Abaixo de 8 caracteres a barra avisa o mínimo, que a API exige. Os dicionários (cerca de 500 KB comprimidos) ficam em arquivos à parte e só são baixados quando alguém escolhe "Com senha".
+- **Senha do link** (home e painel): barra de força de 5 níveis calculada pelo [zxcvbn-ts](https://zxcvbn-ts.github.io/zxcvbn/), com dicionários comum e pt-BR. Abaixo de 8 caracteres a barra avisa o mínimo, que a API exige. Os dicionários (cerca de 500 KB comprimidos) ficam em arquivos à parte e só são baixados quando alguém escolhe "Privado".
 
 ## Produção
 

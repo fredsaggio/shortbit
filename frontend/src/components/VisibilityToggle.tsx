@@ -38,7 +38,7 @@ export function VisibilityToggle({ value, onChange }: VisibilityToggleProps) {
         </ToggleGroupItem>
         <ToggleGroupItem value="private" className={itemClass}>
           <Lock className="size-4" aria-hidden="true" />
-          Com senha
+          Privado
         </ToggleGroupItem>
       </ToggleGroup>
     </div>

@@ -42,7 +42,7 @@ describe('DashboardPage', () => {
     const items = within(list).getAllByRole('listitem')
     expect(items).toHaveLength(2)
     expect(within(items[0]).getByText('1.234')).toBeInTheDocument()
-    expect(within(items[1]).getByText('Com senha')).toBeInTheDocument()
+    expect(within(items[1]).getByText('Privado')).toBeInTheDocument()
 
     await actions.click(screen.getByRole('button', { name: 'Carregar mais' }))
 
@@ -66,7 +66,7 @@ describe('DashboardPage', () => {
     expect(await screen.findByText(/ainda não criou nenhum link/)).toBeInTheDocument()
 
     await actions.type(screen.getByLabelText('URL de destino'), 'https://example.com/segredo')
-    await actions.click(screen.getByRole('radio', { name: 'Com senha' }))
+    await actions.click(screen.getByRole('radio', { name: 'Privado' }))
     await actions.type(screen.getByLabelText('Senha do link'), 'senha-do-link')
     await actions.click(screen.getByRole('button', { name: 'Criar link curto' }))
 
@@ -99,7 +99,7 @@ describe('DashboardPage', () => {
     const { user: actions } = renderApp('/painel')
 
     await actions.type(await screen.findByLabelText('URL de destino'), 'exemplo.com')
-    await actions.click(screen.getByRole('radio', { name: 'Com senha' }))
+    await actions.click(screen.getByRole('radio', { name: 'Privado' }))
     await actions.type(screen.getByLabelText('Senha do link'), 'curta')
     await actions.click(screen.getByRole('button', { name: 'Criar link curto' }))
 
@@ -166,7 +166,7 @@ describe('DashboardPage', () => {
 
     expect(await screen.findByText(/Digite de novo a senha do link/)).toBeInTheDocument()
     expect(screen.getByLabelText('URL de destino')).toHaveValue('https://example.com/segredo')
-    expect(screen.getByRole('radio', { name: 'Com senha' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('radio', { name: 'Privado' })).toHaveAttribute('aria-checked', 'true')
     expect(screen.getByLabelText('Senha do link')).toHaveValue('')
     expect(api.calls('POST', '/urls')).toHaveLength(0)
     expect(sessionStorage.getItem('shortbit:pending-link')).toBeNull()
@@ -176,7 +176,7 @@ describe('DashboardPage', () => {
     fakeApi({ ...signedIn, 'GET /urls': { status: 200, body: { urls: [], next_cursor: null } } })
     const { user: actions } = renderApp('/painel')
 
-    await actions.click(await screen.findByRole('radio', { name: 'Com senha' }))
+    await actions.click(await screen.findByRole('radio', { name: 'Privado' }))
     const field = screen.getByLabelText('Senha do link')
     expect(screen.queryByRole('list', { name: 'Requisitos da senha' })).not.toBeInTheDocument()
 
