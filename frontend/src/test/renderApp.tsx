@@ -1,12 +1,8 @@
 import { render } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, useLocation } from 'react-router'
+import { MemoryRouter } from 'react-router'
 import { App } from '../App.tsx'
-
-function CurrentPath() {
-  const location = useLocation()
-  return <output data-testid="current-path">{location.pathname + location.search}</output>
-}
+import { CurrentPath } from './CurrentPath.tsx'
 
 export function renderApp(path: string) {
   const userActions = userEvent.setup()
