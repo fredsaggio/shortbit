@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
-	"uuid"
 
 	"github.com/fredsaggio/url-shortener/internal/models"
 	"github.com/fredsaggio/url-shortener/internal/repositories"
@@ -45,10 +44,9 @@ type UserRepository interface {
 	CreatePasswordRegistrationAttempt(ctx context.Context, attempt models.PasswordRegistrationAttempt) error
 	UpdatePasswordRegistrationCode(ctx context.Context, tokenHash, proofHash []byte, now, codeExpiresAt, resendAllowedBefore time.Time) (bool, error)
 	FindPasswordRegistrationAttemptByTokenHash(ctx context.Context, tokenHash []byte) (models.PasswordRegistrationAttempt, error)
-	CreateWithPassword(ctx context.Context, email, passwordHash string) (models.User, error)
+	CreateWithPassword(ctx context.Context, email, passwordHash string, fullName *string) (models.User, error)
 	RecordPasswordRegistrationFailure(ctx context.Context, tokenHash []byte, now, retryAt, lockUntil time.Time, maxAttempts int16) (int16,
 		*time.Time, error)
-	FindByID(ctx context.Context, userID uuid.UUID) (models.User, error)
 }
 
 type PasswordHasher interface {
@@ -91,7 +89,7 @@ func NewUserService(userRepo UserRepository, hasher PasswordHasher, generateToke
 	}
 }
 
-func (s *UserService) StartPasswordRegistration(ctx context.Context, email, password string) (PasswordRegistrationResult, error) {
+func (s *UserService) StartPasswordRegistration(ctx context.Context, email, password, fullName string) (PasswordRegistrationResult, error) {
 	normalizedEmail := normalizeEmail(email)
 
 	if !isValidEmail(normalizedEmail) {
@@ -104,6 +102,11 @@ func (s *UserService) StartPasswordRegistration(ctx context.Context, email, pass
 
 	if len(password) > maxPasswordBytes {
 		return PasswordRegistrationResult{}, ErrPasswordTooLong
+	}
+
+	normalizedFullName, err := normalizeFullName(fullName)
+	if err != nil {
+		return PasswordRegistrationResult{}, err
 	}
 
 	exists, err := s.userRepo.UserExistsByEmail(ctx, normalizedEmail)
@@ -140,6 +143,7 @@ func (s *UserService) StartPasswordRegistration(ctx context.Context, email, pass
 	attempt := models.PasswordRegistrationAttempt{
 		TokenHash:             tokenHash,
 		Email:                 normalizedEmail,
+		FullName:              &normalizedFullName,
 		PasswordHash:          passwordHash,
 		VerificationProofHash: verificationcode.Proof(token, code),
 		LastCodeSentAt:        now,
@@ -217,7 +221,7 @@ func (s *UserService) ConfirmPasswordRegistration(ctx context.Context, token, co
 		return models.User{}, ErrVerificationCodeInvalid
 	}
 
-	user, err := s.userRepo.CreateWithPassword(ctx, attempt.Email, attempt.PasswordHash)
+	user, err := s.userRepo.CreateWithPassword(ctx, attempt.Email, attempt.PasswordHash, attempt.FullName)
 
 	if err != nil {
 		if errors.Is(err, repositories.ErrEmailAlreadyExists) {
@@ -290,16 +294,6 @@ func (s *UserService) ResendPasswordRegistrationCode(ctx context.Context, token 
 	}
 
 	return nil
-}
-
-func (s *UserService) GetByID(ctx context.Context, userID uuid.UUID) (models.User, error) {
-	user, err := s.userRepo.FindByID(ctx, userID)
-
-	if err != nil {
-		return models.User{}, fmt.Errorf("get user by ID: %w", err)
-	}
-
-	return user, nil
 }
 
 func normalizeEmail(email string) string {

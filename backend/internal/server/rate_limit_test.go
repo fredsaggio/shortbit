@@ -61,13 +61,15 @@ func newPasswordResetTestHandler() *handlers.PasswordResetHandler {
 
 func TestNewRouterHTTPRegistersPasswordResetRouteAndAppliesIPRateLimit(t *testing.T) {
 	applicationHandlers := &Handlers{
-		UserHandler:          &handlers.UserHandler{},
-		SessionHandler:       &handlers.SessionHandler{},
-		PasswordResetHandler: newPasswordResetTestHandler(),
-		CreateURLHandler:     http.NotFoundHandler(),
-		ListURLHandler:       http.NotFoundHandler(),
-		GetURLHandler:        http.NotFoundHandler(),
-		MeHandler:            http.NotFoundHandler(),
+		UserHandler:           &handlers.UserHandler{},
+		SessionHandler:        &handlers.SessionHandler{},
+		PasswordResetHandler:  newPasswordResetTestHandler(),
+		CreateURLHandler:      http.NotFoundHandler(),
+		ListURLHandler:        http.NotFoundHandler(),
+		GetURLHandler:         http.NotFoundHandler(),
+		MeHandler:             http.NotFoundHandler(),
+		UpdateMeHandler:       http.NotFoundHandler(),
+		ChangePasswordHandler: http.NotFoundHandler(),
 	}
 	srv := NewServer(applicationHandlers, nil)
 	srv.rateLimiter = middleware.NewRateLimiter(1_000, 100, 10, time.Minute)
@@ -92,7 +94,7 @@ func TestNewRouterHTTPRegistersPasswordResetRouteAndAppliesIPRateLimit(t *testin
 func TestNewRouterHTTPRegistersPasswordResetConfirmRouteAndAppliesIPRateLimit(t *testing.T) {
 	applicationHandlers := &Handlers{
 		UserHandler: &handlers.UserHandler{}, SessionHandler: &handlers.SessionHandler{},
-		PasswordResetHandler: newPasswordResetTestHandler(), CreateURLHandler: http.NotFoundHandler(), ListURLHandler: http.NotFoundHandler(), GetURLHandler: http.NotFoundHandler(), MeHandler: http.NotFoundHandler(),
+		PasswordResetHandler: newPasswordResetTestHandler(), CreateURLHandler: http.NotFoundHandler(), ListURLHandler: http.NotFoundHandler(), GetURLHandler: http.NotFoundHandler(), MeHandler: http.NotFoundHandler(), UpdateMeHandler: http.NotFoundHandler(), ChangePasswordHandler: http.NotFoundHandler(),
 	}
 	srv := NewServer(applicationHandlers, nil)
 	srv.rateLimiter = middleware.NewRateLimiter(1_000, 100, 10, time.Minute)
@@ -116,13 +118,15 @@ func TestNewRouterHTTPRegistersPasswordResetConfirmRouteAndAppliesIPRateLimit(t 
 func TestNewRouterHTTPAppliesGlobalRateLimit(t *testing.T) {
 	ctx := t.Context()
 	applicationHandlers := &Handlers{
-		UserHandler:          &handlers.UserHandler{},
-		SessionHandler:       &handlers.SessionHandler{},
-		PasswordResetHandler: newPasswordResetTestHandler(),
-		CreateURLHandler:     http.NotFoundHandler(),
-		ListURLHandler:       http.NotFoundHandler(),
-		GetURLHandler:        http.NotFoundHandler(),
-		MeHandler:            http.NotFoundHandler(),
+		UserHandler:           &handlers.UserHandler{},
+		SessionHandler:        &handlers.SessionHandler{},
+		PasswordResetHandler:  newPasswordResetTestHandler(),
+		CreateURLHandler:      http.NotFoundHandler(),
+		ListURLHandler:        http.NotFoundHandler(),
+		GetURLHandler:         http.NotFoundHandler(),
+		MeHandler:             http.NotFoundHandler(),
+		UpdateMeHandler:       http.NotFoundHandler(),
+		ChangePasswordHandler: http.NotFoundHandler(),
 	}
 
 	srv := NewServer(applicationHandlers, nil)
@@ -154,13 +158,15 @@ func TestNewRouterHTTPAppliesLoginRateLimitOnlyToSessions(t *testing.T) {
 	ctx := t.Context()
 	authService := &loginAuthServiceStub{}
 	applicationHandlers := &Handlers{
-		UserHandler:          &handlers.UserHandler{},
-		SessionHandler:       handlers.NewSessionHandler(authService, allowAllLoginRateLimiterStub{}, false),
-		PasswordResetHandler: newPasswordResetTestHandler(),
-		CreateURLHandler:     http.NotFoundHandler(),
-		ListURLHandler:       http.NotFoundHandler(),
-		GetURLHandler:        http.NotFoundHandler(),
-		MeHandler:            http.NotFoundHandler(),
+		UserHandler:           &handlers.UserHandler{},
+		SessionHandler:        handlers.NewSessionHandler(authService, allowAllLoginRateLimiterStub{}, false),
+		PasswordResetHandler:  newPasswordResetTestHandler(),
+		CreateURLHandler:      http.NotFoundHandler(),
+		ListURLHandler:        http.NotFoundHandler(),
+		GetURLHandler:         http.NotFoundHandler(),
+		MeHandler:             http.NotFoundHandler(),
+		UpdateMeHandler:       http.NotFoundHandler(),
+		ChangePasswordHandler: http.NotFoundHandler(),
 	}
 
 	srv := NewServer(applicationHandlers, nil)
@@ -243,13 +249,15 @@ func TestNewRouterHTTPAppliesPasswordRegistrationRateLimits(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			applicationHandlers := &Handlers{
-				UserHandler:          &handlers.UserHandler{},
-				SessionHandler:       &handlers.SessionHandler{},
-				PasswordResetHandler: newPasswordResetTestHandler(),
-				CreateURLHandler:     http.NotFoundHandler(),
-				ListURLHandler:       http.NotFoundHandler(),
-				GetURLHandler:        http.NotFoundHandler(),
-				MeHandler:            http.NotFoundHandler(),
+				UserHandler:           &handlers.UserHandler{},
+				SessionHandler:        &handlers.SessionHandler{},
+				PasswordResetHandler:  newPasswordResetTestHandler(),
+				CreateURLHandler:      http.NotFoundHandler(),
+				ListURLHandler:        http.NotFoundHandler(),
+				GetURLHandler:         http.NotFoundHandler(),
+				MeHandler:             http.NotFoundHandler(),
+				UpdateMeHandler:       http.NotFoundHandler(),
+				ChangePasswordHandler: http.NotFoundHandler(),
 			}
 
 			srv := NewServer(applicationHandlers, nil)
@@ -286,13 +294,15 @@ func TestNewRouterHTTPAppliesPasswordRegistrationRateLimits(t *testing.T) {
 
 func TestPasswordRegistrationRateLimitersAreIndependent(t *testing.T) {
 	applicationHandlers := &Handlers{
-		UserHandler:          &handlers.UserHandler{},
-		SessionHandler:       &handlers.SessionHandler{},
-		PasswordResetHandler: newPasswordResetTestHandler(),
-		CreateURLHandler:     http.NotFoundHandler(),
-		ListURLHandler:       http.NotFoundHandler(),
-		GetURLHandler:        http.NotFoundHandler(),
-		MeHandler:            http.NotFoundHandler(),
+		UserHandler:           &handlers.UserHandler{},
+		SessionHandler:        &handlers.SessionHandler{},
+		PasswordResetHandler:  newPasswordResetTestHandler(),
+		CreateURLHandler:      http.NotFoundHandler(),
+		ListURLHandler:        http.NotFoundHandler(),
+		GetURLHandler:         http.NotFoundHandler(),
+		MeHandler:             http.NotFoundHandler(),
+		UpdateMeHandler:       http.NotFoundHandler(),
+		ChangePasswordHandler: http.NotFoundHandler(),
 	}
 
 	srv := NewServer(applicationHandlers, nil)
@@ -347,13 +357,15 @@ func TestGetURLRouteRequiresAuthenticationAndPassesShortCode(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	srv := NewServer(&Handlers{
-		UserHandler:          &handlers.UserHandler{},
-		SessionHandler:       &handlers.SessionHandler{},
-		PasswordResetHandler: newPasswordResetTestHandler(),
-		CreateURLHandler:     http.NotFoundHandler(),
-		ListURLHandler:       http.NotFoundHandler(),
-		GetURLHandler:        getURLHandler,
-		MeHandler:            http.NotFoundHandler(),
+		UserHandler:           &handlers.UserHandler{},
+		SessionHandler:        &handlers.SessionHandler{},
+		PasswordResetHandler:  newPasswordResetTestHandler(),
+		CreateURLHandler:      http.NotFoundHandler(),
+		ListURLHandler:        http.NotFoundHandler(),
+		GetURLHandler:         getURLHandler,
+		MeHandler:             http.NotFoundHandler(),
+		UpdateMeHandler:       http.NotFoundHandler(),
+		ChangePasswordHandler: http.NotFoundHandler(),
 	}, nil)
 	router := srv.NewRouterHTTP()
 

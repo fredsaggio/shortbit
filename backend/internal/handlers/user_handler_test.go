@@ -11,17 +11,15 @@ import (
 	"time"
 	"uuid"
 
-	"github.com/fredsaggio/url-shortener/internal/ctxval"
 	"github.com/fredsaggio/url-shortener/internal/handlers"
 	"github.com/fredsaggio/url-shortener/internal/models"
 	"github.com/fredsaggio/url-shortener/internal/services"
 )
 
 type userServiceStub struct {
-	startPasswordRegistrationFunc      func(context.Context, string, string) (services.PasswordRegistrationResult, error)
+	startPasswordRegistrationFunc      func(context.Context, string, string, string) (services.PasswordRegistrationResult, error)
 	confirmPasswordRegistrationFunc    func(context.Context, string, string) (models.User, error)
 	resendPasswordRegistrationCodeFunc func(context.Context, string) error
-	getByIDFunc                        func(context.Context, uuid.UUID) (models.User, error)
 }
 
 type allowAllRegistrationRateLimiterStub struct{}
@@ -38,8 +36,8 @@ func (s registrationRateLimiterStub) Allow(key string) (bool, int) {
 	return s.allowFunc(key)
 }
 
-func (s userServiceStub) StartPasswordRegistration(ctx context.Context, email, password string) (services.PasswordRegistrationResult, error) {
-	return s.startPasswordRegistrationFunc(ctx, email, password)
+func (s userServiceStub) StartPasswordRegistration(ctx context.Context, email, password, fullName string) (services.PasswordRegistrationResult, error) {
+	return s.startPasswordRegistrationFunc(ctx, email, password, fullName)
 }
 
 func (s userServiceStub) ConfirmPasswordRegistration(ctx context.Context, token, code string) (models.User, error) {
@@ -50,10 +48,6 @@ func (s userServiceStub) ResendPasswordRegistrationCode(ctx context.Context, tok
 	return s.resendPasswordRegistrationCodeFunc(ctx, token)
 }
 
-func (s userServiceStub) GetByID(ctx context.Context, userID uuid.UUID) (models.User, error) {
-	return s.getByIDFunc(ctx, userID)
-}
-
 func TestUserHandlerStartPasswordRegistration(t *testing.T) {
 	const (
 		token    = "password-registration-token"
@@ -62,7 +56,7 @@ func TestUserHandlerStartPasswordRegistration(t *testing.T) {
 	)
 	expiresAt := time.Now().UTC().Add(30 * time.Minute).Truncate(time.Second)
 
-	service := userServiceStub{startPasswordRegistrationFunc: func(ctx context.Context, gotEmail, gotPassword string) (services.PasswordRegistrationResult, error) {
+	service := userServiceStub{startPasswordRegistrationFunc: func(ctx context.Context, gotEmail, gotPassword, gotFullName string) (services.PasswordRegistrationResult, error) {
 		if ctx == nil {
 			t.Fatal("StartPasswordRegistration() received a nil context")
 		}
@@ -72,11 +66,14 @@ func TestUserHandlerStartPasswordRegistration(t *testing.T) {
 		if gotPassword != password {
 			t.Errorf("StartPasswordRegistration() password = %q, want %q", gotPassword, password)
 		}
+		if gotFullName != "Ana Souza" {
+			t.Errorf("StartPasswordRegistration() full name = %q, want %q", gotFullName, "Ana Souza")
+		}
 		return services.PasswordRegistrationResult{Token: token, ExpiresAt: expiresAt}, nil
 	}}
 
 	handler := handlers.NewUserHandler(service, allowAllRegistrationRateLimiterStub{}, true)
-	request := httptest.NewRequest(http.MethodPost, "/registrations/password", strings.NewReader(`{"email":"USER@example.com","password":"senha-segura"}`))
+	request := httptest.NewRequest(http.MethodPost, "/registrations/password", strings.NewReader(`{"email":"USER@example.com","password":"senha-segura","full_name":"Ana Souza"}`))
 	response := httptest.NewRecorder()
 	handler.StartPasswordRegistration(response, request)
 
@@ -122,7 +119,7 @@ func TestUserHandlerStartPasswordRegistration(t *testing.T) {
 }
 
 func TestUserHandlerStartPasswordRegistrationHonorsInsecureCookieConfiguration(t *testing.T) {
-	service := userServiceStub{startPasswordRegistrationFunc: func(context.Context, string, string) (services.PasswordRegistrationResult, error) {
+	service := userServiceStub{startPasswordRegistrationFunc: func(context.Context, string, string, string) (services.PasswordRegistrationResult, error) {
 		return services.PasswordRegistrationResult{Token: "registration-token", ExpiresAt: time.Now().UTC().Add(30 * time.Minute)}, nil
 	}}
 	handler := handlers.NewUserHandler(service, allowAllRegistrationRateLimiterStub{}, false)
@@ -141,7 +138,7 @@ func TestUserHandlerStartPasswordRegistrationHonorsInsecureCookieConfiguration(t
 func TestUserHandlerStartPasswordRegistrationRateLimitsNormalizedEmail(t *testing.T) {
 	const retryAfter = 37
 
-	service := userServiceStub{startPasswordRegistrationFunc: func(context.Context, string, string) (services.PasswordRegistrationResult, error) {
+	service := userServiceStub{startPasswordRegistrationFunc: func(context.Context, string, string, string) (services.PasswordRegistrationResult, error) {
 		t.Fatal("StartPasswordRegistration() should not be called after rate limit")
 		return services.PasswordRegistrationResult{}, nil
 	}}
@@ -185,7 +182,7 @@ func TestUserHandlerStartPasswordRegistrationRejectsInvalidJSON(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			service := userServiceStub{startPasswordRegistrationFunc: func(context.Context, string, string) (services.PasswordRegistrationResult, error) {
+			service := userServiceStub{startPasswordRegistrationFunc: func(context.Context, string, string, string) (services.PasswordRegistrationResult, error) {
 				t.Fatal("StartPasswordRegistration() should not be called")
 				return services.PasswordRegistrationResult{}, nil
 			}}
@@ -214,13 +211,16 @@ func TestUserHandlerStartPasswordRegistrationMapsServiceErrors(t *testing.T) {
 		{name: "invalid email", serviceErr: services.ErrInvalidEmail, wantStatus: http.StatusBadRequest, wantBody: "email inválido\n"},
 		{name: "password too short", serviceErr: services.ErrPasswordTooShort, wantStatus: http.StatusBadRequest, wantBody: "senha muito curta\n"},
 		{name: "password too long", serviceErr: services.ErrPasswordTooLong, wantStatus: http.StatusBadRequest, wantBody: "senha muito longa\n"},
+		{name: "full name required", serviceErr: services.ErrFullNameRequired, wantStatus: http.StatusBadRequest, wantBody: "informe o nome completo\n"},
+		{name: "full name too long", serviceErr: services.ErrFullNameTooLong, wantStatus: http.StatusBadRequest, wantBody: "nome completo muito longo; use até 100 caracteres\n"},
+		{name: "invalid full name", serviceErr: services.ErrInvalidFullName, wantStatus: http.StatusBadRequest, wantBody: "nome completo contém caracteres inválidos\n"},
 		{name: "email already exists", serviceErr: services.ErrEmailAlreadyExists, wantStatus: http.StatusConflict, wantBody: "email já está em uso\n"},
 		{name: "unexpected error", serviceErr: unexpectedErr, wantStatus: http.StatusInternalServerError, wantBody: "erro interno do servidor\n"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			service := userServiceStub{startPasswordRegistrationFunc: func(context.Context, string, string) (services.PasswordRegistrationResult, error) {
+			service := userServiceStub{startPasswordRegistrationFunc: func(context.Context, string, string, string) (services.PasswordRegistrationResult, error) {
 				return services.PasswordRegistrationResult{}, tt.serviceErr
 			}}
 			handler := handlers.NewUserHandler(service, allowAllRegistrationRateLimiterStub{}, false)
@@ -555,86 +555,6 @@ func TestUserHandlerResendPasswordRegistrationCodeMapsServiceErrors(t *testing.T
 				t.Errorf("response cookies = %d, want 0", len(cookies))
 			}
 		})
-	}
-}
-
-func TestUserHandlerGetUserInfo(t *testing.T) {
-	wantUser := models.User{ID: uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c317"), Email: "user@example.com"}
-	service := userServiceStub{getByIDFunc: func(ctx context.Context, userID uuid.UUID) (models.User, error) {
-		if ctx == nil {
-			t.Fatal("GetByID() received a nil context")
-		}
-		if userID != wantUser.ID {
-			t.Errorf("GetByID() user ID = %s, want %s", userID, wantUser.ID)
-		}
-		return wantUser, nil
-	}}
-
-	handler := handlers.NewUserHandler(service, allowAllRegistrationRateLimiterStub{}, false)
-	request := httptest.NewRequest(http.MethodGet, "/me", nil)
-	request = request.WithContext(ctxval.ContextWithUserID(request.Context(), wantUser.ID))
-	response := httptest.NewRecorder()
-	handler.GetUserInfo(response, request)
-
-	result := response.Result()
-	defer result.Body.Close()
-	if result.StatusCode != http.StatusOK {
-		t.Fatalf("status code = %d, want %d", result.StatusCode, http.StatusOK)
-	}
-	if got := result.Header.Get("Content-Type"); got != "application/json" {
-		t.Errorf("Content-Type = %q, want %q", got, "application/json")
-	}
-
-	var gotResponse struct {
-		ID    string `json:"id"`
-		Email string `json:"email"`
-	}
-	if err := json.NewDecoder(result.Body).Decode(&gotResponse); err != nil {
-		t.Fatalf("decode response body: %v", err)
-	}
-	if gotResponse.ID != wantUser.ID.String() {
-		t.Errorf("response ID = %q, want %q", gotResponse.ID, wantUser.ID.String())
-	}
-	if gotResponse.Email != wantUser.Email {
-		t.Errorf("response email = %q, want %q", gotResponse.Email, wantUser.Email)
-	}
-}
-
-func TestUserHandlerGetUserInfoRejectsMissingUserID(t *testing.T) {
-	serviceCalled := false
-	service := userServiceStub{getByIDFunc: func(context.Context, uuid.UUID) (models.User, error) {
-		serviceCalled = true
-		return models.User{}, errors.New("unexpected GetByID call")
-	}}
-	handler := handlers.NewUserHandler(service, allowAllRegistrationRateLimiterStub{}, false)
-	response := httptest.NewRecorder()
-	handler.GetUserInfo(response, httptest.NewRequest(http.MethodGet, "/me", nil))
-
-	if response.Code != http.StatusInternalServerError {
-		t.Errorf("status code = %d, want %d", response.Code, http.StatusInternalServerError)
-	}
-	if serviceCalled {
-		t.Error("GetByID() was called without a user ID in the request context")
-	}
-}
-
-func TestUserHandlerGetUserInfoHandlesServiceError(t *testing.T) {
-	wantErr := errors.New("database unavailable")
-	userID := uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c317")
-	service := userServiceStub{getByIDFunc: func(context.Context, uuid.UUID) (models.User, error) {
-		return models.User{}, wantErr
-	}}
-	handler := handlers.NewUserHandler(service, allowAllRegistrationRateLimiterStub{}, false)
-	request := httptest.NewRequest(http.MethodGet, "/me", nil)
-	request = request.WithContext(ctxval.ContextWithUserID(request.Context(), userID))
-	response := httptest.NewRecorder()
-	handler.GetUserInfo(response, request)
-
-	if response.Code != http.StatusInternalServerError {
-		t.Errorf("status code = %d, want %d", response.Code, http.StatusInternalServerError)
-	}
-	if strings.Contains(response.Body.String(), wantErr.Error()) {
-		t.Error("response body exposes an internal error")
 	}
 }
 

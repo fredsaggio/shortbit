@@ -8,14 +8,23 @@ import (
 type User struct {
 	ID              uuid.UUID
 	Email           string
+	FullName        *string // Nil for accounts created before names existed.
 	EmailVerifiedAt time.Time
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 }
 
+// Account is the user plus how they can sign in, as shown on their settings page.
+type Account struct {
+	User
+	HasPassword bool
+	HasGoogle   bool
+}
+
 type PasswordRegistrationAttempt struct {
 	TokenHash             []byte
 	Email                 string
+	FullName              *string
 	PasswordHash          string
 	VerificationProofHash []byte
 	FailedAttempts        int16

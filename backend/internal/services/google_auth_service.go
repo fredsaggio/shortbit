@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"uuid"
 
 	"github.com/fredsaggio/url-shortener/internal/models"
@@ -20,6 +21,8 @@ type GoogleIdentity struct {
 	// Subject é o claim "sub" do ID Token. Ele identifica o usuário de forma
 	// estável dentro do Google, mesmo que o endereço de e-mail seja alterado.
 	Subject string
+	// Name é o claim "name" (escopo profile). Pode vir vazio.
+	Name string
 }
 
 // GoogleOIDCClient define a parte do protocolo OpenID Connect que o service
@@ -40,6 +43,7 @@ type GoogleUserRepository interface {
 	CreateWithIdentity(ctx context.Context, email, provider, providerUserID string) (models.User, error)
 	FindUserByProviderIdentity(ctx context.Context, provider, providerUserID string) (models.User, error)
 	LinkIdentityToPasswordUserByEmail(ctx context.Context, email, provider, providerUserID string) (models.User, error)
+	FillMissingFullName(ctx context.Context, userID uuid.UUID, fullName string) error
 }
 
 type UserSessionCreator interface {
@@ -73,23 +77,47 @@ func (s *GoogleAuthService) CompleteLogin(ctx context.Context, code, expectedNon
 
 	// A fronteira OIDC chama o identificador de Subject. Daqui em diante usamos
 	// providerUserID, o nome genérico aceito pelo domínio e pelo repository.
-	return s.loginWithProvider(ctx, identity.Email, identity.Subject)
+	user, err := s.resolveUser(ctx, identity.Email, identity.Subject)
+	if err != nil {
+		return LoginResult{}, err
+	}
+
+	s.fillMissingFullName(ctx, user, identity.Name)
+
+	return s.sessionCreator.CreateSession(ctx, user.ID, true)
 }
 
-func (s *GoogleAuthService) loginWithProvider(ctx context.Context, email, providerUserID string) (LoginResult, error) {
+// fillMissingFullName só preenche contas sem nome, para nunca sobrescrever um
+// nome que a pessoa editou. Uma falha aqui não impede o login.
+func (s *GoogleAuthService) fillMissingFullName(ctx context.Context, user models.User, googleName string) {
+	if user.FullName != nil {
+		return
+	}
+
+	fullName, err := normalizeFullName(googleName)
+	if err != nil {
+		return
+	}
+
+	if err := s.googleRepo.FillMissingFullName(ctx, user.ID, fullName); err != nil {
+		slog.WarnContext(ctx, "fill full name from Google failed", "error", err)
+	}
+}
+
+func (s *GoogleAuthService) resolveUser(ctx context.Context, email, providerUserID string) (models.User, error) {
 	user, err := s.googleRepo.FindUserByProviderIdentity(ctx, googleProvider, providerUserID)
 
 	if err == nil {
-		return s.sessionCreator.CreateSession(ctx, user.ID, true)
+		return user, nil
 	}
 
 	if !errors.Is(err, repositories.ErrAuthIdentityNotFound) {
-		return LoginResult{}, fmt.Errorf("find user by Google identity: %w", err)
+		return models.User{}, fmt.Errorf("find user by Google identity: %w", err)
 	}
 
 	normalizedEmail := normalizeEmail(email)
 	if !isValidEmail(normalizedEmail) {
-		return LoginResult{}, ErrInvalidEmail
+		return models.User{}, ErrInvalidEmail
 	}
 
 	user, err = s.googleRepo.LinkIdentityToPasswordUserByEmail(ctx, normalizedEmail, googleProvider, providerUserID)
@@ -100,11 +128,11 @@ func (s *GoogleAuthService) loginWithProvider(ctx context.Context, email, provid
 	case errors.Is(err, repositories.ErrAuthIdentityAlreadyExists):
 		user, err = s.googleRepo.FindUserByProviderIdentity(ctx, googleProvider, providerUserID)
 		if err != nil {
-			return LoginResult{}, fmt.Errorf("find concurrently linked Google identity: %w", err)
+			return models.User{}, fmt.Errorf("find concurrently linked Google identity: %w", err)
 		}
 
 	case errors.Is(err, repositories.ErrProviderAlreadyLinked):
-		return LoginResult{}, ErrGoogleAuthenticationFailed
+		return models.User{}, ErrGoogleAuthenticationFailed
 
 	case errors.Is(err, repositories.ErrPasswordAccountNotFound):
 		user, err = s.googleRepo.CreateWithIdentity(ctx, normalizedEmail, googleProvider, providerUserID)
@@ -127,28 +155,28 @@ func (s *GoogleAuthService) loginWithProvider(ctx context.Context, email, provid
 				case errors.Is(err, repositories.ErrAuthIdentityAlreadyExists):
 					user, err = s.googleRepo.FindUserByProviderIdentity(ctx, googleProvider, providerUserID)
 					if err != nil {
-						return LoginResult{}, fmt.Errorf("find concurrently linked Google identity after email conflict: %w", err)
+						return models.User{}, fmt.Errorf("find concurrently linked Google identity after email conflict: %w", err)
 					}
 
 				case errors.Is(err, repositories.ErrPasswordAccountNotFound),
 					errors.Is(err, repositories.ErrProviderAlreadyLinked):
-					return LoginResult{}, ErrGoogleAuthenticationFailed
+					return models.User{}, ErrGoogleAuthenticationFailed
 
 				default:
-					return LoginResult{}, fmt.Errorf("link Google identity after email conflict: %w", err)
+					return models.User{}, fmt.Errorf("link Google identity after email conflict: %w", err)
 				}
 
 			default:
-				return LoginResult{}, fmt.Errorf("find Google identity after email conflict: %w", err)
+				return models.User{}, fmt.Errorf("find Google identity after email conflict: %w", err)
 			}
 
 		default:
-			return LoginResult{}, fmt.Errorf("create user with Google identity: %w", err)
+			return models.User{}, fmt.Errorf("create user with Google identity: %w", err)
 		}
 
 	default:
-		return LoginResult{}, fmt.Errorf("link Google identity to password account: %w", err)
+		return models.User{}, fmt.Errorf("link Google identity to password account: %w", err)
 	}
 
-	return s.sessionCreator.CreateSession(ctx, user.ID, true)
+	return user, nil
 }

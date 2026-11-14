@@ -49,13 +49,15 @@ func TestPasswordResetIntegration(t *testing.T) {
 		services.PasswordResetConfig{CodeTTL: 10 * time.Minute, AttemptTTL: 30 * time.Minute})
 	allowAll := middleware.NewRateLimiter(1_000, 100, 100, time.Minute)
 	router := server.NewServer(&server.Handlers{
-		UserHandler:          &handlers.UserHandler{},
-		SessionHandler:       handlers.NewSessionHandler(authService, allowAll, false),
-		PasswordResetHandler: handlers.NewPasswordResetHandler(resetService, allowAll, false),
-		CreateURLHandler:     http.NotFoundHandler(),
-		ListURLHandler:       http.NotFoundHandler(),
-		GetURLHandler:        http.NotFoundHandler(),
-		MeHandler:            middleware.Authenticator(authService)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })),
+		UserHandler:           &handlers.UserHandler{},
+		SessionHandler:        handlers.NewSessionHandler(authService, allowAll, false),
+		PasswordResetHandler:  handlers.NewPasswordResetHandler(resetService, allowAll, false),
+		CreateURLHandler:      http.NotFoundHandler(),
+		ListURLHandler:        http.NotFoundHandler(),
+		GetURLHandler:         http.NotFoundHandler(),
+		MeHandler:             middleware.Authenticator(authService)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })),
+		UpdateMeHandler:       http.NotFoundHandler(),
+		ChangePasswordHandler: http.NotFoundHandler(),
 	}, pool).NewRouterHTTP()
 
 	login := performJSONRequest(t, router, http.MethodPost, "/sessions", `{"email":"reset-flow@example.com","password":"senha-antiga123"}`)

@@ -17,7 +17,7 @@ import (
 func runPasswordResetRepositoryTests(t *testing.T, pool *pgxpool.Pool, repository *repositories.UserRepository) {
 	t.Run("creates password reset attempt for password account", func(t *testing.T) {
 		const email = "password-reset@example.com"
-		user, err := repository.CreateWithPassword(t.Context(), email, "$argon2id$password-reset-hash")
+		user, err := repository.CreateWithPassword(t.Context(), email, "$argon2id$password-reset-hash", nil)
 		if err != nil {
 			t.Fatalf("CreateWithPassword() error = %v", err)
 		}
@@ -69,7 +69,7 @@ func runPasswordResetRepositoryTests(t *testing.T, pool *pgxpool.Pool, repositor
 
 	t.Run("resend replaces code and token without extending active attempt", func(t *testing.T) {
 		const email = "replace-password-reset@example.com"
-		user, err := repository.CreateWithPassword(t.Context(), email, "$argon2id$replace-password-reset-hash")
+		user, err := repository.CreateWithPassword(t.Context(), email, "$argon2id$replace-password-reset-hash", nil)
 		if err != nil {
 			t.Fatalf("CreateWithPassword() error = %v", err)
 		}
@@ -168,7 +168,7 @@ func runPasswordResetRepositoryTests(t *testing.T, pool *pgxpool.Pool, repositor
 
 	t.Run("suppresses resend during cooldown without replacing code", func(t *testing.T) {
 		const email = "cooldown-password-reset@example.com"
-		if _, err := repository.CreateWithPassword(t.Context(), email, "$argon2id$cooldown-hash"); err != nil {
+		if _, err := repository.CreateWithPassword(t.Context(), email, "$argon2id$cooldown-hash", nil); err != nil {
 			t.Fatalf("CreateWithPassword() error = %v", err)
 		}
 
@@ -202,7 +202,7 @@ func runPasswordResetRepositoryTests(t *testing.T, pool *pgxpool.Pool, repositor
 
 	t.Run("fifth wrong code locks attempt and blocks resend", func(t *testing.T) {
 		const email = "locked-password-reset@example.com"
-		if _, err := repository.CreateWithPassword(t.Context(), email, "$argon2id$locked-hash"); err != nil {
+		if _, err := repository.CreateWithPassword(t.Context(), email, "$argon2id$locked-hash", nil); err != nil {
 			t.Fatalf("CreateWithPassword() error = %v", err)
 		}
 
@@ -254,7 +254,7 @@ func runPasswordResetRepositoryTests(t *testing.T, pool *pgxpool.Pool, repositor
 
 	t.Run("completes password reset and revokes sessions atomically", func(t *testing.T) {
 		const email = "complete-reset@example.com"
-		user, err := repository.CreateWithPassword(t.Context(), email, "old-password-hash")
+		user, err := repository.CreateWithPassword(t.Context(), email, "old-password-hash", nil)
 		if err != nil {
 			t.Fatalf("CreateWithPassword() error = %v", err)
 		}
@@ -313,7 +313,7 @@ func runPasswordResetRepositoryTests(t *testing.T, pool *pgxpool.Pool, repositor
 
 	t.Run("expired or locked password reset cannot change password", func(t *testing.T) {
 		const email = "unavailable-reset@example.com"
-		user, err := repository.CreateWithPassword(t.Context(), email, "old-password-hash")
+		user, err := repository.CreateWithPassword(t.Context(), email, "old-password-hash", nil)
 		if err != nil {
 			t.Fatalf("CreateWithPassword() error = %v", err)
 		}

@@ -95,7 +95,7 @@ func runGoogleIdentityRepositoryTests(t *testing.T, pool *pgxpool.Pool, reposito
 			passwordHash   = "$argon2id$link-identity-password-hash"
 		)
 
-		passwordUser, err := repository.CreateWithPassword(t.Context(), email, passwordHash)
+		passwordUser, err := repository.CreateWithPassword(t.Context(), email, passwordHash, nil)
 		if err != nil {
 			t.Fatalf("CreateWithPassword() error = %v", err)
 		}
@@ -206,7 +206,7 @@ func runGoogleIdentityRepositoryTests(t *testing.T, pool *pgxpool.Pool, reposito
 			providerUserID = "already-linked-google-subject"
 		)
 
-		user, err := repository.CreateWithPassword(t.Context(), email, "$argon2id$already-linked-password-hash")
+		user, err := repository.CreateWithPassword(t.Context(), email, "$argon2id$already-linked-password-hash", nil)
 		if err != nil {
 			t.Fatalf("CreateWithPassword() error = %v", err)
 		}
@@ -237,7 +237,7 @@ func runGoogleIdentityRepositoryTests(t *testing.T, pool *pgxpool.Pool, reposito
 			newProviderUserID      = "replacement-google-subject"
 		)
 
-		user, err := repository.CreateWithPassword(t.Context(), email, "$argon2id$provider-linked-password-hash")
+		user, err := repository.CreateWithPassword(t.Context(), email, "$argon2id$provider-linked-password-hash", nil)
 		if err != nil {
 			t.Fatalf("CreateWithPassword() error = %v", err)
 		}
@@ -301,7 +301,7 @@ func runGoogleIdentityRepositoryTests(t *testing.T, pool *pgxpool.Pool, reposito
 			providerUserID = "duplicate-email-google-subject"
 		)
 
-		if _, err := repository.CreateWithPassword(t.Context(), email, "$argon2id$existing-account-hash"); err != nil {
+		if _, err := repository.CreateWithPassword(t.Context(), email, "$argon2id$existing-account-hash", nil); err != nil {
 			t.Fatalf("CreateWithPassword() error = %v", err)
 		}
 

@@ -18,7 +18,7 @@ func TestUserSessionRepositoryIntegration(t *testing.T) {
 	userRepository := repositories.NewUserRepository(pool)
 	sessionRepository := repositories.NewUserSessionRepository(pool)
 
-	user, err := userRepository.CreateWithPassword(t.Context(), "session-repository@example.com", "$argon2id$integration-test-hash")
+	user, err := userRepository.CreateWithPassword(t.Context(), "session-repository@example.com", "$argon2id$integration-test-hash", nil)
 	if err != nil {
 		t.Fatalf("CreateWithPassword() error = %v", err)
 	}

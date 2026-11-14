@@ -23,7 +23,7 @@ func TestURLRepositoryIntegration(t *testing.T) {
 	userRepository := repositories.NewUserRepository(pool)
 	urlRepository := repositories.NewURLRepository(pool)
 
-	user, err := userRepository.CreateWithPassword(t.Context(), "url-repository@example.com", "$argon2id$integration-test-hash")
+	user, err := userRepository.CreateWithPassword(t.Context(), "url-repository@example.com", "$argon2id$integration-test-hash", nil)
 	if err != nil {
 		t.Fatalf("CreateWithPassword() error = %v", err)
 	}
@@ -210,11 +210,11 @@ func TestURLRepositoryListIntegration(t *testing.T) {
 		t.Fatalf("NewGenerator() error = %v", err)
 	}
 
-	owner, err := users.CreateWithPassword(t.Context(), "list-owner@example.com", "$argon2id$integration-test-hash")
+	owner, err := users.CreateWithPassword(t.Context(), "list-owner@example.com", "$argon2id$integration-test-hash", nil)
 	if err != nil {
 		t.Fatalf("create owner: %v", err)
 	}
-	other, err := users.CreateWithPassword(t.Context(), "list-other@example.com", "$argon2id$integration-test-hash")
+	other, err := users.CreateWithPassword(t.Context(), "list-other@example.com", "$argon2id$integration-test-hash", nil)
 	if err != nil {
 		t.Fatalf("create other user: %v", err)
 	}
@@ -291,11 +291,11 @@ func TestURLRepositoryGetByShortcodeIntegration(t *testing.T) {
 		t.Fatalf("NewGenerator() error = %v", err)
 	}
 
-	owner, err := users.CreateWithPassword(t.Context(), "get-url-owner@example.com", "$argon2id$integration-test-hash")
+	owner, err := users.CreateWithPassword(t.Context(), "get-url-owner@example.com", "$argon2id$integration-test-hash", nil)
 	if err != nil {
 		t.Fatalf("create owner: %v", err)
 	}
-	other, err := users.CreateWithPassword(t.Context(), "get-url-other@example.com", "$argon2id$integration-test-hash")
+	other, err := users.CreateWithPassword(t.Context(), "get-url-other@example.com", "$argon2id$integration-test-hash", nil)
 	if err != nil {
 		t.Fatalf("create other user: %v", err)
 	}
@@ -370,7 +370,7 @@ func TestURLRepositoryFindPrivateByShortCodeIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewGenerator() error = %v", err)
 	}
-	owner, err := users.CreateWithPassword(t.Context(), "private-lookup-owner@example.com", "$argon2id$integration-test-hash")
+	owner, err := users.CreateWithPassword(t.Context(), "private-lookup-owner@example.com", "$argon2id$integration-test-hash", nil)
 	if err != nil {
 		t.Fatalf("create owner: %v", err)
 	}
@@ -441,7 +441,7 @@ func TestURLRepositoryResolvePublicIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewGenerator() error = %v", err)
 	}
-	owner, err := users.CreateWithPassword(t.Context(), "redirect-owner@example.com", "$argon2id$integration-test-hash")
+	owner, err := users.CreateWithPassword(t.Context(), "redirect-owner@example.com", "$argon2id$integration-test-hash", nil)
 	if err != nil {
 		t.Fatalf("create owner: %v", err)
 	}
@@ -515,7 +515,7 @@ func TestURLRepositoryResolvePrivateIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewGenerator() error = %v", err)
 	}
-	owner, err := users.CreateWithPassword(t.Context(), "private-redirect-owner@example.com", "$argon2id$integration-test-hash")
+	owner, err := users.CreateWithPassword(t.Context(), "private-redirect-owner@example.com", "$argon2id$integration-test-hash", nil)
 	if err != nil {
 		t.Fatalf("create owner: %v", err)
 	}

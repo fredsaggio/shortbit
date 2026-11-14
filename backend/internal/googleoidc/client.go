@@ -35,6 +35,7 @@ var _ services.GoogleOIDCClient = (*Client)(nil)
 type identityClaims struct {
 	Email         string `json:"email"`
 	EmailVerified bool   `json:"email_verified"`
+	Name          string `json:"name"`
 }
 
 // New prepara um cliente que será criado uma vez na inicialização da API e
@@ -59,9 +60,9 @@ func New(ctx context.Context, cfg config.GoogleConfig) (*Client, error) {
 		// Endpoint contém as URLs de autorização e de troca de tokens descobertas
 		// no documento OIDC do Google.
 		Endpoint: provider.Endpoint(),
-		// openid solicita um ID Token; email solicita os claims de e-mail. Não
-		// pedimos profile porque atualmente não precisamos de nome nem foto.
-		Scopes: []string{oidc.ScopeOpenID, oidc.ScopeEmail},
+		// openid solicita um ID Token; email, os claims de e-mail; profile, o
+		// claim name, usado para preencher o nome completo da conta.
+		Scopes: []string{oidc.ScopeOpenID, oidc.ScopeEmail, oidc.ScopeProfile},
 	}
 
 	tokenVerifier := provider.Verifier(&oidc.Config{
@@ -194,5 +195,6 @@ func identityFromIDToken(idToken *oidc.IDToken) (services.GoogleIdentity, error)
 	return services.GoogleIdentity{
 		Email:   claims.Email,
 		Subject: idToken.Subject,
+		Name:    claims.Name,
 	}, nil
 }

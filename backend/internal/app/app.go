@@ -22,6 +22,12 @@ import (
 )
 
 const (
+	// Per account: 5 attempts at once, then 5 more every 15 minutes.
+	passwordChangeRateLimitRequestsPerSecond = 5.0 / (15.0 * 60.0)
+	passwordChangeRateLimitBurst             = 5
+	passwordChangeRateLimitMaxEntries        = 10_000
+	passwordChangeRateLimitStaleAfter        = 30 * time.Minute
+
 	loginEmailRateLimitRequestsPerSecond = 10.0 / 60.0
 	loginEmailRateLimitBurst             = 5
 	loginEmailRateLimitMaxEntries        = 10_000
@@ -100,7 +106,12 @@ func CompositionRoot(pool db.DB, cfg config.Config, googleClient services.Google
 		http.HandlerFunc(urlHandler.GetByShortCode),
 	)
 
-	meHandler := middleware.Authenticator(authService)(http.HandlerFunc(userHandler.GetUserInfo))
+	accountService := services.NewAccountService(userRepository, userSessionRepository, passwordHasher, sessiontoken.Generate, cfg.Session.TTL)
+	passwordChangeRateLimiter := middleware.NewRateLimiter(passwordChangeRateLimitRequestsPerSecond, passwordChangeRateLimitBurst, passwordChangeRateLimitMaxEntries, passwordChangeRateLimitStaleAfter)
+	accountHandler := handlers.NewAccountHandler(accountService, passwordChangeRateLimiter, cfg.Session.CookieSecure)
+	meHandler := middleware.Authenticator(authService)(http.HandlerFunc(accountHandler.Get))
+	updateMeHandler := middleware.Authenticator(authService)(http.HandlerFunc(accountHandler.Update))
+	changePasswordHandler := middleware.Authenticator(authService)(http.HandlerFunc(accountHandler.ChangePassword))
 
 	return &server.Handlers{
 		UserHandler:              userHandler,
@@ -113,5 +124,7 @@ func CompositionRoot(pool db.DB, cfg config.Config, googleClient services.Google
 		ListURLHandler:           listURLHandler,
 		GetURLHandler:            getURLHandler,
 		MeHandler:                meHandler,
+		UpdateMeHandler:          updateMeHandler,
+		ChangePasswordHandler:    changePasswordHandler,
 	}, passwordRegisterCleanup, nil
 }

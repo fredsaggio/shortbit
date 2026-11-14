@@ -23,7 +23,7 @@ func TestLinkAccessSessionRepositoryCreateIntegration(t *testing.T) {
 	urls := repositories.NewURLRepository(pool)
 	sessions := repositories.NewLinkAccessSessionRepository(pool)
 
-	owner, err := users.CreateWithPassword(t.Context(), "link-session-owner@example.com", "$argon2id$integration-test-hash")
+	owner, err := users.CreateWithPassword(t.Context(), "link-session-owner@example.com", "$argon2id$integration-test-hash", nil)
 	if err != nil {
 		t.Fatalf("create owner: %v", err)
 	}

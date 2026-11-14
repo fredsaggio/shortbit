@@ -64,10 +64,12 @@ func runUserRepositoryCoreBeforeResetTests(t *testing.T, pool *pgxpool.Pool, rep
 			passwordHash = "$argon2id$integration-test-hash"
 		)
 
+		fullName := "Ana Souza"
 		user, err := repository.CreateWithPassword(
 			t.Context(),
 			email,
 			passwordHash,
+			&fullName,
 		)
 		if err != nil {
 			t.Fatalf("CreateWithPassword() error = %v", err)
@@ -83,6 +85,9 @@ func runUserRepositoryCoreBeforeResetTests(t *testing.T, pool *pgxpool.Pool, rep
 
 		if user.Email != email {
 			t.Errorf("CreateWithPassword() email = %q, want %q", user.Email, email)
+		}
+		if user.FullName == nil || *user.FullName != fullName {
+			t.Errorf("CreateWithPassword() full name = %v, want %q", user.FullName, fullName)
 		}
 
 		if user.CreatedAt.IsZero() {
@@ -148,6 +153,7 @@ func runUserRepositoryCoreBeforeResetTests(t *testing.T, pool *pgxpool.Pool, rep
 			t.Context(),
 			email,
 			passwordHash,
+			nil,
 		)
 		if err != nil {
 			t.Fatalf("CreateWithPassword() error = %v", err)
@@ -197,7 +203,7 @@ func runUserRepositoryCoreBeforeResetTests(t *testing.T, pool *pgxpool.Pool, rep
 
 func runUserRepositoryCoreAfterResetTests(t *testing.T, pool *pgxpool.Pool, repository *repositories.UserRepository) {
 	t.Run("finds user by ID", func(t *testing.T) {
-		createdUser, err := repository.CreateWithPassword(t.Context(), "find-by-id@example.com", "$argon2id$find-by-id-test-hash")
+		createdUser, err := repository.CreateWithPassword(t.Context(), "find-by-id@example.com", "$argon2id$find-by-id-test-hash", nil)
 		if err != nil {
 			t.Fatalf("CreateWithPassword() error = %v", err)
 		}
@@ -266,6 +272,7 @@ func runUserRepositoryCoreAfterResetTests(t *testing.T, pool *pgxpool.Pool, repo
 			t.Context(),
 			email,
 			"$argon2id$first-hash",
+			nil,
 		); err != nil {
 			t.Fatalf("first CreateWithPassword() error = %v", err)
 		}
@@ -274,6 +281,7 @@ func runUserRepositoryCoreAfterResetTests(t *testing.T, pool *pgxpool.Pool, repo
 			t.Context(),
 			email,
 			"$argon2id$second-hash",
+			nil,
 		)
 		if !errors.Is(err, repositories.ErrEmailAlreadyExists) {
 			t.Fatalf(
@@ -304,6 +312,7 @@ func runUserRepositoryCoreAfterResetTests(t *testing.T, pool *pgxpool.Pool, repo
 			t.Context(),
 			email,
 			" ",
+			nil,
 		)
 		if err == nil {
 			t.Fatal("CreateWithPassword() error = nil, want credential constraint error")

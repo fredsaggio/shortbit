@@ -66,7 +66,7 @@ func TestPasswordRegistrationResendIntegration(t *testing.T) {
 		router,
 		http.MethodPost,
 		"/registrations/password",
-		`{"email":"registration-resend-integration@example.com","password":"senha12345"}`,
+		`{"email":"registration-resend-integration@example.com","password":"senha12345","full_name":"Ana Souza"}`,
 	)
 	defer startResponse.Body.Close()
 
@@ -193,8 +193,8 @@ func TestConcurrentPasswordRegistrationConfirmationsForSameEmail(t *testing.T) {
 		code     string
 		body     string
 	}{
-		{password: "senha-concorrente-um", code: "111111", body: `{"email":"registration-concurrency@example.com","password":"senha-concorrente-um"}`},
-		{password: "senha-concorrente-dois", code: "222222", body: `{"email":"registration-concurrency@example.com","password":"senha-concorrente-dois"}`},
+		{password: "senha-concorrente-um", code: "111111", body: `{"email":"registration-concurrency@example.com","password":"senha-concorrente-um","full_name":"Ana Souza"}`},
+		{password: "senha-concorrente-dois", code: "222222", body: `{"email":"registration-concurrency@example.com","password":"senha-concorrente-dois","full_name":"Ana Souza"}`},
 	}
 
 	pool := dbtest.Open(t)
@@ -350,7 +350,7 @@ func TestRepeatedPasswordRegistrationConfirmationDoesNotCreateAnotherAccount(t *
 		router,
 		http.MethodPost,
 		"/registrations/password",
-		`{"email":"registration-repeated-confirmation@example.com","password":"senha-confirmacao-repetida"}`,
+		`{"email":"registration-repeated-confirmation@example.com","password":"senha-confirmacao-repetida","full_name":"Ana Souza"}`,
 	)
 	if startResponse.StatusCode != http.StatusAccepted {
 		body := readResponseBody(t, startResponse)
@@ -480,16 +480,20 @@ func passwordRegistrationTestRouter(pool *pgxpool.Pool, codeSender registrationA
 	authService := services.NewAuthService(userRepository, sessionRepository, passwordHasher, sessiontoken.Generate, 24*time.Hour, 720*time.Hour)
 	loginLimiter := middleware.NewRateLimiter(1, 5, 100, time.Minute)
 	sessionHandler := handlers.NewSessionHandler(authService, loginLimiter, false)
-	meHandler := middleware.Authenticator(authService)(http.HandlerFunc(userHandler.GetUserInfo))
+	accountService := services.NewAccountService(userRepository, sessionRepository, passwordHasher, sessiontoken.Generate, 24*time.Hour)
+	accountHandler := handlers.NewAccountHandler(accountService, middleware.NewRateLimiter(1_000, 100, 100, time.Minute), false)
+	meHandler := middleware.Authenticator(authService)(http.HandlerFunc(accountHandler.Get))
 
 	applicationHandlers := &server.Handlers{
-		UserHandler:          userHandler,
-		SessionHandler:       sessionHandler,
-		PasswordResetHandler: resetHandler,
-		CreateURLHandler:     http.NotFoundHandler(),
-		ListURLHandler:       http.NotFoundHandler(),
-		GetURLHandler:        http.NotFoundHandler(),
-		MeHandler:            meHandler,
+		UserHandler:           userHandler,
+		SessionHandler:        sessionHandler,
+		PasswordResetHandler:  resetHandler,
+		CreateURLHandler:      http.NotFoundHandler(),
+		ListURLHandler:        http.NotFoundHandler(),
+		GetURLHandler:         http.NotFoundHandler(),
+		MeHandler:             meHandler,
+		UpdateMeHandler:       http.NotFoundHandler(),
+		ChangePasswordHandler: http.NotFoundHandler(),
 	}
 
 	return server.NewServer(applicationHandlers, pool).NewRouterHTTP()

@@ -57,7 +57,7 @@ func (r *UserRepository) UserExistsByEmail(ctx context.Context, email string) (b
 	return exists, nil
 }
 
-func (r *UserRepository) CreateWithPassword(ctx context.Context, email, passwordHash string) (models.User, error) {
+func (r *UserRepository) CreateWithPassword(ctx context.Context, email, passwordHash string, fullName *string) (models.User, error) {
 	tx, err := r.db.Begin(ctx)
 
 	if err != nil {
@@ -69,18 +69,19 @@ func (r *UserRepository) CreateWithPassword(ctx context.Context, email, password
 	}()
 
 	const q = `
-			   INSERT INTO users(email, email_verified_at)
-			   VALUES (@email, NOW())
-			   RETURNING id, email, email_verified_at, created_at, updated_at
+			   INSERT INTO users(email, full_name, email_verified_at)
+			   VALUES (@email, @fullName, NOW())
+			   RETURNING id, email, full_name, email_verified_at, created_at, updated_at
 			   `
 
 	args := pgx.StrictNamedArgs{
-		"email": email,
+		"email":    email,
+		"fullName": fullName,
 	}
 
 	var user models.User
 
-	err = tx.QueryRow(ctx, q, args).Scan(&user.ID, &user.Email, &user.EmailVerifiedAt, &user.CreatedAt, &user.UpdatedAt)
+	err = tx.QueryRow(ctx, q, args).Scan(&user.ID, &user.Email, &user.FullName, &user.EmailVerifiedAt, &user.CreatedAt, &user.UpdatedAt)
 
 	if err != nil {
 		if isConstraintConflict(err, "uq_users_email") {
@@ -119,6 +120,7 @@ func (r *UserRepository) FindPasswordCredentialsByEmail(
 		SELECT
 			u.id,
 			u.email,
+			u.full_name,
 			u.email_verified_at,
 			u.created_at,
 			u.updated_at,
@@ -144,6 +146,7 @@ func (r *UserRepository) FindPasswordCredentialsByEmail(
 	err := r.db.QueryRow(ctx, q, args).Scan(
 		&user.ID,
 		&user.Email,
+		&user.FullName,
 		&user.EmailVerifiedAt,
 		&user.CreatedAt,
 		&user.UpdatedAt,
@@ -168,7 +171,7 @@ func (r *UserRepository) FindPasswordCredentialsByEmail(
 
 func (r *UserRepository) FindByID(ctx context.Context, userID uuid.UUID) (models.User, error) {
 	const q = `
-		SELECT id, email, email_verified_at, created_at, updated_at
+		SELECT id, email, full_name, email_verified_at, created_at, updated_at
 		FROM users
 		WHERE id = @userID
 	`
@@ -179,7 +182,7 @@ func (r *UserRepository) FindByID(ctx context.Context, userID uuid.UUID) (models
 
 	var user models.User
 
-	if err := r.db.QueryRow(ctx, q, args).Scan(&user.ID, &user.Email, &user.EmailVerifiedAt, &user.CreatedAt, &user.UpdatedAt); err != nil {
+	if err := r.db.QueryRow(ctx, q, args).Scan(&user.ID, &user.Email, &user.FullName, &user.EmailVerifiedAt, &user.CreatedAt, &user.UpdatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.User{}, ErrUserNotFound
 		}

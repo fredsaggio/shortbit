@@ -60,6 +60,8 @@ type Handlers struct {
 	ListURLHandler           http.Handler
 	GetURLHandler            http.Handler
 	MeHandler                http.Handler
+	UpdateMeHandler          http.Handler
+	ChangePasswordHandler    http.Handler
 }
 
 type Server struct {
@@ -134,6 +136,8 @@ func (srv *Server) registerRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /password-resets/confirm", confirmResetHandler)
 
 	mux.Handle("GET /me", srv.h.MeHandler)
+	mux.Handle("PATCH /me", srv.h.UpdateMeHandler)
+	mux.Handle("POST /me/password", srv.h.ChangePasswordHandler)
 
 	loginHandler := srv.loginRateLimiter.MiddlewareByIP(http.HandlerFunc(srv.h.SessionHandler.LoginWithPassword))
 	mux.Handle("POST /sessions", loginHandler)

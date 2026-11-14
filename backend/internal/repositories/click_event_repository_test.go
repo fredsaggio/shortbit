@@ -134,7 +134,7 @@ func TestClickEventRepositoryIntegration(t *testing.T) {
 func createClickTestURL(t *testing.T, pool *pgxpool.Pool) models.URL {
 	t.Helper()
 
-	user, err := repositories.NewUserRepository(pool).CreateWithPassword(t.Context(), "click-events@example.com", "$argon2id$integration-test-hash")
+	user, err := repositories.NewUserRepository(pool).CreateWithPassword(t.Context(), "click-events@example.com", "$argon2id$integration-test-hash", nil)
 	if err != nil {
 		t.Fatalf("CreateWithPassword() error = %v", err)
 	}

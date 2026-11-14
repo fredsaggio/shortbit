@@ -73,7 +73,7 @@ func TestPrivateLinkAccessFlowIntegration(t *testing.T) {
 	router := server.NewServer(handlers, pool).NewRouterHTTP()
 	users := repositories.NewUserRepository(pool)
 	urls := repositories.NewURLRepository(pool)
-	owner, err := users.CreateWithPassword(t.Context(), "private-flow-owner@example.com", "$argon2id$integration-test-hash")
+	owner, err := users.CreateWithPassword(t.Context(), "private-flow-owner@example.com", "$argon2id$integration-test-hash", nil)
 	if err != nil {
 		t.Fatalf("create owner: %v", err)
 	}

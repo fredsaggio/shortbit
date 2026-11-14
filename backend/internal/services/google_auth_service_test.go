@@ -16,6 +16,14 @@ type googleUserRepositoryStub struct {
 	createWithIdentityFunc                func(ctx context.Context, email, provider, providerUserID string) (models.User, error)
 	findUserByProviderIdentityFunc        func(ctx context.Context, provider, providerUserID string) (models.User, error)
 	linkIdentityToPasswordUserByEmailFunc func(ctx context.Context, email, provider, providerUserID string) (models.User, error)
+	fillMissingFullNameFunc               func(ctx context.Context, userID uuid.UUID, fullName string) error
+}
+
+func (s googleUserRepositoryStub) FillMissingFullName(ctx context.Context, userID uuid.UUID, fullName string) error {
+	if s.fillMissingFullNameFunc == nil {
+		return nil
+	}
+	return s.fillMissingFullNameFunc(ctx, userID, fullName)
 }
 
 func (s googleUserRepositoryStub) CreateWithIdentity(ctx context.Context, email, provider, providerUserID string) (models.User, error) {
@@ -587,5 +595,55 @@ func unexpectedUserSessionCreator(t *testing.T) userSessionCreatorStub {
 			t.Fatal("CreateSession() should not be called")
 			return services.LoginResult{}, nil
 		},
+	}
+}
+
+func TestGoogleAuthServiceCompleteLoginFillsFullName(t *testing.T) {
+	userID := uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c318")
+	existingName := "Nome Editado"
+
+	tests := []struct {
+		name       string
+		user       models.User
+		googleName string
+		fillErr    error
+		wantFill   string
+	}{
+		{name: "account without name gets the Google name", user: models.User{ID: userID}, googleName: "  Ana   Souza ", wantFill: "Ana Souza"},
+		{name: "edited name is kept", user: models.User{ID: userID, FullName: &existingName}, googleName: "Ana Souza"},
+		{name: "empty Google name is ignored", user: models.User{ID: userID}, googleName: " "},
+		{name: "fill failure does not block login", user: models.User{ID: userID}, googleName: "Ana Souza", fillErr: errors.New("database unavailable"), wantFill: "Ana Souza"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var filled string
+			repository := googleUserRepositoryStub{
+				findUserByProviderIdentityFunc: func(context.Context, string, string) (models.User, error) {
+					return tt.user, nil
+				},
+				fillMissingFullNameFunc: func(_ context.Context, gotUserID uuid.UUID, fullName string) error {
+					if gotUserID != userID {
+						t.Errorf("FillMissingFullName() user ID = %s, want %s", gotUserID, userID)
+					}
+					filled = fullName
+					return tt.fillErr
+				},
+			}
+			sessions := userSessionCreatorStub{createSessionFunc: func(context.Context, uuid.UUID, bool) (services.LoginResult, error) {
+				return services.LoginResult{Token: "session-token", ExpiresAt: time.Now().Add(time.Hour)}, nil
+			}}
+			oidcClient := googleOIDCClientStub{exchangeAndVerifyFunc: func(context.Context, string, string, string) (services.GoogleIdentity, error) {
+				return services.GoogleIdentity{Email: "ana@example.com", Subject: "google-sub", Name: tt.googleName}, nil
+			}}
+
+			result, err := services.NewGoogleAuthService(repository, sessions, oidcClient).CompleteLogin(t.Context(), "code", "nonce", "verifier")
+			if err != nil || result.Token != "session-token" {
+				t.Fatalf("CompleteLogin() = (%+v, %v), want a session", result, err)
+			}
+			if filled != tt.wantFill {
+				t.Errorf("filled full name = %q, want %q", filled, tt.wantFill)
+			}
+		})
 	}
 }

@@ -249,7 +249,7 @@ func assertQueueLength(t *testing.T, rabbitURL string, queue string, want int) {
 func createConsumerTestURL(t *testing.T, pool *pgxpool.Pool) models.URL {
 	t.Helper()
 
-	user, err := repositories.NewUserRepository(pool).CreateWithPassword(t.Context(), "click-worker@example.com", "$argon2id$integration-test-hash")
+	user, err := repositories.NewUserRepository(pool).CreateWithPassword(t.Context(), "click-worker@example.com", "$argon2id$integration-test-hash", nil)
 	if err != nil {
 		t.Fatalf("CreateWithPassword() error = %v", err)
 	}

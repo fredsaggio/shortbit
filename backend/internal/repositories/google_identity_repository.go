@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"uuid"
 
 	"github.com/fredsaggio/url-shortener/internal/models"
 	"github.com/jackc/pgx/v5"
@@ -24,7 +25,7 @@ func (r *UserRepository) CreateWithIdentity(ctx context.Context, email, provider
 	const q = `
 		INSERT INTO users(email, email_verified_at)
 		VALUES(@email, NOW())
-		RETURNING id, email, email_verified_at, created_at, updated_at
+		RETURNING id, email, full_name, email_verified_at, created_at, updated_at
 	`
 
 	args := pgx.StrictNamedArgs{
@@ -33,7 +34,7 @@ func (r *UserRepository) CreateWithIdentity(ctx context.Context, email, provider
 
 	var user models.User
 
-	if err := tx.QueryRow(ctx, q, args).Scan(&user.ID, &user.Email, &user.EmailVerifiedAt, &user.CreatedAt, &user.UpdatedAt); err != nil {
+	if err := tx.QueryRow(ctx, q, args).Scan(&user.ID, &user.Email, &user.FullName, &user.EmailVerifiedAt, &user.CreatedAt, &user.UpdatedAt); err != nil {
 		if isConstraintConflict(err, "uq_users_email") {
 			return models.User{}, ErrEmailAlreadyExists
 		}
@@ -67,6 +68,7 @@ func (r *UserRepository) FindUserByProviderIdentity(ctx context.Context, provide
 		SELECT
 			u.id,
 			u.email,
+			u.full_name,
 			u.email_verified_at,
 			u.created_at,
 			u.updated_at
@@ -83,7 +85,7 @@ func (r *UserRepository) FindUserByProviderIdentity(ctx context.Context, provide
 
 	var user models.User
 
-	if err := r.db.QueryRow(ctx, q, args).Scan(&user.ID, &user.Email, &user.EmailVerifiedAt, &user.CreatedAt, &user.UpdatedAt); err != nil {
+	if err := r.db.QueryRow(ctx, q, args).Scan(&user.ID, &user.Email, &user.FullName, &user.EmailVerifiedAt, &user.CreatedAt, &user.UpdatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.User{}, ErrAuthIdentityNotFound
 		}
@@ -108,6 +110,7 @@ func (r *UserRepository) LinkIdentityToPasswordUserByEmail(ctx context.Context, 
 		SELECT
 			u.id,
 			u.email,
+			u.full_name,
 			u.email_verified_at,
 			u.created_at,
 			u.updated_at
@@ -123,7 +126,7 @@ func (r *UserRepository) LinkIdentityToPasswordUserByEmail(ctx context.Context, 
 		"email": email,
 	}
 
-	err = tx.QueryRow(ctx, q1, args).Scan(&user.ID, &user.Email, &user.EmailVerifiedAt, &user.CreatedAt, &user.UpdatedAt)
+	err = tx.QueryRow(ctx, q1, args).Scan(&user.ID, &user.Email, &user.FullName, &user.EmailVerifiedAt, &user.CreatedAt, &user.UpdatedAt)
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -162,4 +165,23 @@ func (r *UserRepository) LinkIdentityToPasswordUserByEmail(ctx context.Context, 
 	}
 
 	return user, nil
+}
+
+func (r *UserRepository) FillMissingFullName(ctx context.Context, userID uuid.UUID, fullName string) error {
+	const q = `
+		UPDATE users
+		SET full_name = @fullName
+		WHERE id = @userID AND full_name IS NULL
+	`
+
+	args := pgx.StrictNamedArgs{
+		"userID":   userID,
+		"fullName": fullName,
+	}
+
+	if _, err := r.db.Exec(ctx, q, args); err != nil {
+		return fmt.Errorf("fill missing full name: %w", err)
+	}
+
+	return nil
 }

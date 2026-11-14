@@ -30,6 +30,8 @@ func TestLinkAccessRouteHasRateLimitPerIPAndCode(t *testing.T) {
 	h := &Handlers{
 		LinkAccessSessionHandler: handlers.NewLinkAccessSessionHandler(service, false),
 		MeHandler:                http.NotFoundHandler(),
+		UpdateMeHandler:          http.NotFoundHandler(),
+		ChangePasswordHandler:    http.NotFoundHandler(),
 		CreateURLHandler:         http.NotFoundHandler(),
 		ListURLHandler:           http.NotFoundHandler(),
 		GetURLHandler:            http.NotFoundHandler(),

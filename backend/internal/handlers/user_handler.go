@@ -9,17 +9,14 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"uuid"
 
-	"github.com/fredsaggio/url-shortener/internal/ctxval"
 	"github.com/fredsaggio/url-shortener/internal/models"
 	"github.com/fredsaggio/url-shortener/internal/services"
 )
 
 type UserService interface {
-	StartPasswordRegistration(ctx context.Context, email, password string) (services.PasswordRegistrationResult, error)
+	StartPasswordRegistration(ctx context.Context, email, password, fullName string) (services.PasswordRegistrationResult, error)
 	ConfirmPasswordRegistration(ctx context.Context, token, code string) (models.User, error)
-	GetByID(ctx context.Context, userID uuid.UUID) (models.User, error)
 	ResendPasswordRegistrationCode(ctx context.Context, token string) error
 }
 
@@ -30,6 +27,7 @@ type RegistrationRateLimiter interface {
 type startPasswordRegistrationRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+	FullName string `json:"full_name"`
 }
 
 type confirmPasswordRegistrationRequest struct {
@@ -80,7 +78,7 @@ func (h *UserHandler) StartPasswordRegistration(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	result, err := h.userServ.StartPasswordRegistration(ctx, req.Email, req.Password)
+	result, err := h.userServ.StartPasswordRegistration(ctx, req.Email, req.Password, req.FullName)
 
 	if err != nil {
 		switch {
@@ -92,6 +90,9 @@ func (h *UserHandler) StartPasswordRegistration(w http.ResponseWriter, r *http.R
 
 		case errors.Is(err, services.ErrPasswordTooLong):
 			http.Error(w, "senha muito longa", http.StatusBadRequest)
+
+		case errors.Is(err, services.ErrFullNameRequired), errors.Is(err, services.ErrFullNameTooLong), errors.Is(err, services.ErrInvalidFullName):
+			http.Error(w, fullNameErrorMessage(err), http.StatusBadRequest)
 
 		case errors.Is(err, services.ErrEmailAlreadyExists):
 			http.Error(w, "email já está em uso", http.StatusConflict)
@@ -260,34 +261,4 @@ func (h *UserHandler) ResendPasswordRegistrationCode(w http.ResponseWriter, r *h
 
 	w.WriteHeader(http.StatusAccepted)
 
-}
-
-func (h *UserHandler) GetUserInfo(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	userID, ok := ctxval.UserIDFromContext(ctx)
-
-	if !ok {
-		http.Error(w, "Erro interno no servidor", http.StatusInternalServerError)
-		return
-	}
-
-	user, err := h.userServ.GetByID(ctx, userID)
-
-	if err != nil {
-		slog.ErrorContext(ctx, "get authenticated user failed", "error", err)
-		http.Error(w, "erro interno no servidor", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-
-	resp := userResponse{
-		ID:    user.ID.String(),
-		Email: user.Email,
-	}
-
-	if err := json.NewEncoder(w).Encode(&resp); err != nil {
-		slog.ErrorContext(ctx, "encode authenticated user response failed", "error", err)
-	}
 }
