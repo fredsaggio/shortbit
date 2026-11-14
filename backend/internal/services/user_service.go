@@ -7,7 +7,6 @@ import (
 	"net/mail"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/fredsaggio/url-shortener/internal/models"
 	"github.com/fredsaggio/url-shortener/internal/repositories"
@@ -96,12 +95,8 @@ func (s *UserService) StartPasswordRegistration(ctx context.Context, email, pass
 		return PasswordRegistrationResult{}, ErrInvalidEmail
 	}
 
-	if utf8.RuneCountInString(password) < minPasswordCharacters {
-		return PasswordRegistrationResult{}, ErrPasswordTooShort
-	}
-
-	if len(password) > maxPasswordBytes {
-		return PasswordRegistrationResult{}, ErrPasswordTooLong
+	if err := validateAccountPassword(password); err != nil {
+		return PasswordRegistrationResult{}, err
 	}
 
 	normalizedFullName, err := normalizeFullName(fullName)

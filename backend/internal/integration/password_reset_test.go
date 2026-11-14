@@ -34,7 +34,7 @@ func (s *recordingPasswordResetSender) SendPasswordChangedNotice(_ context.Conte
 }
 
 func TestPasswordResetIntegration(t *testing.T) {
-	const email, oldPassword, newPassword = "reset-flow@example.com", "senha-antiga123", "senha-nova456"
+	const email, oldPassword, newPassword = "reset-flow@example.com", "Senha-antiga123", "Senha-nova456"
 	pool := dbtest.Open(t)
 	createConfirmedPasswordUser(t, pool, email, oldPassword)
 	hasher := argon2.Argon2id{}
@@ -60,7 +60,7 @@ func TestPasswordResetIntegration(t *testing.T) {
 		ChangePasswordHandler: http.NotFoundHandler(),
 	}, pool).NewRouterHTTP()
 
-	login := performJSONRequest(t, router, http.MethodPost, "/sessions", `{"email":"reset-flow@example.com","password":"senha-antiga123"}`)
+	login := performJSONRequest(t, router, http.MethodPost, "/sessions", `{"email":"reset-flow@example.com","password":"Senha-antiga123"}`)
 	defer login.Body.Close()
 	if login.StatusCode != http.StatusNoContent {
 		t.Fatalf("initial login status = %d", login.StatusCode)
@@ -94,13 +94,13 @@ func TestPasswordResetIntegration(t *testing.T) {
 	}
 
 	wrong := performJSONRequestWithCookie(t, router, http.MethodPost, "/password-resets/confirm",
-		`{"code":"00000000","password":"senha-nova456","password_confirmation":"senha-nova456"}`, resetCookie)
+		`{"code":"00000000","password":"Senha-nova456","password_confirmation":"Senha-nova456"}`, resetCookie)
 	defer wrong.Body.Close()
 	if wrong.StatusCode != http.StatusBadRequest {
 		t.Fatalf("wrong code status = %d, want 400", wrong.StatusCode)
 	}
 	locked := performJSONRequestWithCookie(t, router, http.MethodPost, "/password-resets/confirm",
-		`{"code":"`+sender.codes[0]+`","password":"senha-nova456","password_confirmation":"senha-nova456"}`, resetCookie)
+		`{"code":"`+sender.codes[0]+`","password":"Senha-nova456","password_confirmation":"Senha-nova456"}`, resetCookie)
 	defer locked.Body.Close()
 	if locked.StatusCode != http.StatusTooManyRequests {
 		t.Fatalf("confirm during cooldown status = %d, want 429", locked.StatusCode)
@@ -109,7 +109,7 @@ func TestPasswordResetIntegration(t *testing.T) {
 		t.Fatalf("end test cooldown: %v", err)
 	}
 
-	confirmBody := `{"code":"` + sender.codes[0] + `","password":"senha-nova456","password_confirmation":"senha-nova456"}`
+	confirmBody := `{"code":"` + sender.codes[0] + `","password":"Senha-nova456","password_confirmation":"Senha-nova456"}`
 	confirm := performJSONRequestWithCookie(t, router, http.MethodPost, "/password-resets/confirm", confirmBody, resetCookie)
 	defer confirm.Body.Close()
 	if confirm.StatusCode != http.StatusNoContent {
@@ -131,12 +131,12 @@ func TestPasswordResetIntegration(t *testing.T) {
 	if oldSession.StatusCode != http.StatusUnauthorized {
 		t.Errorf("old session status = %d, want 401", oldSession.StatusCode)
 	}
-	oldLogin := performJSONRequest(t, router, http.MethodPost, "/sessions", `{"email":"reset-flow@example.com","password":"senha-antiga123"}`)
+	oldLogin := performJSONRequest(t, router, http.MethodPost, "/sessions", `{"email":"reset-flow@example.com","password":"Senha-antiga123"}`)
 	defer oldLogin.Body.Close()
 	if oldLogin.StatusCode != http.StatusUnauthorized {
 		t.Errorf("old password login status = %d, want 401", oldLogin.StatusCode)
 	}
-	newLogin := performJSONRequest(t, router, http.MethodPost, "/sessions", `{"email":"reset-flow@example.com","password":"senha-nova456"}`)
+	newLogin := performJSONRequest(t, router, http.MethodPost, "/sessions", `{"email":"reset-flow@example.com","password":"Senha-nova456"}`)
 	defer newLogin.Body.Close()
 	if newLogin.StatusCode != http.StatusNoContent {
 		t.Errorf("new password login status = %d, want 204", newLogin.StatusCode)

@@ -85,11 +85,8 @@ func (h *UserHandler) StartPasswordRegistration(w http.ResponseWriter, r *http.R
 		case errors.Is(err, services.ErrInvalidEmail):
 			http.Error(w, "email inválido", http.StatusBadRequest)
 
-		case errors.Is(err, services.ErrPasswordTooShort):
-			http.Error(w, "senha muito curta", http.StatusBadRequest)
-
-		case errors.Is(err, services.ErrPasswordTooLong):
-			http.Error(w, "senha muito longa", http.StatusBadRequest)
+		case isPasswordPolicyError(err):
+			http.Error(w, passwordPolicyMessage(err), http.StatusBadRequest)
 
 		case errors.Is(err, services.ErrFullNameRequired), errors.Is(err, services.ErrFullNameTooLong), errors.Is(err, services.ErrInvalidFullName):
 			http.Error(w, fullNameErrorMessage(err), http.StatusBadRequest)

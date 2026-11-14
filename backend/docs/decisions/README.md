@@ -47,3 +47,4 @@ Quais benefícios, limitações e trabalhos futuros surgem dessa escolha?
 - [0001 — Shortcodes com ID incremental e Sqids](0001-shortcode-sqids.md) — aceita; implementada.
 - [0002 — Contagem de cliques via RabbitMQ e cache Redis de destinos quentes](0002-click-events-rabbitmq-redis-cache.md) — aceita; implementada.
 - [0003 — Deploy gratuito em um único serviço web](0003-free-single-service-deploy.md) — aceita; implementada.
+- [0004 — Regras de composição na senha da conta](0004-account-password-composition.md) — aceita; implementada.

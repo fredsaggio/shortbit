@@ -51,7 +51,7 @@ func (s *recordingPasswordRegistrationCodeSender) SendPasswordChangedNotice(cont
 func TestPasswordRegistrationResendIntegration(t *testing.T) {
 	const (
 		email      = "registration-resend-integration@example.com"
-		password   = "senha12345"
+		password   = "Senha12345!"
 		firstCode  = "123456"
 		secondCode = "654321"
 	)
@@ -66,7 +66,7 @@ func TestPasswordRegistrationResendIntegration(t *testing.T) {
 		router,
 		http.MethodPost,
 		"/registrations/password",
-		`{"email":"registration-resend-integration@example.com","password":"senha12345","full_name":"Ana Souza"}`,
+		`{"email":"registration-resend-integration@example.com","password":"Senha12345!","full_name":"Ana Souza"}`,
 	)
 	defer startResponse.Body.Close()
 
@@ -193,8 +193,8 @@ func TestConcurrentPasswordRegistrationConfirmationsForSameEmail(t *testing.T) {
 		code     string
 		body     string
 	}{
-		{password: "senha-concorrente-um", code: "111111", body: `{"email":"registration-concurrency@example.com","password":"senha-concorrente-um","full_name":"Ana Souza"}`},
-		{password: "senha-concorrente-dois", code: "222222", body: `{"email":"registration-concurrency@example.com","password":"senha-concorrente-dois","full_name":"Ana Souza"}`},
+		{password: "Senha-concorrente-1", code: "111111", body: `{"email":"registration-concurrency@example.com","password":"Senha-concorrente-1","full_name":"Ana Souza"}`},
+		{password: "Senha-concorrente-2", code: "222222", body: `{"email":"registration-concurrency@example.com","password":"Senha-concorrente-2","full_name":"Ana Souza"}`},
 	}
 
 	pool := dbtest.Open(t)
@@ -337,7 +337,7 @@ func TestConcurrentPasswordRegistrationConfirmationsForSameEmail(t *testing.T) {
 func TestRepeatedPasswordRegistrationConfirmationDoesNotCreateAnotherAccount(t *testing.T) {
 	const (
 		email    = "registration-repeated-confirmation@example.com"
-		password = "senha-confirmacao-repetida"
+		password = "Senha-confirmacao-1"
 		code     = "333333"
 	)
 
@@ -350,7 +350,7 @@ func TestRepeatedPasswordRegistrationConfirmationDoesNotCreateAnotherAccount(t *
 		router,
 		http.MethodPost,
 		"/registrations/password",
-		`{"email":"registration-repeated-confirmation@example.com","password":"senha-confirmacao-repetida","full_name":"Ana Souza"}`,
+		`{"email":"registration-repeated-confirmation@example.com","password":"Senha-confirmacao-1","full_name":"Ana Souza"}`,
 	)
 	if startResponse.StatusCode != http.StatusAccepted {
 		body := readResponseBody(t, startResponse)

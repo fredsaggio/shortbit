@@ -52,7 +52,7 @@ func TestUserHandlerStartPasswordRegistration(t *testing.T) {
 	const (
 		token    = "password-registration-token"
 		email    = "USER@example.com"
-		password = "senha-segura"
+		password = "Senha-segura1"
 	)
 	expiresAt := time.Now().UTC().Add(30 * time.Minute).Truncate(time.Second)
 
@@ -73,7 +73,7 @@ func TestUserHandlerStartPasswordRegistration(t *testing.T) {
 	}}
 
 	handler := handlers.NewUserHandler(service, allowAllRegistrationRateLimiterStub{}, true)
-	request := httptest.NewRequest(http.MethodPost, "/registrations/password", strings.NewReader(`{"email":"USER@example.com","password":"senha-segura","full_name":"Ana Souza"}`))
+	request := httptest.NewRequest(http.MethodPost, "/registrations/password", strings.NewReader(`{"email":"USER@example.com","password":"Senha-segura1","full_name":"Ana Souza"}`))
 	response := httptest.NewRecorder()
 	handler.StartPasswordRegistration(response, request)
 
@@ -124,7 +124,7 @@ func TestUserHandlerStartPasswordRegistrationHonorsInsecureCookieConfiguration(t
 	}}
 	handler := handlers.NewUserHandler(service, allowAllRegistrationRateLimiterStub{}, false)
 	response := httptest.NewRecorder()
-	handler.StartPasswordRegistration(response, httptest.NewRequest(http.MethodPost, "/registrations/password", strings.NewReader(`{"email":"user@example.com","password":"senha-segura"}`)))
+	handler.StartPasswordRegistration(response, httptest.NewRequest(http.MethodPost, "/registrations/password", strings.NewReader(`{"email":"user@example.com","password":"Senha-segura1"}`)))
 
 	cookies := response.Result().Cookies()
 	if len(cookies) != 1 {
@@ -151,7 +151,7 @@ func TestUserHandlerStartPasswordRegistrationRateLimitsNormalizedEmail(t *testin
 	}}
 
 	handler := handlers.NewUserHandler(service, limiter, false)
-	request := httptest.NewRequest(http.MethodPost, "/registrations/password", strings.NewReader(`{"email":"  USER@Example.COM  ","password":"senha-segura"}`))
+	request := httptest.NewRequest(http.MethodPost, "/registrations/password", strings.NewReader(`{"email":"  USER@Example.COM  ","password":"Senha-segura1"}`))
 	response := httptest.NewRecorder()
 	handler.StartPasswordRegistration(response, request)
 
@@ -176,8 +176,8 @@ func TestUserHandlerStartPasswordRegistrationRejectsInvalidJSON(t *testing.T) {
 	}{
 		{name: "empty body", body: ""},
 		{name: "malformed JSON", body: `{"email":`},
-		{name: "unknown field", body: `{"email":"user@example.com","password":"senha-segura","name":"Fred"}`},
-		{name: "multiple JSON objects", body: `{"email":"user@example.com","password":"senha-segura"} {"email":"other@example.com"}`},
+		{name: "unknown field", body: `{"email":"user@example.com","password":"Senha-segura1","name":"Fred"}`},
+		{name: "multiple JSON objects", body: `{"email":"user@example.com","password":"Senha-segura1"} {"email":"other@example.com"}`},
 	}
 
 	for _, tt := range tests {
@@ -211,6 +211,9 @@ func TestUserHandlerStartPasswordRegistrationMapsServiceErrors(t *testing.T) {
 		{name: "invalid email", serviceErr: services.ErrInvalidEmail, wantStatus: http.StatusBadRequest, wantBody: "email inválido\n"},
 		{name: "password too short", serviceErr: services.ErrPasswordTooShort, wantStatus: http.StatusBadRequest, wantBody: "senha muito curta\n"},
 		{name: "password too long", serviceErr: services.ErrPasswordTooLong, wantStatus: http.StatusBadRequest, wantBody: "senha muito longa\n"},
+		{name: "password without uppercase", serviceErr: services.ErrPasswordMissingUppercase, wantStatus: http.StatusBadRequest, wantBody: "a senha precisa ter pelo menos uma letra maiúscula\n"},
+		{name: "password without digit", serviceErr: services.ErrPasswordMissingDigit, wantStatus: http.StatusBadRequest, wantBody: "a senha precisa ter pelo menos um número\n"},
+		{name: "password without special character", serviceErr: services.ErrPasswordMissingSpecial, wantStatus: http.StatusBadRequest, wantBody: "a senha precisa ter pelo menos um caractere especial\n"},
 		{name: "full name required", serviceErr: services.ErrFullNameRequired, wantStatus: http.StatusBadRequest, wantBody: "informe o nome completo\n"},
 		{name: "full name too long", serviceErr: services.ErrFullNameTooLong, wantStatus: http.StatusBadRequest, wantBody: "nome completo muito longo; use até 100 caracteres\n"},
 		{name: "invalid full name", serviceErr: services.ErrInvalidFullName, wantStatus: http.StatusBadRequest, wantBody: "nome completo contém caracteres inválidos\n"},
@@ -224,7 +227,7 @@ func TestUserHandlerStartPasswordRegistrationMapsServiceErrors(t *testing.T) {
 				return services.PasswordRegistrationResult{}, tt.serviceErr
 			}}
 			handler := handlers.NewUserHandler(service, allowAllRegistrationRateLimiterStub{}, false)
-			request := httptest.NewRequest(http.MethodPost, "/registrations/password", strings.NewReader(`{"email":"user@example.com","password":"senha-segura"}`))
+			request := httptest.NewRequest(http.MethodPost, "/registrations/password", strings.NewReader(`{"email":"user@example.com","password":"Senha-segura1"}`))
 			response := httptest.NewRecorder()
 			handler.StartPasswordRegistration(response, request)
 

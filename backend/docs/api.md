@@ -67,12 +67,14 @@ Executa `Ping` no PostgreSQL com timeout.
 
 ## Iniciar cadastro com senha ✅
 
+**Senha da conta** (cadastro, recuperação e troca): pelo menos 8 caracteres e no máximo 1024 bytes, com ao menos uma letra maiúscula (qualquer maiúscula Unicode, como `É`), um número e um caractere especial (qualquer coisa que não seja letra, número nem espaço). Cada regra que falha tem a sua mensagem em `400`: `senha muito curta`, `senha muito longa`, `a senha precisa ter pelo menos uma letra maiúscula`, `... um número` e `... um caractere especial`. Senhas criadas antes da regra continuam entrando. A senha de link privado segue só o mínimo de 8 caracteres ([ADR 0004](decisions/0004-account-password-composition.md)).
+
 ### `POST /registrations/password`
 
 ```json
 {
   "email": "usuario@example.com",
-  "password": "senha12345",
+  "password": "Senha12345!",
   "full_name": "Ana Souza"
 }
 ```
@@ -90,7 +92,7 @@ Respostas relevantes:
 
 | Status | Motivo |
 |---:|---|
-| `400` | JSON, email, senha ou nome completo inválidos |
+| `400` | JSON, email, senha (veja as regras acima) ou nome completo inválidos |
 | `409` | Email já cadastrado |
 | `429` | Rate limit por IP ou email |
 | `500` | Falha interna ou no envio do email |
@@ -148,7 +150,7 @@ Pode retornar `410`, `429` ou `500`.
 ```json
 {
   "email": "usuario@example.com",
-  "password": "senha12345",
+  "password": "Senha12345!",
   "remember_me": false
 }
 ```
@@ -196,9 +198,9 @@ Altera o nome completo, com as mesmas regras do cadastro. Recebe `{"full_name": 
 
 ```json
 {
-  "current_password": "senha12345",
-  "new_password": "nova-senha-1",
-  "new_password_confirmation": "nova-senha-1"
+  "current_password": "Senha12345!",
+  "new_password": "Nova-senha-1",
+  "new_password_confirmation": "Nova-senha-1"
 }
 ```
 
@@ -211,7 +213,7 @@ Set-Cookie: user_session=<novo token>
 
 | Status | Motivo |
 |---:|---|
-| `400` | Senha atual incorreta, confirmação diferente, nova senha igual à atual, curta ou longa |
+| `400` | Senha atual incorreta, confirmação diferente, nova senha igual à atual ou fora das regras da senha da conta |
 | `401` | Sem sessão válida |
 | `409` | A conta só entra com Google e não tem senha |
 | `429` | Mais de 5 tentativas seguidas; depois, 5 a cada 15 minutos, contadas por conta |
@@ -280,12 +282,12 @@ Request:
 ```json
 {
   "code": "12345678",
-  "password": "nova-senha123",
-  "password_confirmation": "nova-senha123"
+  "password": "Nova-senha123!",
+  "password_confirmation": "Nova-senha123!"
 }
 ```
 
-O token opaco identifica a tentativa e fica em cookie HttpOnly. O email contém apenas o código de oito dígitos. A confirmação consome a tentativa, troca a senha e revoga as sessões anteriores; não cria uma nova sessão.
+O token opaco identifica a tentativa e fica em cookie HttpOnly. O email contém apenas o código de oito dígitos. A confirmação consome a tentativa, troca a senha e revoga as sessões anteriores; não cria uma nova sessão. A nova senha segue as regras da senha da conta, descritas em "Iniciar cadastro com senha".
 
 Sucesso:
 

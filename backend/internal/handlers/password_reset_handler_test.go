@@ -119,13 +119,13 @@ func TestPasswordResetHandlerStartMapsServiceErrors(t *testing.T) {
 
 func TestPasswordResetHandlerConfirmConsumesCookieAndReturnsNoContent(t *testing.T) {
 	service := passwordResetStarterStub{confirmFunc: func(ctx context.Context, token, code, password string) error {
-		if ctx == nil || token != "reset-token" || code != "00123456" || password != "nova-senha-segura" {
+		if ctx == nil || token != "reset-token" || code != "00123456" || password != "Nova-senha-segura1" {
 			t.Errorf("Confirm() = (%q, %q, %q)", token, code, password)
 		}
 		return nil
 	}}
 	handler := handlers.NewPasswordResetHandler(service, allowAllRegistrationRateLimiterStub{}, true)
-	request := httptest.NewRequest(http.MethodPost, "/password-resets/confirm", strings.NewReader(`{"code":"00123456","password":"nova-senha-segura","password_confirmation":"nova-senha-segura"}`))
+	request := httptest.NewRequest(http.MethodPost, "/password-resets/confirm", strings.NewReader(`{"code":"00123456","password":"Nova-senha-segura1","password_confirmation":"Nova-senha-segura1"}`))
 	request.AddCookie(&http.Cookie{Name: "password_reset", Value: "reset-token"})
 	response := httptest.NewRecorder()
 	handler.Confirm(response, request)
@@ -171,6 +171,7 @@ func TestPasswordResetHandlerConfirmMapsServiceErrors(t *testing.T) {
 		{name: "invalid code", err: services.ErrPasswordResetCodeInvalid, status: http.StatusBadRequest},
 		{name: "short password", err: services.ErrPasswordTooShort, status: http.StatusBadRequest},
 		{name: "long password", err: services.ErrPasswordTooLong, status: http.StatusBadRequest},
+		{name: "password without digit", err: services.ErrPasswordMissingDigit, status: http.StatusBadRequest},
 		{name: "infrastructure", err: errors.New("database unavailable"), status: http.StatusInternalServerError},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

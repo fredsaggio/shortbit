@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
-	"unicode/utf8"
 
 	"github.com/fredsaggio/url-shortener/internal/models"
 	"github.com/fredsaggio/url-shortener/internal/repositories"
@@ -123,11 +122,8 @@ func (s *PasswordResetService) Confirm(ctx context.Context, token, code, passwor
 	if token == "" {
 		return ErrPasswordResetAttemptUnavailable
 	}
-	if utf8.RuneCountInString(password) < minPasswordCharacters {
-		return ErrPasswordTooShort
-	}
-	if len(password) > maxPasswordBytes {
-		return ErrPasswordTooLong
+	if err := validateAccountPassword(password); err != nil {
+		return err
 	}
 
 	tokenHash := sessiontoken.Hash(token)

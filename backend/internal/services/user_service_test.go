@@ -74,7 +74,7 @@ func TestUserServiceStartPasswordRegistration(t *testing.T) {
 	const (
 		inputEmail      = "  USER@Example.COM  "
 		normalizedEmail = "user@example.com"
-		password        = "senha-segura"
+		password        = "Senha-segura1"
 		passwordHash    = "$argon2id$test-hash"
 		rawToken        = "registration-token"
 		code            = "123456"
@@ -176,13 +176,16 @@ func TestUserServiceStartPasswordRegistrationRejectsInvalidInput(t *testing.T) {
 		fullName string
 		wantErr  error
 	}{
-		{name: "invalid email", email: "invalid-email", password: "senha-segura", fullName: "Ana Souza", wantErr: services.ErrInvalidEmail},
+		{name: "invalid email", email: "invalid-email", password: "Senha-segura1", fullName: "Ana Souza", wantErr: services.ErrInvalidEmail},
 		{name: "short password", email: "user@example.com", password: "1234567", fullName: "Ana Souza", wantErr: services.ErrPasswordTooShort},
 		{name: "long password", email: "user@example.com", password: strings.Repeat("a", 1025), fullName: "Ana Souza", wantErr: services.ErrPasswordTooLong},
-		{name: "blank full name", email: "user@example.com", password: "senha-segura", fullName: " \t ", wantErr: services.ErrFullNameRequired},
-		{name: "long full name", email: "user@example.com", password: "senha-segura", fullName: strings.Repeat("á", 101), wantErr: services.ErrFullNameTooLong},
-		{name: "control character in full name", email: "user@example.com", password: "senha-segura", fullName: "Ana\u0000Souza", wantErr: services.ErrInvalidFullName},
-		{name: "invisible format character in full name", email: "user@example.com", password: "senha-segura", fullName: "Ana\u202eSouza", wantErr: services.ErrInvalidFullName},
+		{name: "password without uppercase", email: "user@example.com", password: "senha-segura1", fullName: "Ana Souza", wantErr: services.ErrPasswordMissingUppercase},
+		{name: "password without digit", email: "user@example.com", password: "Senha-segura", fullName: "Ana Souza", wantErr: services.ErrPasswordMissingDigit},
+		{name: "password without special character", email: "user@example.com", password: "SenhaSegura1", fullName: "Ana Souza", wantErr: services.ErrPasswordMissingSpecial},
+		{name: "blank full name", email: "user@example.com", password: "Senha-segura1", fullName: " \t ", wantErr: services.ErrFullNameRequired},
+		{name: "long full name", email: "user@example.com", password: "Senha-segura1", fullName: strings.Repeat("á", 101), wantErr: services.ErrFullNameTooLong},
+		{name: "control character in full name", email: "user@example.com", password: "Senha-segura1", fullName: "Ana\u0000Souza", wantErr: services.ErrInvalidFullName},
+		{name: "invisible format character in full name", email: "user@example.com", password: "Senha-segura1", fullName: "Ana\u202eSouza", wantErr: services.ErrInvalidFullName},
 	}
 
 	for _, tt := range tests {
@@ -200,7 +203,7 @@ func TestUserServiceStartPasswordRegistrationRejectsExistingEmail(t *testing.T) 
 	repository := userRepositoryStub{userExistsByEmailFunc: func(context.Context, string) (bool, error) { return true, nil }}
 	service := newUserService(repository, unexpectedPasswordHasher(t), unexpectedRegistrationTokenGenerator(t), unexpectedVerificationCodeGenerator(t), unexpectedCodeSender(t))
 
-	_, err := service.StartPasswordRegistration(context.Background(), "user@example.com", "senha-segura", "Ana Souza")
+	_, err := service.StartPasswordRegistration(context.Background(), "user@example.com", "Senha-segura1", "Ana Souza")
 	if !errors.Is(err, services.ErrEmailAlreadyExists) {
 		t.Fatalf("StartPasswordRegistration() error = %v, want %v", err, services.ErrEmailAlreadyExists)
 	}
@@ -211,7 +214,7 @@ func TestUserServiceStartPasswordRegistrationPropagatesUserLookupError(t *testin
 	repository := userRepositoryStub{userExistsByEmailFunc: func(context.Context, string) (bool, error) { return false, wantErr }}
 	service := newUserService(repository, unexpectedPasswordHasher(t), unexpectedRegistrationTokenGenerator(t), unexpectedVerificationCodeGenerator(t), unexpectedCodeSender(t))
 
-	_, err := service.StartPasswordRegistration(context.Background(), "user@example.com", "senha-segura", "Ana Souza")
+	_, err := service.StartPasswordRegistration(context.Background(), "user@example.com", "Senha-segura1", "Ana Souza")
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("StartPasswordRegistration() error = %v, want wrapped %v", err, wantErr)
 	}
@@ -222,7 +225,7 @@ func TestUserServiceStartPasswordRegistrationPropagatesHasherError(t *testing.T)
 	hasher := passwordHasherStub{hashFunc: func(string) (string, error) { return "", wantErr }}
 	service := newUserService(availableEmailRepository(), hasher, unexpectedRegistrationTokenGenerator(t), unexpectedVerificationCodeGenerator(t), unexpectedCodeSender(t))
 
-	_, err := service.StartPasswordRegistration(context.Background(), "user@example.com", "senha-segura", "Ana Souza")
+	_, err := service.StartPasswordRegistration(context.Background(), "user@example.com", "Senha-segura1", "Ana Souza")
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("StartPasswordRegistration() error = %v, want wrapped %v", err, wantErr)
 	}
@@ -233,7 +236,7 @@ func TestUserServiceStartPasswordRegistrationPropagatesTokenGeneratorError(t *te
 	generateToken := func() (string, []byte, error) { return "", nil, wantErr }
 	service := newUserService(availableEmailRepository(), successfulPasswordHasher(), generateToken, unexpectedVerificationCodeGenerator(t), unexpectedCodeSender(t))
 
-	_, err := service.StartPasswordRegistration(context.Background(), "user@example.com", "senha-segura", "Ana Souza")
+	_, err := service.StartPasswordRegistration(context.Background(), "user@example.com", "Senha-segura1", "Ana Souza")
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("StartPasswordRegistration() error = %v, want wrapped %v", err, wantErr)
 	}
@@ -244,7 +247,7 @@ func TestUserServiceStartPasswordRegistrationPropagatesCodeGeneratorError(t *tes
 	generateCode := func() (string, error) { return "", wantErr }
 	service := newUserService(availableEmailRepository(), successfulPasswordHasher(), successfulTokenGenerator(), generateCode, unexpectedCodeSender(t))
 
-	_, err := service.StartPasswordRegistration(context.Background(), "user@example.com", "senha-segura", "Ana Souza")
+	_, err := service.StartPasswordRegistration(context.Background(), "user@example.com", "Senha-segura1", "Ana Souza")
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("StartPasswordRegistration() error = %v, want wrapped %v", err, wantErr)
 	}
@@ -258,7 +261,7 @@ func TestUserServiceStartPasswordRegistrationPropagatesCreateAttemptError(t *tes
 	}
 	service := newUserService(repository, successfulPasswordHasher(), successfulTokenGenerator(), successfulVerificationCodeGenerator(), unexpectedCodeSender(t))
 
-	_, err := service.StartPasswordRegistration(context.Background(), "user@example.com", "senha-segura", "Ana Souza")
+	_, err := service.StartPasswordRegistration(context.Background(), "user@example.com", "Senha-segura1", "Ana Souza")
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("StartPasswordRegistration() error = %v, want wrapped %v", err, wantErr)
 	}
@@ -277,7 +280,7 @@ func TestUserServiceStartPasswordRegistrationPropagatesCodeSenderError(t *testin
 	codeSender := passwordRegistrationCodeSenderStub{sendFunc: func(context.Context, string, string) error { return wantErr }}
 	service := newUserService(repository, successfulPasswordHasher(), successfulTokenGenerator(), successfulVerificationCodeGenerator(), codeSender)
 
-	_, err := service.StartPasswordRegistration(context.Background(), "user@example.com", "senha-segura", "Ana Souza")
+	_, err := service.StartPasswordRegistration(context.Background(), "user@example.com", "Senha-segura1", "Ana Souza")
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("StartPasswordRegistration() error = %v, want wrapped %v", err, wantErr)
 	}

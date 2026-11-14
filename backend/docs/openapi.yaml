@@ -368,6 +368,7 @@ paths:
                   type: string
                   writeOnly: true
                   minLength: 8
+                  description: Senha da conta: 8+ caracteres, até 1024 bytes, com ao menos uma letra maiúscula, um número e um caractere especial (nem letra, nem número, nem espaço).
                 new_password_confirmation:
                   type: string
                   writeOnly: true
@@ -794,7 +795,8 @@ components:
           type: string
           writeOnly: true
           minLength: 8
-          example: senha-forte
+          description: Senha da conta: 8+ caracteres, até 1024 bytes, com ao menos uma letra maiúscula, um número e um caractere especial (nem letra, nem número, nem espaço).
+          example: Senha-forte1
         full_name:
           type: string
           minLength: 1
@@ -823,6 +825,7 @@ components:
           type: string
           writeOnly: true
           minLength: 8
+          description: Senha da conta: 8+ caracteres, até 1024 bytes, com ao menos uma letra maiúscula, um número e um caractere especial (nem letra, nem número, nem espaço).
         password_confirmation:
           type: string
           writeOnly: true

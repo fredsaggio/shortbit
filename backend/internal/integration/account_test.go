@@ -23,7 +23,7 @@ type accountBody struct {
 func TestAccountIntegration(t *testing.T) {
 	const (
 		email    = "account-integration@example.com"
-		password = "senha12345"
+		password = "Senha12345!"
 	)
 
 	pool := dbtest.Open(t)
@@ -82,7 +82,7 @@ func TestAccountIntegration(t *testing.T) {
 
 	t.Run("rejects a wrong current password without changing anything", func(t *testing.T) {
 		response := performJSONRequestWithCookie(t, router, http.MethodPost, "/me/password",
-			`{"current_password":"errada-123","new_password":"nova-senha-1","new_password_confirmation":"nova-senha-1"}`, laptop)
+			`{"current_password":"errada-123","new_password":"Nova-senha-1","new_password_confirmation":"Nova-senha-1"}`, laptop)
 		defer response.Body.Close()
 		if response.StatusCode != http.StatusBadRequest || readResponseBody(t, response) != "senha atual incorreta\n" {
 			t.Fatalf("status = %d, want 400 senha atual incorreta", response.StatusCode)
@@ -92,7 +92,7 @@ func TestAccountIntegration(t *testing.T) {
 
 	t.Run("changes the password, signs out other devices and renews this session", func(t *testing.T) {
 		response := performJSONRequestWithCookie(t, router, http.MethodPost, "/me/password",
-			`{"current_password":"senha12345","new_password":"nova-senha-1","new_password_confirmation":"nova-senha-1"}`, laptop)
+			`{"current_password":"Senha12345!","new_password":"Nova-senha-1","new_password_confirmation":"Nova-senha-1"}`, laptop)
 		defer response.Body.Close()
 		if response.StatusCode != http.StatusNoContent {
 			t.Fatalf("status = %d, want 204; body = %q", response.StatusCode, readResponseBody(t, response))
@@ -111,9 +111,9 @@ func TestAccountIntegration(t *testing.T) {
 		}
 
 		readAccount(renewed)
-		login("nova-senha-1")
+		login("Nova-senha-1")
 
-		old := performJSONRequest(t, router, http.MethodPost, "/sessions", `{"email":"`+email+`","password":"senha12345"}`)
+		old := performJSONRequest(t, router, http.MethodPost, "/sessions", `{"email":"`+email+`","password":"Senha12345!"}`)
 		old.Body.Close()
 		if old.StatusCode != http.StatusUnauthorized {
 			t.Errorf("login with the old password status = %d, want 401", old.StatusCode)

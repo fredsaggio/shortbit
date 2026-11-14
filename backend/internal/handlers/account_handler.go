@@ -132,10 +132,8 @@ func (h *AccountHandler) ChangePassword(w http.ResponseWriter, r *http.Request) 
 		switch {
 		case errors.Is(err, services.ErrPasswordConfirmationMismatch):
 			http.Error(w, "as senhas não coincidem", http.StatusBadRequest)
-		case errors.Is(err, services.ErrPasswordTooShort):
-			http.Error(w, "senha muito curta", http.StatusBadRequest)
-		case errors.Is(err, services.ErrPasswordTooLong):
-			http.Error(w, "senha muito longa", http.StatusBadRequest)
+		case isPasswordPolicyError(err):
+			http.Error(w, passwordPolicyMessage(err), http.StatusBadRequest)
 		case errors.Is(err, services.ErrIncorrectCurrentPassword):
 			http.Error(w, "senha atual incorreta", http.StatusBadRequest)
 		case errors.Is(err, services.ErrSamePassword):

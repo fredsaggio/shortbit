@@ -221,7 +221,7 @@ flowchart TD
 - **Todas as sessões são encerradas** e este navegador recebe um **ID de sessão novo** com o mesmo prazo do anterior; quem estiver logado em outro aparelho precisa entrar de novo.
 - A nova senha não pode ser igual à atual.
 
-O mínimo continua em 8 caracteres, igual ao cadastro e à recuperação. O OWASP considera fracas senhas com menos de 15 caracteres quando não há MFA; aumentar o mínimo é uma decisão de produto ainda em aberto.
+A nova senha segue a mesma regra do cadastro e da recuperação: pelo menos 8 caracteres, com ao menos uma letra maiúscula, um número e um caractere especial. A composição é uma decisão de produto contra a recomendação do NIST SP 800-63B, registrada no [ADR 0004](decisions/0004-account-password-composition.md).
 
 ## Logout ✅
 

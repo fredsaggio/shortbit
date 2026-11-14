@@ -113,7 +113,7 @@ func TestAccountHandlerChangePasswordRenewsSessionCookie(t *testing.T) {
 		RememberMe: true,
 	}}
 	handler := handlers.NewAccountHandler(service, allowAllRegistrationRateLimiterStub{}, true)
-	request := authenticatedRequest(http.MethodPost, "/me/password", `{"current_password":"senha-atual","new_password":"senha-nova-123","new_password_confirmation":"senha-nova-123"}`)
+	request := authenticatedRequest(http.MethodPost, "/me/password", `{"current_password":"Senha-atual1","new_password":"Senha-nova-123","new_password_confirmation":"Senha-nova-123"}`)
 	request.AddCookie(&http.Cookie{Name: "user_session", Value: "current-session-token"})
 	response := httptest.NewRecorder()
 
@@ -122,7 +122,7 @@ func TestAccountHandlerChangePasswordRenewsSessionCookie(t *testing.T) {
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, want 204; body = %q", response.Code, response.Body.String())
 	}
-	wantInput := []string{"current-session-token", "senha-atual", "senha-nova-123", "senha-nova-123"}
+	wantInput := []string{"current-session-token", "Senha-atual1", "Senha-nova-123", "Senha-nova-123"}
 	for i := range wantInput {
 		if service.gotChangeInput[i] != wantInput[i] {
 			t.Errorf("service input = %v, want %v", service.gotChangeInput, wantInput)
@@ -144,6 +144,7 @@ func TestAccountHandlerChangePasswordMapsErrors(t *testing.T) {
 	}{
 		{name: "mismatch", err: services.ErrPasswordConfirmationMismatch, wantStatus: http.StatusBadRequest, wantBody: "as senhas não coincidem\n"},
 		{name: "too short", err: services.ErrPasswordTooShort, wantStatus: http.StatusBadRequest, wantBody: "senha muito curta\n"},
+		{name: "no uppercase", err: services.ErrPasswordMissingUppercase, wantStatus: http.StatusBadRequest, wantBody: "a senha precisa ter pelo menos uma letra maiúscula\n"},
 		{name: "wrong current", err: services.ErrIncorrectCurrentPassword, wantStatus: http.StatusBadRequest, wantBody: "senha atual incorreta\n"},
 		{name: "same password", err: services.ErrSamePassword, wantStatus: http.StatusBadRequest, wantBody: "a nova senha deve ser diferente da atual\n"},
 		{name: "Google-only", err: services.ErrAccountHasNoPassword, wantStatus: http.StatusConflict, wantBody: "esta conta entra com Google e não tem senha\n"},

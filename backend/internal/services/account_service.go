@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"time"
-	"unicode/utf8"
 	"uuid"
 
 	"github.com/fredsaggio/url-shortener/internal/models"
@@ -87,11 +86,8 @@ func (s *AccountService) ChangePassword(ctx context.Context, userID uuid.UUID, s
 	if newPassword != confirmation {
 		return PasswordChangeResult{}, ErrPasswordConfirmationMismatch
 	}
-	if utf8.RuneCountInString(newPassword) < minPasswordCharacters {
-		return PasswordChangeResult{}, ErrPasswordTooShort
-	}
-	if len(newPassword) > maxPasswordBytes {
-		return PasswordChangeResult{}, ErrPasswordTooLong
+	if err := validateAccountPassword(newPassword); err != nil {
+		return PasswordChangeResult{}, err
 	}
 	if currentPassword == "" || len(currentPassword) > maxPasswordBytes {
 		return PasswordChangeResult{}, ErrIncorrectCurrentPassword

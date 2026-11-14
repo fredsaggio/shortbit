@@ -113,10 +113,8 @@ func (h *PasswordResetHandler) Confirm(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "código expirado; solicite um novo código", http.StatusBadRequest)
 		case errors.Is(err, services.ErrPasswordResetCodeInvalid):
 			http.Error(w, "código de recuperação inválido", http.StatusBadRequest)
-		case errors.Is(err, services.ErrPasswordTooShort):
-			http.Error(w, "senha muito curta", http.StatusBadRequest)
-		case errors.Is(err, services.ErrPasswordTooLong):
-			http.Error(w, "senha muito longa", http.StatusBadRequest)
+		case isPasswordPolicyError(err):
+			http.Error(w, passwordPolicyMessage(err), http.StatusBadRequest)
 		default:
 			slog.ErrorContext(r.Context(), "confirm password reset failed", "error", err)
 			http.Error(w, "erro interno do servidor", http.StatusInternalServerError)

@@ -225,7 +225,7 @@ func validPasswordResetAttempt(token, code string) models.PasswordResetAttempt {
 }
 
 func TestPasswordResetServiceConfirmChangesPasswordAfterMatchingCode(t *testing.T) {
-	const token, code, password = "reset-token", "00123456", "nova-senha-segura"
+	const token, code, password = "reset-token", "00123456", "Nova-senha-segura1"
 	attempt := validPasswordResetAttempt(token, code)
 	completed := false
 	repo := passwordResetRepositoryStub{
@@ -272,7 +272,7 @@ func TestPasswordResetServiceConfirmIgnoresNoticeFailureAfterCommit(t *testing.T
 	}
 	sender := passwordResetCodeSenderStub{noticeFunc: func(context.Context, string) error { return errors.New("provider unavailable") }}
 	service := newPasswordResetService(repo, sender, nil, nil)
-	if err := service.Confirm(t.Context(), token, code, "nova-senha-segura"); err != nil {
+	if err := service.Confirm(t.Context(), token, code, "Nova-senha-segura1"); err != nil {
 		t.Fatalf("Confirm() error = %v, want success after committed password change", err)
 	}
 }
@@ -303,7 +303,7 @@ func TestPasswordResetServiceConfirmRecordsWrongCode(t *testing.T) {
 				},
 			}
 			service := newPasswordResetService(repo, passwordResetCodeSenderStub{}, nil, nil)
-			if err := service.Confirm(t.Context(), token, "87654321", "nova-senha-segura"); !errors.Is(err, tt.want) {
+			if err := service.Confirm(t.Context(), token, "87654321", "Nova-senha-segura1"); !errors.Is(err, tt.want) {
 				t.Fatalf("Confirm() error = %v, want %v", err, tt.want)
 			}
 		})
@@ -331,7 +331,7 @@ func TestPasswordResetServiceConfirmRejectsUnavailableAndExpiredAttempts(t *test
 			tt.change(&attempt)
 			repo := passwordResetRepositoryStub{findFunc: func(context.Context, []byte) (models.PasswordResetAttempt, error) { return attempt, nil }}
 			service := newPasswordResetService(repo, passwordResetCodeSenderStub{}, nil, nil)
-			if err := service.Confirm(t.Context(), token, code, "nova-senha-segura"); !errors.Is(err, tt.want) {
+			if err := service.Confirm(t.Context(), token, code, "Nova-senha-segura1"); !errors.Is(err, tt.want) {
 				t.Fatalf("Confirm() error = %v, want %v", err, tt.want)
 			}
 		})
@@ -344,8 +344,9 @@ func TestPasswordResetServiceConfirmRejectsMissingTokenAndInvalidPassword(t *tes
 		token, password string
 		want            error
 	}{
-		{token: "", password: "nova-senha-segura", want: services.ErrPasswordResetAttemptUnavailable},
+		{token: "", password: "Nova-senha-segura1", want: services.ErrPasswordResetAttemptUnavailable},
 		{token: "reset-token", password: "curta", want: services.ErrPasswordTooShort},
+		{token: "reset-token", password: "nova-senha-segura1", want: services.ErrPasswordMissingUppercase},
 		{token: "reset-token", password: string(bytes.Repeat([]byte{'x'}, 1025)), want: services.ErrPasswordTooLong},
 	} {
 		if err := service.Confirm(t.Context(), tt.token, "12345678", tt.password); !errors.Is(err, tt.want) {
@@ -359,7 +360,7 @@ func TestPasswordResetServiceConfirmMapsMissingAttempt(t *testing.T) {
 		return models.PasswordResetAttempt{}, repositories.ErrPasswordResetAttemptNotFound
 	}}
 	service := newPasswordResetService(repo, passwordResetCodeSenderStub{}, nil, nil)
-	if err := service.Confirm(t.Context(), "missing-token", "12345678", "nova-senha-segura"); !errors.Is(err, services.ErrPasswordResetAttemptUnavailable) {
+	if err := service.Confirm(t.Context(), "missing-token", "12345678", "Nova-senha-segura1"); !errors.Is(err, services.ErrPasswordResetAttemptUnavailable) {
 		t.Fatalf("Confirm() error = %v, want unavailable", err)
 	}
 }

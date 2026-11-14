@@ -98,15 +98,15 @@ func TestAccountServiceChangePassword(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repo := &accountRepositoryStub{passwordHash: "hash:senha-atual"}
+			repo := &accountRepositoryStub{passwordHash: "hash:Senha-atual1"}
 			session := currentSession(tt.ttl)
 
-			result, err := newAccountService(repo, session).ChangePassword(t.Context(), accountUserID, "current-session-token", "senha-atual", "senha-nova-123", "senha-nova-123")
+			result, err := newAccountService(repo, session).ChangePassword(t.Context(), accountUserID, "current-session-token", "Senha-atual1", "Senha-nova-123", "Senha-nova-123")
 			if err != nil {
 				t.Fatalf("ChangePassword() error = %v", err)
 			}
 
-			if repo.replaced == nil || repo.replaced.hash != "hash:senha-nova-123" || string(repo.replaced.tokenHash) != "new-session-hash" {
+			if repo.replaced == nil || repo.replaced.hash != "hash:Senha-nova-123" || string(repo.replaced.tokenHash) != "new-session-hash" {
 				t.Fatalf("ReplacePasswordAndSessions() = %+v, want new hash and session", repo.replaced)
 			}
 			if !repo.replaced.expiresAt.Equal(session.ExpiresAt) || !result.Session.ExpiresAt.Equal(session.ExpiresAt) {
@@ -130,19 +130,20 @@ func TestAccountServiceChangePasswordRejects(t *testing.T) {
 		token        string
 		wantErr      error
 	}{
-		{name: "confirmation mismatch", current: "senha-atual", newPassword: "senha-nova-123", confirmation: "outra-senha-1", wantErr: services.ErrPasswordConfirmationMismatch},
-		{name: "short new password", current: "senha-atual", newPassword: "curta", confirmation: "curta", wantErr: services.ErrPasswordTooShort},
-		{name: "wrong current password", current: "errada-123", newPassword: "senha-nova-123", confirmation: "senha-nova-123", wantErr: services.ErrIncorrectCurrentPassword},
-		{name: "empty current password", current: "", newPassword: "senha-nova-123", confirmation: "senha-nova-123", wantErr: services.ErrIncorrectCurrentPassword},
-		{name: "same password", current: "senha-atual", newPassword: "senha-atual", confirmation: "senha-atual", wantErr: services.ErrSamePassword},
-		{name: "Google-only account", current: "qualquer-1", newPassword: "senha-nova-123", confirmation: "senha-nova-123", hashErr: repositories.ErrPasswordCredentialNotFound, wantErr: services.ErrAccountHasNoPassword},
-		{name: "unknown session", current: "senha-atual", newPassword: "senha-nova-123", confirmation: "senha-nova-123", token: "other-token", wantErr: services.ErrUnauthenticated},
-		{name: "session of another user", current: "senha-atual", newPassword: "senha-nova-123", confirmation: "senha-nova-123", sessionUser: uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c319"), wantErr: services.ErrUnauthenticated},
+		{name: "confirmation mismatch", current: "Senha-atual1", newPassword: "Senha-nova-123", confirmation: "Outra-senha-1", wantErr: services.ErrPasswordConfirmationMismatch},
+		{name: "short new password", current: "Senha-atual1", newPassword: "curta", confirmation: "curta", wantErr: services.ErrPasswordTooShort},
+		{name: "new password without special character", current: "Senha-atual1", newPassword: "SenhaNova123", confirmation: "SenhaNova123", wantErr: services.ErrPasswordMissingSpecial},
+		{name: "wrong current password", current: "errada-123", newPassword: "Senha-nova-123", confirmation: "Senha-nova-123", wantErr: services.ErrIncorrectCurrentPassword},
+		{name: "empty current password", current: "", newPassword: "Senha-nova-123", confirmation: "Senha-nova-123", wantErr: services.ErrIncorrectCurrentPassword},
+		{name: "same password", current: "Senha-atual1", newPassword: "Senha-atual1", confirmation: "Senha-atual1", wantErr: services.ErrSamePassword},
+		{name: "Google-only account", current: "qualquer-1", newPassword: "Senha-nova-123", confirmation: "Senha-nova-123", hashErr: repositories.ErrPasswordCredentialNotFound, wantErr: services.ErrAccountHasNoPassword},
+		{name: "unknown session", current: "Senha-atual1", newPassword: "Senha-nova-123", confirmation: "Senha-nova-123", token: "other-token", wantErr: services.ErrUnauthenticated},
+		{name: "session of another user", current: "Senha-atual1", newPassword: "Senha-nova-123", confirmation: "Senha-nova-123", sessionUser: uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c319"), wantErr: services.ErrUnauthenticated},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repo := &accountRepositoryStub{passwordHash: "hash:senha-atual", hashErr: tt.hashErr}
+			repo := &accountRepositoryStub{passwordHash: "hash:Senha-atual1", hashErr: tt.hashErr}
 			session := currentSession(accountSessionTTL)
 			if tt.sessionUser != (uuid.UUID{}) {
 				session.UserID = tt.sessionUser
