@@ -35,7 +35,7 @@ Analytics além do contador total ficam fora do MVP.
 
 | Camada | Tecnologias |
 | --- | --- |
-| Backend | Go 1.27, `net/http` da biblioteca padrão, pgx |
+| Backend | Go 1.27.4, `net/http` da biblioteca padrão, pgx |
 | Banco | PostgreSQL 18, migrations com Goose |
 | Cache | Redis 8 (go-redis): destinos quentes e contador de frequência |
 | Mensageria | RabbitMQ 4 (amqp091-go) |
@@ -89,7 +89,7 @@ Analytics além do contador total ficam fora do MVP.
 
 ## Como rodar
 
-**Pré-requisitos:** Go 1.27, Docker com o Docker Compose, Goose, uma conta Resend e um cliente OAuth Web no Google Cloud.
+**Pré-requisitos:** Go 1.27.4 (o Go baixa essa versão sozinho com `GOTOOLCHAIN=auto`), Docker com o Docker Compose, Goose, uma conta Resend e um cliente OAuth Web no Google Cloud.
 
 Configure as variáveis de ambiente conforme [Desenvolvimento local](backend/docs/development.md) e depois:
 

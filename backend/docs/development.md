@@ -5,7 +5,7 @@
 
 ## Requisitos
 
-- Go 1.27;
+- Go 1.27.4 (com `GOTOOLCHAIN=auto`, o padrão, um Go mais antigo baixa essa versão sozinho);
 - Docker com Docker Compose;
 - Goose;
 - conta Resend configurada;
