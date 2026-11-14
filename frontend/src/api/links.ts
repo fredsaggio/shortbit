@@ -1,7 +1,11 @@
 import { apiRequest } from './client.ts'
 import type { CreatedLink, NewLink, ShortLink, ShortLinkPage } from './types.ts'
 
-const shortLinkBaseURL = (import.meta.env.VITE_SHORT_LINK_BASE_URL || 'http://localhost:8080').replace(/\/+$/, '')
+// In production the API serves this app, so short links share the page's
+// origin unless the build says otherwise.
+const shortLinkBaseURL = (
+  import.meta.env.VITE_SHORT_LINK_BASE_URL || (import.meta.env.PROD ? window.location.origin : 'http://localhost:8080')
+).replace(/\/+$/, '')
 
 // The list and detail endpoints return only the code; the API builds short
 // URLs from PUBLIC_BASE_URL, which VITE_SHORT_LINK_BASE_URL must match.

@@ -23,9 +23,10 @@ Não coloque co-author em nenhum commit criado por você, em nenhuma hipótese.
 - `frontend/`: interface em React + TypeScript + Vite. Detalhes, rotas e o porquê do proxy sem prefixo em `frontend/README.md`. As rotas do front não podem colidir com os caminhos da API repassados pelo proxy (`/registrations`, `/sessions`, `/me`, `/auth`, `/password-resets`, `/urls`, `/health`, `/docs`).
 - `backend/`: módulo Go (`go.mod` próprio). Comandos Go rodam com `go -C backend ...` ou pelos alvos do `Makefile`.
 - `backend/cmd/api/`: ponto de entrada da API. `backend/cmd/worker/`: worker que consome a fila de cliques (ADR 0002).
-- `backend/internal/`: `app` (composition root), `server` (rotas e health), `handlers`, `middleware`, `services` (regras de negócio), `repositories` (PostgreSQL), `models`, `config`, `db`, `cache` (Redis: frequência e destinos), `messaging` (RabbitMQ), `jobs`, `shortcodes` (Sqids), `argon2`, `googleoidc`, `email` (Resend), `sessiontoken`, `verificationcode`, `ctxval`, `integration` (testes HTTP + PostgreSQL).
+- `backend/internal/`: `app` (composition root e worker de cliques), `server` (rotas e health), `frontend` (serve o build do app em produção), `handlers`, `middleware`, `services` (regras de negócio), `repositories` (PostgreSQL), `models`, `config`, `db`, `cache` (Redis: frequência e destinos), `messaging` (RabbitMQ), `jobs`, `shortcodes` (Sqids), `argon2`, `googleoidc`, `email` (Resend), `sessiontoken`, `verificationcode`, `ctxval`, `integration` (testes HTTP + PostgreSQL).
 - `backend/migrations/`: migrations Goose, embarcadas no binário de testes.
-- `backend/docs/`: `authentication.md`, `short-links.md`, `api.md`, `openapi.yaml`, `data-model.md`, `glossary.md`, `development.md` e `decisions/` (ADRs). Leia só quando mexer no assunto.
+- `backend/docs/`: `authentication.md`, `short-links.md`, `api.md`, `openapi.yaml`, `data-model.md`, `glossary.md`, `development.md`, `deployment.md` e `decisions/` (ADRs). Leia só quando mexer no assunto.
+- Deploy: `Dockerfile` e `render.yaml` na raiz. Uma imagem só: a API serve o frontend e roda o worker (ADR 0003). Passo a passo em `backend/docs/deployment.md`.
 - `IMPLEMENTATION_PLAN.md` (ordem das fases e progresso) e `PROJECT_CONTEXT.md` (produto e regras gerais) ficam só na máquina do usuário, ignorados pelo Git.
 
 ## Comandos (rodar na raiz)

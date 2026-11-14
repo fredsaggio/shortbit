@@ -1,0 +1,51 @@
+# Render Blueprint: one free web service runs the API, the web app and the
+# click worker. Postgres, Redis and RabbitMQ come from Neon, Upstash and
+# CloudAMQP. Step by step in backend/docs/deployment.md.
+services:
+  - type: web
+    name: shortbit
+    runtime: docker
+    plan: free
+    # Same AWS region as Neon, Upstash and CloudAMQP (us-east-1). Render does
+    # not allow changing it after creation.
+    region: virginia
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    # Liveness only: /health/ready pings Postgres, and frequent checks would
+    # keep the free Neon database from ever suspending.
+    healthCheckPath: /health/live
+    autoDeployTrigger: commit
+    envVars:
+      - key: PORT
+        value: "8080"
+      - key: HTTP_ADDR
+        value: ":8080"
+      - key: RUN_MIGRATIONS
+        value: "true"
+      - key: RUN_CLICK_WORKER
+        value: "true"
+      - key: CLIENT_IP_HEADER
+        value: True-Client-IP
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: PUBLIC_BASE_URL
+        value: https://shortbit.com.br
+      - key: FRONTEND_URL
+        value: https://shortbit.com.br
+      - key: GOOGLE_REDIRECT_URL
+        value: https://shortbit.com.br/auth/google/callback
+      - key: EMAIL_FROM
+        value: shortbit <nao-responda@shortbit.com.br>
+      # Secrets: Render asks for them when the Blueprint is created.
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: RABBITMQ_URL
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false

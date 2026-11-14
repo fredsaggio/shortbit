@@ -1,0 +1,12 @@
+# Keep secrets and local artifacts out of the build context.
+.env
+.env.*
+**/.env
+**/.env.*
+!**/.env.example
+.git
+**/node_modules
+frontend/dist
+**/*.log
+IMPLEMENTATION_PLAN.md
+PROJECT_CONTEXT.md

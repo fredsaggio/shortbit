@@ -40,7 +40,7 @@ Opcionais; veja `.env.example`.
 | Variável | Padrão | Uso |
 | --- | --- | --- |
 | `VITE_API_PROXY_TARGET` | `http://localhost:8080` | Destino do proxy do Vite em desenvolvimento |
-| `VITE_SHORT_LINK_BASE_URL` | `http://localhost:8080` | Base dos links curtos mostrados no painel; deve ser igual ao `PUBLIC_BASE_URL` da API |
+| `VITE_SHORT_LINK_BASE_URL` | `http://localhost:8080` em dev; a origem da página no build de produção | Base dos links curtos mostrados no painel; deve ser igual ao `PUBLIC_BASE_URL` da API |
 
 ## Qualidade
 
@@ -82,3 +82,7 @@ Copiada da do Bitly: cabeçalho, hero e rodapé azul-marinho, páginas em creme,
 Contraste (WCAG 2.2 AA): branco sobre `#0058DD` dá 6,1:1; o texto secundário `#62615F` sobre o creme dá 5,6:1; laranja sobre o azul-marinho dá 5,3:1. O laranja `#F36600` não leva texto branco nem vira texto sobre fundo claro (3,0:1); nesses casos entra o `brand-700`.
 
 Interações: transições de 150 a 300 ms, desligadas com `prefers-reduced-motion`; foco visível em laranja; alvos de toque de 44 px; carregamento com skeleton; avisos de sucesso em toast (sonner).
+
+## Produção
+
+Em produção não há servidor só para o frontend: a API serve o build (`FRONTEND_DIST_DIR`), então app, API e links curtos ficam na mesma origem. O `Dockerfile` da raiz faz o build. Veja `backend/docs/deployment.md`.

@@ -50,10 +50,25 @@ URL_CACHE_TTL=5m
 RABBITMQ_URL=amqp://shortbit:...@localhost:5672/
 RABBITMQ_PUBLISH_TIMEOUT=500ms
 
-# Somente o worker
+# Worker (cmd/worker, ou a API com RUN_CLICK_WORKER=true)
 RABBITMQ_PREFETCH=10
 PROCESSED_CLICK_EVENT_RETENTION=168h
+
+# Opcionais, usadas em produção (veja deployment.md)
+RUN_MIGRATIONS=false
+RUN_CLICK_WORKER=false
+FRONTEND_DIST_DIR=
+REDIS_URL=
+CLIENT_IP_HEADER=
 ```
+
+As variáveis do último bloco são opcionais e ficam desligadas no desenvolvimento ([deploy](deployment.md), [ADR 0003](decisions/0003-free-single-service-deploy.md)):
+
+- `RUN_MIGRATIONS=true` aplica as migrations pendentes ao subir a API, com trava consultiva do Postgres. Precisa de conexão direta com o banco, sem pooler.
+- `RUN_CLICK_WORKER=true` roda o worker de cliques dentro da API, para hospedagens sem serviço de worker. Usa `RABBITMQ_PREFETCH` e `PROCESSED_CLICK_EVENT_RETENTION`. Não rode junto com o `make worker` sem necessidade: os dois consumiriam a mesma fila, o que funciona, mas não ajuda.
+- `FRONTEND_DIST_DIR` aponta para o build do frontend (`frontend/dist`). A API passa a servir o app nas rotas dele, com CSP. Localmente, o Vite continua sendo o caminho.
+- `REDIS_URL` (`redis://` ou `rediss://`, com senha) substitui `REDIS_ADDR` em Redis hospedado.
+- `CLIENT_IP_HEADER` faz o rate limit ler o IP do cliente de um cabeçalho que o proxy sobrescreve (`True-Client-IP` no Render). Sem proxy, deixe vazio: o cliente poderia mandar o cabeçalho e escolher o próprio limite. `X-Forwarded-For` é recusado.
 
 `FRONTEND_URL` é opcional e assume `http://localhost:5173`, onde o Vite roda o frontend. É o destino do redirect do login com Google e precisa ser só a origem (esquema, host e porta), sem caminho nem query. Em produção, use a origem pública do frontend.
 
