@@ -95,9 +95,6 @@ function ShortenCard() {
             <CopyButton text={created.short_url} />
           </div>
         )}
-        <p className="mt-5 text-sm text-muted-foreground">
-          {state.status === 'authenticated' ? 'O link vai direto para o seu painel.' : 'Você cria a conta em menos de um minuto, sem cartão.'}
-        </p>
       </div>
     </div>
   )
@@ -239,7 +236,6 @@ export function HomePage() {
         <Reveal className="mx-auto max-w-3xl text-center">
           <p className="text-sm font-bold tracking-widest text-brand-700 uppercase">Por que shortbit</p>
           <h2 className="mt-3 text-[clamp(1.875rem,4vw,3rem)] leading-tight font-extrabold">Tudo o que um link curto precisa</h2>
-          <p className="mt-4 text-lg text-muted-foreground">Crie a conta e comece a encurtar em menos de um minuto.</p>
         </Reveal>
 
         <div className="mt-12 grid gap-4 md:grid-cols-3">
