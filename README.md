@@ -2,7 +2,7 @@
 
 ShortBit is a URL shortener for public or password-protected links. It tracks clicks, provides analytics, and supports password or Google sign-in.
 
-> Projeto em desenvolvimento, construído em Go e PostgreSQL para estudo de backend, segurança, concorrência e evolução de uma API até produção.
+> Projeto em desenvolvimento, construído em Go e PostgreSQL, com frontend em React, para estudo de backend, segurança, concorrência e evolução de uma API até produção.
 
 | Parte | O que faz |
 | --- | --- |
@@ -12,6 +12,7 @@ ShortBit is a URL shortener for public or password-protected links. It tracks cl
 | **Redirect** | Redirect público e privado; o clique vai para o RabbitMQ e um worker incrementa o contador, com fallback síncrono no PostgreSQL; links privados exigem senha e criam uma sessão temporária por link |
 | **Cache** | Links públicos com 20 acessos em 60 segundos têm o destino guardado no Redis por 5 minutos; sem Redis, a leitura volta ao PostgreSQL |
 | **Proteções** | Rate limiting, limite de tamanho do corpo e limpeza de cadastros pendentes |
+| **Frontend** | Landing page, cadastro, login (senha ou Google), recuperação de senha, painel para criar e listar links e detalhe com cliques ([`frontend/`](frontend/README.md)) |
 
 ---
 
@@ -36,6 +37,7 @@ Analytics além do contador total ficam fora do MVP.
 | Camada | Tecnologias |
 | --- | --- |
 | Backend | Go 1.27.4, `net/http` da biblioteca padrão, pgx |
+| Frontend | React 19, TypeScript, Vite, React Router, Vitest + Testing Library, oxlint |
 | Banco | PostgreSQL 18, migrations com Goose |
 | Cache | Redis 8 (go-redis): destinos quentes e contador de frequência |
 | Mensageria | RabbitMQ 4 (amqp091-go) |
@@ -55,6 +57,7 @@ Analytics além do contador total ficam fora do MVP.
 ├── Makefile            # Todos os comandos, rodados a partir da raiz
 ├── AGENTS.md           # Regras do projeto (segurança, privacidade, comunicação)
 ├── docker-compose.yml  # PostgreSQL, Redis e RabbitMQ
+├── frontend/           # Interface web em React + Vite (ver frontend/README.md)
 └── backend/            # API e worker em Go (módulo Go próprio)
     ├── go.mod
     ├── cmd/
@@ -89,7 +92,7 @@ Analytics além do contador total ficam fora do MVP.
 
 ## Como rodar
 
-**Pré-requisitos:** Go 1.27.4 (o Go baixa essa versão sozinho com `GOTOOLCHAIN=auto`), Docker com o Docker Compose, Goose, uma conta Resend e um cliente OAuth Web no Google Cloud.
+**Pré-requisitos:** Go 1.27.4 (o Go baixa essa versão sozinho com `GOTOOLCHAIN=auto`), Node.js 24 com npm, Docker com o Docker Compose, Goose, uma conta Resend e um cliente OAuth Web no Google Cloud.
 
 Configure as variáveis de ambiente conforme [Desenvolvimento local](backend/docs/development.md) e depois:
 
@@ -99,12 +102,15 @@ docker compose up -d --wait redis-shortener rabbitmq-shortener
 make migration/up                            # aplica as migrations
 make run                                     # sobe a API
 make worker                                  # sobe o worker de cliques (outro terminal)
+make front/install                           # dependências do frontend (uma vez)
+make front/dev                               # sobe o frontend (outro terminal)
 ```
 
 O `make infra/up` sobe só o PostgreSQL. A API funciona sem Redis e sem RabbitMQ: registra um aviso e continua sem cache e contando cliques de forma síncrona.
 
 | Serviço | Endereço |
 | --- | --- |
+| Frontend | http://localhost:5173 |
 | API | http://localhost:8080 |
 | Documentação da API (ReDoc) | http://localhost:8080/docs |
 | OpenAPI bruto | http://localhost:8080/docs/openapi.yaml |
@@ -121,11 +127,14 @@ O `make infra/up` sobe só o PostgreSQL. A API funciona sem Redis e sem RabbitMQ
 
 | Comando | O que faz |
 | --- | --- |
-| `make test` | Testes unitários |
+| `make test` | Testes unitários do backend |
 | `make test/integration` | Testes de integração. Sobem PostgreSQL, Redis e RabbitMQ descartáveis com Testcontainers, então o Docker precisa estar ligado |
-| `go vet ./...` | Análise estática |
-| `go test -race ./...` | Detector de race conditions, para mudanças em concorrência, sessões, cache e rate limiting |
+| `go -C backend vet ./...` | Análise estática |
+| `go -C backend test -race ./...` | Detector de race conditions, para mudanças em concorrência, sessões, cache e rate limiting |
 | `gofmt -w <arquivos>` | Formatação |
+| `make front/test` | Testes do frontend (Vitest + Testing Library) |
+| `make front/lint` | Lint do frontend (oxlint) |
+| `make front/build` | Checagem de tipos e build de produção do frontend |
 
 ---
 

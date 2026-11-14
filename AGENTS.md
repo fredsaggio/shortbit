@@ -20,6 +20,7 @@ Não coloque co-author em nenhum commit criado por você, em nenhuma hipótese.
 
 ## Estrutura do projeto
 - **Um só `Makefile`, na raiz.** Rode tudo com `make` a partir da raiz; `make help` lista todos os alvos.
+- `frontend/`: interface em React + TypeScript + Vite. Detalhes, rotas e o porquê do proxy sem prefixo em `frontend/README.md`. As rotas do front não podem colidir com os caminhos da API repassados pelo proxy (`/registrations`, `/sessions`, `/me`, `/auth`, `/password-resets`, `/urls`, `/health`, `/docs`).
 - `backend/`: módulo Go (`go.mod` próprio). Comandos Go rodam com `go -C backend ...` ou pelos alvos do `Makefile`.
 - `backend/cmd/api/`: ponto de entrada da API. `backend/cmd/worker/`: worker que consome a fila de cliques (ADR 0002).
 - `backend/internal/`: `app` (composition root), `server` (rotas e health), `handlers`, `middleware`, `services` (regras de negócio), `repositories` (PostgreSQL), `models`, `config`, `db`, `cache` (Redis: frequência e destinos), `messaging` (RabbitMQ), `jobs`, `shortcodes` (Sqids), `argon2`, `googleoidc`, `email` (Resend), `sessiontoken`, `verificationcode`, `ctxval`, `integration` (testes HTTP + PostgreSQL).
@@ -33,6 +34,8 @@ Não coloque co-author em nenhum commit criado por você, em nenhuma hipótese.
 | `make infra/up` / `make infra/down` | Sobe só o PostgreSQL / para tudo. Redis e RabbitMQ sobem com `docker compose up -d --wait redis-shortener rabbitmq-shortener` |
 | `make run` | Sobe a API em `:8080` |
 | `make worker` | Sobe o worker de cliques |
+| `make front/install` / `make front/dev` | Instala as dependências do frontend / sobe o Vite em `:5173`, repassando as rotas da API para `:8080` |
+| `make front/test` / `make front/lint` / `make front/build` | Testes (Vitest), lint (oxlint) e checagem de tipos + build do frontend |
 | `make test` | Testes unitários |
 | `make test/integration` | Testes de integração com Testcontainers (build tag `integration`): PostgreSQL, Redis e RabbitMQ, então o Docker precisa estar ligado. Um pacote novo com testes de integração precisa entrar na lista do alvo, no `Makefile` |
 | `make migration/new name=descricao` | Cria migration Goose |
@@ -45,4 +48,5 @@ Não coloque co-author em nenhum commit criado por você, em nenhuma hipótese.
 3. Uma decisão difícil de reverter entra como ADR em `backend/docs/decisions/`, e o índice em `backend/docs/decisions/README.md` é atualizado. Uma mudança de comportamento atualiza o documento responsável em `backend/docs/`.
 4. Mudou um endpoint: atualize `backend/docs/api.md` e `backend/docs/openapi.yaml`. O `backend/docs/redoc.html` lê o YAML no navegador e não precisa ser gerado.
 5. Jobs e workers devem poder rodar de novo depois de um reinício ou de uma reentrega (idempotentes).
-6. **Nunca faça push, merge ou abra PR sem o usuário pedir.**
+6. Mexeu no frontend: `make front/lint`, `make front/test` e `make front/build` passam.
+7. **Nunca faça push, merge ou abra PR sem o usuário pedir.**
