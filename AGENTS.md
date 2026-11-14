@@ -2,7 +2,7 @@
 
 ## Segurança e Privacidade
 - **Arquivos sensíveis / `.env`:** NUNCA leia, visualize, exiba ou inspecione arquivos `.env` ou qualquer arquivo contendo credenciais e segredos sem a permissão explícita do usuário.
-- **Alternativa para checagem:** Para verificar variáveis necessárias ou configurações de ambiente, consulte exclusivamente arquivos de exemplo como `.env.example` ou os esquemas de configuração do código (ex: `internal/config/config.go` e a seção de variáveis em `docs/development.md`).
+- **Alternativa para checagem:** Para verificar variáveis necessárias ou configurações de ambiente, consulte exclusivamente arquivos de exemplo como `.env.example` ou os esquemas de configuração do código (ex: `backend/internal/config/config.go` e a seção de variáveis em `backend/docs/development.md`).
 
 ## Pesquisa e Padrões de Segurança
 - **Consulta a Padrões da Indústria:** Sempre que projetar, refatorar, implementar ou revisar tópicos técnicos de segurança (como autenticação, autorização, hashing de senhas, controle de acesso RBAC, proteção contra injeções, CORS, tokens JWT/OAuth2, gerenciamento de sessões, cabeçalhos HTTP e validação de entradas), consulte e fundamente as decisões em fontes e guias de autoridade reconhecidos, em especial:
@@ -20,10 +20,11 @@ Não coloque co-author em nenhum commit criado por você, em nenhuma hipótese.
 
 ## Estrutura do projeto
 - **Um só `Makefile`, na raiz.** Rode tudo com `make` a partir da raiz; `make help` lista todos os alvos.
-- `cmd/api/`: ponto de entrada da API. `cmd/worker/`: worker que consome a fila de cliques (ADR 0002).
-- `internal/`: `app` (composition root), `server` (rotas e health), `handlers`, `middleware`, `services` (regras de negócio), `repositories` (PostgreSQL), `models`, `config`, `db`, `cache` (Redis: frequência e destinos), `messaging` (RabbitMQ), `jobs`, `shortcodes` (Sqids), `argon2`, `googleoidc`, `email` (Resend), `sessiontoken`, `verificationcode`, `ctxval`, `integration` (testes HTTP + PostgreSQL).
-- `migrations/`: migrations Goose, embarcadas no binário de testes.
-- `docs/`: `authentication.md`, `short-links.md`, `api.md`, `openapi.yaml`, `data-model.md`, `glossary.md`, `development.md` e `decisions/` (ADRs). Leia só quando mexer no assunto.
+- `backend/`: módulo Go (`go.mod` próprio). Comandos Go rodam com `go -C backend ...` ou pelos alvos do `Makefile`.
+- `backend/cmd/api/`: ponto de entrada da API. `backend/cmd/worker/`: worker que consome a fila de cliques (ADR 0002).
+- `backend/internal/`: `app` (composition root), `server` (rotas e health), `handlers`, `middleware`, `services` (regras de negócio), `repositories` (PostgreSQL), `models`, `config`, `db`, `cache` (Redis: frequência e destinos), `messaging` (RabbitMQ), `jobs`, `shortcodes` (Sqids), `argon2`, `googleoidc`, `email` (Resend), `sessiontoken`, `verificationcode`, `ctxval`, `integration` (testes HTTP + PostgreSQL).
+- `backend/migrations/`: migrations Goose, embarcadas no binário de testes.
+- `backend/docs/`: `authentication.md`, `short-links.md`, `api.md`, `openapi.yaml`, `data-model.md`, `glossary.md`, `development.md` e `decisions/` (ADRs). Leia só quando mexer no assunto.
 - `IMPLEMENTATION_PLAN.md` (ordem das fases e progresso) e `PROJECT_CONTEXT.md` (produto e regras gerais) ficam só na máquina do usuário, ignorados pelo Git.
 
 ## Comandos (rodar na raiz)
@@ -39,9 +40,9 @@ Não coloque co-author em nenhum commit criado por você, em nenhuma hipótese.
 | `make migration/validate` | Confere as migrations sem aplicar |
 
 ## Antes de terminar uma mudança
-1. `gofmt -w <arquivos-alterados>`, `go vet ./...` e `make test` passam. Mexeu em concorrência, sessões, cache ou rate limiting: rode também `go test -race ./...`. Mexeu em repository, integração HTTP ou mensageria: rode `make test/integration`.
-2. **Variável de ambiente nova e obrigatória** (`internal/config/config.go`): documente em `docs/development.md` e **avise o usuário para criá-la no `.env`**, porque sem ela a API não sobe.
-3. Uma decisão difícil de reverter entra como ADR em `docs/decisions/`, e o índice em `docs/decisions/README.md` é atualizado. Uma mudança de comportamento atualiza o documento responsável em `docs/`.
-4. Mudou um endpoint: atualize `docs/api.md` e `docs/openapi.yaml`. O `docs/redoc.html` lê o YAML no navegador e não precisa ser gerado.
+1. `gofmt -w <arquivos-alterados>`, `go -C backend vet ./...` e `make test` passam. Mexeu em concorrência, sessões, cache ou rate limiting: rode também `go -C backend test -race ./...`. Mexeu em repository, integração HTTP ou mensageria: rode `make test/integration`.
+2. **Variável de ambiente nova e obrigatória** (`backend/internal/config/config.go`): documente em `backend/docs/development.md` e **avise o usuário para criá-la no `.env`**, porque sem ela a API não sobe.
+3. Uma decisão difícil de reverter entra como ADR em `backend/docs/decisions/`, e o índice em `backend/docs/decisions/README.md` é atualizado. Uma mudança de comportamento atualiza o documento responsável em `backend/docs/`.
+4. Mudou um endpoint: atualize `backend/docs/api.md` e `backend/docs/openapi.yaml`. O `backend/docs/redoc.html` lê o YAML no navegador e não precisa ser gerado.
 5. Jobs e workers devem poder rodar de novo depois de um reinício ou de uma reentrega (idempotentes).
 6. **Nunca faça push, merge ou abra PR sem o usuário pedir.**

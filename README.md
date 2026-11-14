@@ -17,13 +17,13 @@ ShortBit is a URL shortener for public or password-protected links. It tracks cl
 
 ## Estado atual
 
-Tudo da tabela acima está implementado e testado. A Fase 13 tirou a contagem de cliques e a leitura dos links quentes do caminho do redirect ([ADR 0002](docs/decisions/0002-click-events-rabbitmq-redis-cache.md)):
+Tudo da tabela acima está implementado e testado. A Fase 13 tirou a contagem de cliques e a leitura dos links quentes do caminho do redirect ([ADR 0002](backend/docs/decisions/0002-click-events-rabbitmq-redis-cache.md)):
 
 | Passo | Estado |
 | --- | --- |
 | Conexão e configuração do RabbitMQ | ✅ |
 | Publisher com confirmação do broker | ✅ |
-| Worker (`cmd/worker`) com deduplicação | ✅ |
+| Worker (`backend/cmd/worker`) com deduplicação | ✅ |
 | Redirect contando pela fila, com fallback síncrono | ✅ |
 | Cache Redis dos destinos mais acessados | ✅ |
 
@@ -55,32 +55,34 @@ Analytics além do contador total ficam fora do MVP.
 ├── Makefile            # Todos os comandos, rodados a partir da raiz
 ├── AGENTS.md           # Regras do projeto (segurança, privacidade, comunicação)
 ├── docker-compose.yml  # PostgreSQL, Redis e RabbitMQ
-├── cmd/
-│   ├── api/            # Ponto de entrada da API
-│   └── worker/         # Worker que consome a fila de cliques
-├── internal/
-│   ├── app/            # Composition root: monta services, repositories e handlers
-│   ├── server/         # Rotas, health checks e /docs
-│   ├── handlers/       # Handlers HTTP e templates HTML
-│   ├── middleware/     # Autenticação, rate limit, access log, limite de corpo
-│   ├── services/       # Regras de negócio
-│   ├── repositories/   # Acesso ao PostgreSQL
-│   ├── models/         # Tipos de domínio
-│   ├── config/         # Leitura e validação das variáveis de ambiente
-│   ├── db/             # Pool de conexões e utilitários de teste
-│   ├── cache/          # Redis: frequência dos links e cache de destinos
-│   ├── messaging/      # RabbitMQ
-│   ├── jobs/           # Tarefas em segundo plano
-│   ├── shortcodes/     # Gerador Sqids
-│   ├── argon2/         # Hash de senhas
-│   ├── googleoidc/     # Cliente do login Google
-│   ├── email/          # Envio pelo Resend
-│   ├── sessiontoken/   # Tokens opacos de sessão
-│   ├── verificationcode/ # Códigos de confirmação e de recuperação
-│   ├── ctxval/         # Valores no context da requisição
-│   └── integration/    # Testes de integração HTTP + PostgreSQL
-├── migrations/         # Migrations Goose, embarcadas no binário de testes
-└── docs/               # Documentação técnica, OpenAPI e ADRs
+└── backend/            # API e worker em Go (módulo Go próprio)
+    ├── go.mod
+    ├── cmd/
+    │   ├── api/            # Ponto de entrada da API
+    │   └── worker/         # Worker que consome a fila de cliques
+    ├── internal/
+    │   ├── app/            # Composition root: monta services, repositories e handlers
+    │   ├── server/         # Rotas, health checks e /docs
+    │   ├── handlers/       # Handlers HTTP e templates HTML
+    │   ├── middleware/     # Autenticação, rate limit, access log, limite de corpo
+    │   ├── services/       # Regras de negócio
+    │   ├── repositories/   # Acesso ao PostgreSQL
+    │   ├── models/         # Tipos de domínio
+    │   ├── config/         # Leitura e validação das variáveis de ambiente
+    │   ├── db/             # Pool de conexões e utilitários de teste
+    │   ├── cache/          # Redis: frequência dos links e cache de destinos
+    │   ├── messaging/      # RabbitMQ
+    │   ├── jobs/           # Tarefas em segundo plano
+    │   ├── shortcodes/     # Gerador Sqids
+    │   ├── argon2/         # Hash de senhas
+    │   ├── googleoidc/     # Cliente do login Google
+    │   ├── email/          # Envio pelo Resend
+    │   ├── sessiontoken/   # Tokens opacos de sessão
+    │   ├── verificationcode/ # Códigos de confirmação e de recuperação
+    │   ├── ctxval/         # Valores no context da requisição
+    │   └── integration/    # Testes de integração HTTP + PostgreSQL
+    ├── migrations/         # Migrations Goose, embarcadas no binário de testes
+    └── docs/               # Documentação técnica, OpenAPI e ADRs (embarcados em /docs)
 ```
 
 ---
@@ -89,7 +91,7 @@ Analytics além do contador total ficam fora do MVP.
 
 **Pré-requisitos:** Go 1.27, Docker com o Docker Compose, Goose, uma conta Resend e um cliente OAuth Web no Google Cloud.
 
-Configure as variáveis de ambiente conforme [Desenvolvimento local](docs/development.md) e depois:
+Configure as variáveis de ambiente conforme [Desenvolvimento local](backend/docs/development.md) e depois:
 
 ```bash
 make infra/up                                # sobe o PostgreSQL
@@ -129,25 +131,25 @@ O `make infra/up` sobe só o PostgreSQL. A API funciona sem Redis e sem RabbitMQ
 
 ## Banco de dados
 
-- As migrations ficam em `migrations/`: uma para o trigger de `updated_at` e uma por tabela.
+- As migrations ficam em `backend/migrations/`: uma para o trigger de `updated_at` e uma por tabela.
 - `make migration/new name=descricao` cria uma migration nova; `make migration/up` aplica, `make migration/down` desfaz a última e `make migration/status` mostra o estado.
 - `make migration/validate` confere as migrations sem aplicar.
-- O modelo das tabelas está em [`docs/data-model.md`](docs/data-model.md).
+- O modelo das tabelas está em [`backend/docs/data-model.md`](backend/docs/data-model.md).
 
 ---
 
 ## Documentação
 
-O índice completo está em [`docs/README.md`](docs/README.md).
+O índice completo está em [`backend/docs/README.md`](backend/docs/README.md).
 
 | Documento | Conteúdo |
 | --- | --- |
 | [`AGENTS.md`](AGENTS.md) | Regras do projeto |
-| [`docs/authentication.md`](docs/authentication.md) | Cadastro, login, Google, cookies e sessões |
-| [`docs/short-links.md`](docs/short-links.md) | Criação, resolução, links privados e o plano de cache e fila |
-| [`docs/api.md`](docs/api.md) | Endpoints, o que recebem e o que devolvem |
-| [`docs/openapi.yaml`](docs/openapi.yaml) | Contrato OpenAPI, servido em `/docs` |
-| [`docs/data-model.md`](docs/data-model.md) | As tabelas e os relacionamentos |
-| [`docs/glossary.md`](docs/glossary.md) | Códigos, tokens e termos do projeto |
-| [`docs/development.md`](docs/development.md) | Variáveis de ambiente, execução e testes locais |
-| [`docs/decisions/`](docs/decisions/README.md) | Decisões de arquitetura (ADRs) |
+| [`backend/docs/authentication.md`](backend/docs/authentication.md) | Cadastro, login, Google, cookies e sessões |
+| [`backend/docs/short-links.md`](backend/docs/short-links.md) | Criação, resolução, links privados e o plano de cache e fila |
+| [`backend/docs/api.md`](backend/docs/api.md) | Endpoints, o que recebem e o que devolvem |
+| [`backend/docs/openapi.yaml`](backend/docs/openapi.yaml) | Contrato OpenAPI, servido em `/docs` |
+| [`backend/docs/data-model.md`](backend/docs/data-model.md) | As tabelas e os relacionamentos |
+| [`backend/docs/glossary.md`](backend/docs/glossary.md) | Códigos, tokens e termos do projeto |
+| [`backend/docs/development.md`](backend/docs/development.md) | Variáveis de ambiente, execução e testes locais |
+| [`backend/docs/decisions/`](backend/docs/decisions/README.md) | Decisões de arquitetura (ADRs) |

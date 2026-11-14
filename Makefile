@@ -1,7 +1,9 @@
 -include .env
 export
 
-MIGRATIONS_DIR := migrations
+BACKEND_DIR := backend
+FRONTEND_DIR := frontend
+MIGRATIONS_DIR := $(BACKEND_DIR)/migrations
 DATABASE_SERVICE := postgres-shortener
 
 # Exemplo: make help
@@ -20,6 +22,11 @@ help:
 	@echo "  make test/integration"
 	@echo "  make run"
 	@echo "  make worker"
+	@echo "  make front/install"
+	@echo "  make front/dev"
+	@echo "  make front/build"
+	@echo "  make front/lint"
+	@echo "  make front/test"
 
 # Exemplo: make infra/up
 .PHONY: infra/up
@@ -65,19 +72,44 @@ migration/status:
 # Exemplo: make test
 .PHONY: test
 test:
-	@go test ./... -count=1
+	@go -C $(BACKEND_DIR) test ./... -count=1
 
 # Exemplo: make test/integration
 .PHONY: test/integration
 test/integration:
-	@go test -tags=integration ./internal/repositories ./internal/integration ./internal/messaging ./internal/server ./internal/cache -v -count=1
+	@go -C $(BACKEND_DIR) test -tags=integration ./internal/repositories ./internal/integration ./internal/messaging ./internal/server ./internal/cache -v -count=1
 
 # Exemplo: make run
 .PHONY: run
 run:
-	@go run ./cmd/api
+	@go -C $(BACKEND_DIR) run ./cmd/api
 
 # Exemplo: make worker
 .PHONY: worker
 worker:
-	@go run ./cmd/worker
+	@go -C $(BACKEND_DIR) run ./cmd/worker
+
+# Exemplo: make front/install
+.PHONY: front/install
+front/install:
+	@npm --prefix $(FRONTEND_DIR) ci
+
+# Exemplo: make front/dev
+.PHONY: front/dev
+front/dev:
+	@npm --prefix $(FRONTEND_DIR) run dev
+
+# Exemplo: make front/build
+.PHONY: front/build
+front/build:
+	@npm --prefix $(FRONTEND_DIR) run build
+
+# Exemplo: make front/lint
+.PHONY: front/lint
+front/lint:
+	@npm --prefix $(FRONTEND_DIR) run lint
+
+# Exemplo: make front/test
+.PHONY: front/test
+front/test:
+	@npm --prefix $(FRONTEND_DIR) run test

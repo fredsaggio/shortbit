@@ -5,8 +5,8 @@
 
 Esta pasta explica como o sistema funciona. Ela complementa os documentos da raiz:
 
-- [`PROJECT_CONTEXT.md`](../PROJECT_CONTEXT.md): visão, regras e decisões gerais do produto;
-- [`IMPLEMENTATION_PLAN.md`](../IMPLEMENTATION_PLAN.md): ordem de implementação e progresso;
+- [`PROJECT_CONTEXT.md`](../../PROJECT_CONTEXT.md): visão, regras e decisões gerais do produto;
+- [`IMPLEMENTATION_PLAN.md`](../../IMPLEMENTATION_PLAN.md): ordem de implementação e progresso;
 - `docs/`: explicação técnica dos fluxos e contratos.
 
 ## Mapa da documentação
