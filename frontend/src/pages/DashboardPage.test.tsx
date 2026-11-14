@@ -38,7 +38,8 @@ describe('DashboardPage', () => {
     })
     const { user: actions } = renderApp('/painel')
 
-    const items = await screen.findAllByRole('listitem')
+    const list = await screen.findByRole('list', { name: 'Seus links' })
+    const items = within(list).getAllByRole('listitem')
     expect(items).toHaveLength(2)
     expect(within(items[0]).getByText('1.234')).toBeInTheDocument()
     expect(within(items[1]).getByText('Com senha')).toBeInTheDocument()
@@ -46,7 +47,7 @@ describe('DashboardPage', () => {
     await actions.click(screen.getByRole('button', { name: 'Carregar mais' }))
 
     expect(await screen.findByText('https://example.com/Zx9Wq1')).toBeInTheDocument()
-    expect(screen.getAllByRole('listitem')).toHaveLength(3)
+    expect(within(list).getAllByRole('listitem')).toHaveLength(3)
     expect(screen.queryByRole('button', { name: 'Carregar mais' })).not.toBeInTheDocument()
   })
 
@@ -65,7 +66,7 @@ describe('DashboardPage', () => {
     expect(await screen.findByText(/ainda não criou nenhum link/)).toBeInTheDocument()
 
     await actions.type(screen.getByLabelText('URL de destino'), 'https://example.com/segredo')
-    await actions.click(screen.getByLabelText('Com senha'))
+    await actions.click(screen.getByRole('radio', { name: 'Com senha' }))
     await actions.type(screen.getByLabelText('Senha do link'), 'senha-do-link')
     await actions.click(screen.getByRole('button', { name: 'Criar link curto' }))
 
@@ -98,7 +99,7 @@ describe('DashboardPage', () => {
     const { user: actions } = renderApp('/painel')
 
     await actions.type(await screen.findByLabelText('URL de destino'), 'exemplo.com')
-    await actions.click(screen.getByLabelText('Com senha'))
+    await actions.click(screen.getByRole('radio', { name: 'Com senha' }))
     await actions.type(screen.getByLabelText('Senha do link'), 'curta')
     await actions.click(screen.getByRole('button', { name: 'Criar link curto' }))
 

@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { fakeApi, signedOut, user } from '../test/fakeApi.ts'
 import { renderApp } from '../test/renderApp.tsx'
@@ -15,11 +15,12 @@ describe('AccountPage', () => {
     fakeApi({ 'GET /me': { status: 200, body: { ...user, has_google: true } } })
     renderApp('/conta')
 
-    expect(await screen.findByText('ana@example.com', { selector: 'dd' })).toBeInTheDocument()
-    expect(screen.getByText('Ana Souza', { selector: 'dd' })).toBeInTheDocument()
-    expect(screen.getByText('Email e senha')).toBeInTheDocument()
-    expect(screen.getByText('Google')).toBeInTheDocument()
-    expect(screen.getByText('14 de novembro de 2026')).toBeInTheDocument()
+    const info = await screen.findByRole('region', { name: 'Informações' })
+    expect(within(info).getByText('ana@example.com')).toBeInTheDocument()
+    expect(within(info).getAllByText('Ana Souza')).not.toHaveLength(0)
+    expect(within(info).getByText('Email e senha')).toBeInTheDocument()
+    expect(within(info).getByText('Google')).toBeInTheDocument()
+    expect(within(info).getByText('14 de novembro de 2026')).toBeInTheDocument()
   })
 
   it('updates the full name and the greeting', async () => {
@@ -36,7 +37,7 @@ describe('AccountPage', () => {
 
     expect(await screen.findByText('Nome atualizado.')).toBeInTheDocument()
     expect(api.calls('PATCH', '/me')[0].body).toEqual({ full_name: 'Beatriz Lima' })
-    expect(screen.getByText('Olá, Beatriz')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Menu da conta de Beatriz' })).toBeInTheDocument()
   })
 
   it('validates the name before calling the API', async () => {
@@ -54,7 +55,8 @@ describe('AccountPage', () => {
     const api = fakeApi({ 'GET /me': { status: 200, body: user }, 'POST /me/password': { status: 204 } })
     const { user: actions } = renderApp('/conta')
 
-    await actions.type(await screen.findByLabelText('Senha atual'), 'senha12345')
+    await actions.click(await screen.findByRole('tab', { name: 'Segurança' }))
+    await actions.type(screen.getByLabelText('Senha atual'), 'senha12345')
     await actions.type(screen.getByLabelText('Nova senha'), 'nova-senha-1')
     await actions.type(screen.getByLabelText('Confirme a nova senha'), 'nova-senha-1')
     await actions.click(screen.getByRole('button', { name: 'Trocar senha' }))
@@ -72,7 +74,8 @@ describe('AccountPage', () => {
     fakeApi({ 'GET /me': { status: 200, body: user }, 'POST /me/password': { status: 400, body: 'senha atual incorreta' } })
     const { user: actions } = renderApp('/conta')
 
-    await actions.type(await screen.findByLabelText('Senha atual'), 'errada-123')
+    await actions.click(await screen.findByRole('tab', { name: 'Segurança' }))
+    await actions.type(screen.getByLabelText('Senha atual'), 'errada-123')
     await actions.type(screen.getByLabelText('Nova senha'), 'nova-senha-1')
     await actions.type(screen.getByLabelText('Confirme a nova senha'), 'nova-senha-1')
     await actions.click(screen.getByRole('button', { name: 'Trocar senha' }))
@@ -84,7 +87,8 @@ describe('AccountPage', () => {
     const api = fakeApi({ 'GET /me': { status: 200, body: user } })
     const { user: actions } = renderApp('/conta')
 
-    await actions.type(await screen.findByLabelText('Senha atual'), 'senha12345')
+    await actions.click(await screen.findByRole('tab', { name: 'Segurança' }))
+    await actions.type(screen.getByLabelText('Senha atual'), 'senha12345')
     await actions.type(screen.getByLabelText('Nova senha'), 'senha12345')
     await actions.type(screen.getByLabelText('Confirme a nova senha'), 'senha12345')
     await actions.click(screen.getByRole('button', { name: 'Trocar senha' }))
@@ -95,9 +99,10 @@ describe('AccountPage', () => {
 
   it('explains that a Google-only account has no password to change', async () => {
     fakeApi({ 'GET /me': { status: 200, body: { ...user, has_password: false, has_google: true } } })
-    renderApp('/conta')
+    const { user: actions } = renderApp('/conta')
 
-    expect(await screen.findByText(/Sua conta entra com o Google/)).toBeInTheDocument()
+    await actions.click(await screen.findByRole('tab', { name: 'Segurança' }))
+    expect(screen.getByText(/Sua conta entra com o Google/)).toBeInTheDocument()
     expect(screen.queryByLabelText('Senha atual')).not.toBeInTheDocument()
   })
 })

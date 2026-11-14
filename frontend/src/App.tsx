@@ -10,6 +10,7 @@ import { LinkDetailPage } from './pages/LinkDetailPage.tsx'
 import { LoginPage } from './pages/LoginPage.tsx'
 import { NotFoundPage } from './pages/NotFoundPage.tsx'
 import { RegisterPage } from './pages/RegisterPage.tsx'
+import { Toaster } from '@/components/ui/sonner'
 
 export function App() {
   return (
@@ -61,6 +62,7 @@ export function App() {
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>
+      <Toaster />
     </AuthProvider>
   )
 }

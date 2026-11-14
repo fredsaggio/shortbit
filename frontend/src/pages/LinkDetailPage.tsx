@@ -1,3 +1,4 @@
+import { ArrowLeft, BarChart3, CalendarDays, ExternalLink, Link2Off, RotateCw } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { ApiError, isAbortError, messageOf } from '../api/client.ts'
@@ -5,10 +6,12 @@ import { getLink, shortLinkURL } from '../api/links.ts'
 import type { ShortLink } from '../api/types.ts'
 import { Alert } from '../components/Alert.tsx'
 import { Button } from '../components/Button.tsx'
+import { buttonSizes, buttonTones } from '../components/buttonStyles.ts'
 import { CopyButton } from '../components/CopyButton.tsx'
-import { PageLoader } from '../components/PageLoader.tsx'
 import { VisibilityBadge } from '../components/VisibilityBadge.tsx'
 import { clicksLabel, formatCount, formatDate } from '../format.ts'
+import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
 
 type DetailState =
   | { status: 'loading' }
@@ -43,74 +46,94 @@ export function LinkDetailPage() {
   }
 
   return (
-    <div className="container page">
-      <Link to="/painel" className="back-link">
-        ← Voltar para meus links
+    <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-12">
+      <Link
+        to="/painel"
+        className="group mb-6 inline-flex h-10 items-center gap-2 rounded-md px-2 -ml-2 font-semibold text-navy transition-colors hover:bg-navy/5"
+      >
+        <ArrowLeft className="size-4 transition-transform duration-200 group-hover:-translate-x-0.5" aria-hidden="true" />
+        Voltar para meus links
       </Link>
 
-      {state.status === 'loading' && <PageLoader label="Carregando o link…" />}
+      {state.status === 'loading' && (
+        <div className="grid gap-5 lg:grid-cols-[2fr_1fr]" role="status" aria-label="Carregando o link…">
+          <Skeleton className="h-72 rounded-3xl bg-surface-200" />
+          <Skeleton className="h-72 rounded-3xl bg-surface-200" />
+        </div>
+      )}
 
       {state.status === 'not-found' && (
-        <div className="card empty-state">
-          <h1>Link não encontrado</h1>
-          <p>Esse link não existe ou não pertence à sua conta.</p>
+        <div className="grid justify-items-center gap-3 rounded-3xl border bg-card px-6 py-14 text-center">
+          <span className="inline-flex size-14 items-center justify-center rounded-2xl bg-surface-200" aria-hidden="true">
+            <Link2Off className="size-7 text-navy" />
+          </span>
+          <h1 className="text-2xl font-extrabold">Link não encontrado</h1>
+          <p className="text-muted-foreground">Esse link não existe ou não pertence à sua conta.</p>
         </div>
       )}
 
       {state.status === 'error' && (
-        <div className="card empty-state">
+        <div className="grid justify-items-center gap-4 rounded-3xl border bg-card p-8 text-center">
           <Alert tone="error">{state.error}</Alert>
-          <p style={{ marginTop: 16 }}>
-            <Button type="button" variant="secondary" onClick={refresh}>
-              Tentar de novo
-            </Button>
-          </p>
+          <Button type="button" variant="outline" onClick={refresh}>
+            Tentar de novo
+          </Button>
         </div>
       )}
 
       {state.status === 'ready' && (
-        <div className="detail">
-          <section className="card" aria-labelledby="detail-title">
-            <h1 id="detail-title" className="detail__short">
+        <div className="grid gap-5 lg:grid-cols-[2fr_1fr]">
+          <section aria-labelledby="detail-title" className="rounded-3xl border bg-card p-6 shadow-card sm:p-8">
+            <VisibilityBadge visibility={state.link.visibility} />
+            <h1 id="detail-title" className="mt-4 text-[clamp(1.5rem,3.5vw,2.25rem)] font-extrabold break-all">
               {shortLinkURL(state.link.short_code).replace(/^https?:\/\//, '')}
             </h1>
-            <div className="detail__actions">
-              <CopyButton text={shortLinkURL(state.link.short_code)} label="Copiar link" />
-              <a className="button button--secondary" href={shortLinkURL(state.link.short_code)} target="_blank" rel="noreferrer">
+            <div className="mt-5 flex flex-wrap gap-3">
+              <CopyButton text={shortLinkURL(state.link.short_code)} label="Copiar link" variant="navy" />
+              <a
+                className={cn('inline-flex items-center gap-2 rounded-md border font-semibold transition-colors', buttonSizes.md, buttonTones.outline)}
+                href={shortLinkURL(state.link.short_code)}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <ExternalLink className="size-4" aria-hidden="true" />
                 Abrir
               </a>
             </div>
-            <dl className="detail__facts">
+
+            <dl className="mt-8 grid gap-5 border-t pt-6">
               <div>
-                <dt>Destino</dt>
-                <dd>
-                  <a href={state.link.original_url} target="_blank" rel="noreferrer">
+                <dt className="text-sm font-medium text-muted-foreground">Destino</dt>
+                <dd className="mt-1 break-all">
+                  <a href={state.link.original_url} target="_blank" rel="noreferrer" className="font-semibold text-action underline-offset-4 hover:underline">
                     {state.link.original_url}
                   </a>
                 </dd>
               </div>
               <div>
-                <dt>Acesso</dt>
-                <dd>
-                  <VisibilityBadge visibility={state.link.visibility} />
+                <dt className="text-sm font-medium text-muted-foreground">Criado em</dt>
+                <dd className="mt-1 inline-flex items-center gap-2 font-semibold">
+                  <CalendarDays className="size-4 text-muted-foreground" aria-hidden="true" />
+                  {formatDate(state.link.created_at)}
                 </dd>
-              </div>
-              <div>
-                <dt>Criado em</dt>
-                <dd>{formatDate(state.link.created_at)}</dd>
               </div>
             </dl>
           </section>
 
-          <aside className="card stat" aria-label="Cliques">
-            <p className="stat__value">{formatCount(state.link.click_count)}</p>
-            <p className="stat__label">{clicksLabel(state.link.click_count)} no total</p>
-            <Button type="button" variant="secondary" onClick={refresh} loading={state.refreshing}>
-              Atualizar
-            </Button>
-            <p className="note" style={{ color: 'inherit', opacity: 0.8 }}>
-              Os cliques podem levar alguns segundos para aparecer.
-            </p>
+          <aside aria-label="Cliques" className="relative overflow-hidden rounded-3xl bg-navy p-6 text-white shadow-card sm:p-8">
+            <div aria-hidden="true" className="pointer-events-none absolute -top-16 -right-16 size-48 rounded-full bg-brand/30 blur-2xl" />
+            <div className="relative">
+              <span className="inline-flex items-center gap-2 text-sm font-bold tracking-wide text-brand uppercase">
+                <BarChart3 className="size-5" aria-hidden="true" /> Cliques
+              </span>
+              <p className="mt-4 text-6xl leading-none font-extrabold tracking-tight">{formatCount(state.link.click_count)}</p>
+              <p className="mt-2 text-navy-300">{clicksLabel(state.link.click_count)} no total</p>
+              <Button type="button" variant="onDarkOutline" className="mt-6" onClick={refresh} loading={state.refreshing}>
+                {!state.refreshing && <RotateCw className="size-4" aria-hidden="true" />}
+                Atualizar
+              </Button>
+              <p className="mt-4 text-sm text-navy-300">Os cliques podem levar alguns segundos para aparecer.</p>
+            </div>
           </aside>
         </div>
       )}

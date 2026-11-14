@@ -3,12 +3,15 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router'
 import { messageOf } from '../api/client.ts'
 import { useAuth } from '../auth/AuthContext.ts'
 import { Alert } from '../components/Alert.tsx'
+import { AuthCard, OrDivider, textLinkClass } from '../components/AuthCard.tsx'
 import { Button } from '../components/Button.tsx'
 import { GoogleButton } from '../components/GoogleButton.tsx'
 import { TextField } from '../components/TextField.tsx'
 import { returnPath } from '../navigation.ts'
 import { useFieldErrors } from '../useFieldErrors.ts'
 import { checkEmail, checkRequired } from '../validation.ts'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
 
 type LoginLocationState = { message?: string; email?: string } | null
 
@@ -50,62 +53,72 @@ export function LoginPage() {
   }
 
   return (
-    <section className="auth-page">
-      <div className="card auth-card">
-        <header className="auth-card__header">
-          <h1>Entrar</h1>
-          <p>Acesse seus links e veja os cliques.</p>
-        </header>
+    <AuthCard
+      title="Entrar"
+      description="Que bom te ver de novo. Acesse seus links e cliques."
+      footer={
+        <>
+          Ainda não tem conta?{' '}
+          <Link to="/cadastro" className={textLinkClass}>
+            Criar conta grátis
+          </Link>
+        </>
+      }
+    >
+      {locationState?.message && <Alert tone="success">{locationState.message}</Alert>}
+      {error && <Alert tone="error">{error}</Alert>}
 
-        {locationState?.message && <Alert tone="success">{locationState.message}</Alert>}
-        {error && <Alert tone="error">{error}</Alert>}
+      <GoogleButton />
+      <OrDivider label="ou com email" />
 
-        <GoogleButton />
-        <div className="divider">ou com email</div>
-
-        <form className="form" onSubmit={handleSubmit} noValidate>
-          <TextField
-            label="Email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            value={email}
-            error={fields.errors.email}
-            onChange={(event) => {
-              setEmail(event.target.value)
-              fields.clear('email')
-            }}
-            required
-          />
-          <TextField
-            label="Senha"
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            error={fields.errors.password}
-            onChange={(event) => {
-              setPassword(event.target.value)
-              fields.clear('password')
-            }}
-            required
-          />
-          <div className="row-between">
-            <label className="checkbox">
-              <input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} />
+      <form className="grid gap-5" onSubmit={handleSubmit} noValidate>
+        <TextField
+          label="Email"
+          name="email"
+          type="email"
+          autoComplete="email"
+          placeholder="voce@exemplo.com"
+          value={email}
+          error={fields.errors.email}
+          onChange={(event) => {
+            setEmail(event.target.value)
+            fields.clear('email')
+          }}
+          required
+        />
+        <TextField
+          label="Senha"
+          name="password"
+          type="password"
+          autoComplete="current-password"
+          value={password}
+          error={fields.errors.password}
+          onChange={(event) => {
+            setPassword(event.target.value)
+            fields.clear('password')
+          }}
+          required
+        />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <Checkbox
+              id="remember-me"
+              checked={rememberMe}
+              onCheckedChange={(checked) => setRememberMe(checked === true)}
+              className="size-5 rounded-[5px] border-input data-[state=checked]:border-action data-[state=checked]:bg-action"
+            />
+            <Label htmlFor="remember-me" className="cursor-pointer text-[15px] font-medium text-navy">
               Manter conectado por 30 dias
-            </label>
-            <Link to="/recuperar-senha">Esqueci a senha</Link>
+            </Label>
           </div>
-          <Button type="submit" block loading={submitting}>
-            Entrar
-          </Button>
-        </form>
-
-        <p className="auth-card__footer">
-          Ainda não tem conta? <Link to="/cadastro">Criar conta grátis</Link>
-        </p>
-      </div>
-    </section>
+          <Link to="/recuperar-senha" className={textLinkClass}>
+            Esqueci a senha
+          </Link>
+        </div>
+        <Button type="submit" size="lg" block loading={submitting}>
+          Entrar
+        </Button>
+      </form>
+    </AuthCard>
   )
 }
