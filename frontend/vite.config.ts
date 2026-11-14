@@ -14,6 +14,9 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react(), tailwindcss()],
+    // ES workers can split code, so the password meter's dictionaries load
+    // inside the worker on demand.
+    worker: { format: 'es' },
     resolve: {
       alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
     },
