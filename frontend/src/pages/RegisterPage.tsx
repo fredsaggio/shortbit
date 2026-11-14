@@ -256,7 +256,7 @@ export function RegisterPage() {
           }}
           required
         />
-        <PasswordChecklist id={checklistId} rules={passwordRules({ password, confirmation: passwordConfirmation })} />
+        <PasswordChecklist id={checklistId} rules={passwordRules({ password })} />
         <Button type="submit" size="lg" block loading={submitting}>
           Continuar
         </Button>

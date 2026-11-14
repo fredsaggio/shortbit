@@ -189,7 +189,7 @@ function PasswordCard() {
         </div>
         <PasswordChecklist
           id={checklistId}
-          rules={passwordRules({ password: passwords.next, confirmation: passwords.confirmation, current: passwords.current })}
+          rules={passwordRules({ password: passwords.next, current: passwords.current })}
         />
         {error && <Alert tone="error">{error}</Alert>}
         {changed && <Alert tone="success">Senha alterada. Os outros aparelhos foram desconectados.</Alert>}

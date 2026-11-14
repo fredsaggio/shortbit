@@ -3,10 +3,10 @@ import { describe, expect, it } from 'vitest'
 import { fakeApi, signedOut, user } from '../test/fakeApi.ts'
 import { renderApp } from '../test/renderApp.tsx'
 
-async function fillDetails(actions: ReturnType<typeof renderApp>['user'], confirmation = 'senha12345') {
+async function fillDetails(actions: ReturnType<typeof renderApp>['user'], confirmation = 'Senha12345!') {
   await actions.type(await screen.findByLabelText('Nome completo'), user.full_name)
   await actions.type(screen.getByLabelText('Email'), user.email)
-  await actions.type(screen.getByLabelText('Senha'), 'senha12345')
+  await actions.type(screen.getByLabelText('Senha'), 'Senha12345!')
   await actions.type(screen.getByLabelText('Confirme a senha'), confirmation)
   await actions.click(screen.getByRole('button', { name: 'Continuar' }))
 }
@@ -33,9 +33,9 @@ describe('RegisterPage', () => {
     await actions.click(screen.getByRole('button', { name: 'Confirmar e entrar' }))
 
     await waitFor(() => expect(screen.getByTestId('current-path')).toHaveTextContent('/painel'))
-    expect(api.calls('POST', '/registrations/password')[0].body).toEqual({ email: user.email, password: 'senha12345', full_name: 'Ana Souza' })
+    expect(api.calls('POST', '/registrations/password')[0].body).toEqual({ email: user.email, password: 'Senha12345!', full_name: 'Ana Souza' })
     expect(api.calls('POST', '/registrations/password/confirm')[0].body).toEqual({ code: '123456' })
-    expect(api.calls('POST', '/sessions')[0].body).toEqual({ email: user.email, password: 'senha12345', remember_me: false })
+    expect(api.calls('POST', '/sessions')[0].body).toEqual({ email: user.email, password: 'Senha12345!', remember_me: false })
   })
 
   it('does not call the API when the passwords differ', async () => {
@@ -78,16 +78,37 @@ describe('RegisterPage', () => {
 
     const checklist = await screen.findByRole('list', { name: 'Requisitos da senha' })
     const rule = (name: string) => within(checklist).getByText(name).closest('li')
+    const rules = ['Pelo menos 8 caracteres', 'Uma letra maiúscula', 'Um número', 'Um caractere especial (! @ # - …)']
 
-    expect(rule('Pelo menos 8 caracteres')).toHaveAttribute('data-state', 'pending')
-    expect(rule('As duas senhas são iguais')).toHaveAttribute('data-state', 'pending')
+    for (const name of rules) {
+      expect(rule(name)).toHaveAttribute('data-state', 'pending')
+    }
+    expect(within(checklist).queryByText('As duas senhas são iguais')).not.toBeInTheDocument()
 
-    await actions.type(screen.getByLabelText('Senha'), 'senha12345')
+    await actions.type(screen.getByLabelText('Senha'), 'senhalonga')
     expect(rule('Pelo menos 8 caracteres')).toHaveAttribute('data-state', 'met')
+    expect(rule('Uma letra maiúscula')).toHaveAttribute('data-state', 'pending')
 
+    await actions.clear(screen.getByLabelText('Senha'))
+    await actions.type(screen.getByLabelText('Senha'), 'Senha12345!')
+    for (const name of rules) {
+      expect(rule(name)).toHaveAttribute('data-state', 'met')
+    }
+    expect(screen.getByLabelText('Senha')).toHaveAccessibleDescription(/Uma letra maiúscula/)
+  })
+
+  it('does not send a password without the required characters', async () => {
+    const api = fakeApi(signedOut)
+    const { user: actions } = renderApp('/cadastro')
+
+    await actions.type(await screen.findByLabelText('Nome completo'), 'Ana Souza')
+    await actions.type(screen.getByLabelText('Email'), 'ana@example.com')
+    await actions.type(screen.getByLabelText('Senha'), 'senha12345')
     await actions.type(screen.getByLabelText('Confirme a senha'), 'senha12345')
-    expect(rule('As duas senhas são iguais')).toHaveAttribute('data-state', 'met')
-    expect(screen.getByLabelText('Senha')).toHaveAccessibleDescription(/Pelo menos 8 caracteres/)
+    await actions.click(screen.getByRole('button', { name: 'Continuar' }))
+
+    expect(screen.getByText('A senha precisa ter pelo menos uma letra maiúscula.')).toBeInTheDocument()
+    expect(api.calls('POST', '/registrations/password')).toHaveLength(0)
   })
 
   it('accepts a password of exactly 8 characters', async () => {
@@ -96,8 +117,8 @@ describe('RegisterPage', () => {
 
     await actions.type(await screen.findByLabelText('Nome completo'), 'Ana Souza')
     await actions.type(screen.getByLabelText('Email'), 'ana@example.com')
-    await actions.type(screen.getByLabelText('Senha'), 'senha123')
-    await actions.type(screen.getByLabelText('Confirme a senha'), 'senha123')
+    await actions.type(screen.getByLabelText('Senha'), 'Senha12!')
+    await actions.type(screen.getByLabelText('Confirme a senha'), 'Senha12!')
     await actions.click(screen.getByRole('button', { name: 'Continuar' }))
 
     await waitFor(() => expect(api.calls('POST', '/registrations/password')).toHaveLength(1))

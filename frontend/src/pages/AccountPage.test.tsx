@@ -57,15 +57,15 @@ describe('AccountPage', () => {
 
     await actions.click(await screen.findByRole('tab', { name: 'Segurança' }))
     await actions.type(screen.getByLabelText('Senha atual'), 'senha12345')
-    await actions.type(screen.getByLabelText('Nova senha'), 'nova-senha-1')
-    await actions.type(screen.getByLabelText('Confirme a nova senha'), 'nova-senha-1')
+    await actions.type(screen.getByLabelText('Nova senha'), 'Nova-senha-1')
+    await actions.type(screen.getByLabelText('Confirme a nova senha'), 'Nova-senha-1')
     await actions.click(screen.getByRole('button', { name: 'Trocar senha' }))
 
     expect(await screen.findByText('Senha alterada. Os outros aparelhos foram desconectados.')).toBeInTheDocument()
     expect(api.calls('POST', '/me/password')[0].body).toEqual({
       current_password: 'senha12345',
-      new_password: 'nova-senha-1',
-      new_password_confirmation: 'nova-senha-1',
+      new_password: 'Nova-senha-1',
+      new_password_confirmation: 'Nova-senha-1',
     })
     expect(screen.getByLabelText('Senha atual')).toHaveValue('')
   })
@@ -76,8 +76,8 @@ describe('AccountPage', () => {
 
     await actions.click(await screen.findByRole('tab', { name: 'Segurança' }))
     await actions.type(screen.getByLabelText('Senha atual'), 'errada-123')
-    await actions.type(screen.getByLabelText('Nova senha'), 'nova-senha-1')
-    await actions.type(screen.getByLabelText('Confirme a nova senha'), 'nova-senha-1')
+    await actions.type(screen.getByLabelText('Nova senha'), 'Nova-senha-1')
+    await actions.type(screen.getByLabelText('Confirme a nova senha'), 'Nova-senha-1')
     await actions.click(screen.getByRole('button', { name: 'Trocar senha' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Senha atual incorreta')
@@ -88,9 +88,9 @@ describe('AccountPage', () => {
     const { user: actions } = renderApp('/conta')
 
     await actions.click(await screen.findByRole('tab', { name: 'Segurança' }))
-    await actions.type(screen.getByLabelText('Senha atual'), 'senha12345')
-    await actions.type(screen.getByLabelText('Nova senha'), 'senha12345')
-    await actions.type(screen.getByLabelText('Confirme a nova senha'), 'senha12345')
+    await actions.type(screen.getByLabelText('Senha atual'), 'Senha12345!')
+    await actions.type(screen.getByLabelText('Nova senha'), 'Senha12345!')
+    await actions.type(screen.getByLabelText('Confirme a nova senha'), 'Senha12345!')
     await actions.click(screen.getByRole('button', { name: 'Trocar senha' }))
 
     expect(screen.getByText('A nova senha precisa ser diferente da atual.')).toBeInTheDocument()

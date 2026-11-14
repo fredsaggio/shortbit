@@ -4,7 +4,7 @@ import { checkCode, checkConfirmation, checkEmail, checkFullName, checkLinkPassw
 describe('validation', () => {
   it('accepts valid values', () => {
     expect(checkEmail(' ana@example.com ')).toBeUndefined()
-    expect(checkNewPassword('senha123')).toBeUndefined()
+    expect(checkNewPassword('Senha12!')).toBeUndefined()
     expect(checkConfirmation('senha123', 'senha123')).toBeUndefined()
     expect(checkFullName('Ana Souza')).toBeUndefined()
     expect(checkURL('https://example.com/a?b=c')).toBeUndefined()
@@ -12,8 +12,20 @@ describe('validation', () => {
   })
 
   it('counts characters, not bytes, in passwords', () => {
-    expect(checkNewPassword('çãõéíúâê')).toBeUndefined()
-    expect(checkNewPassword('ção1234')).toBe('A senha precisa ter pelo menos 8 caracteres.')
+    expect(checkNewPassword('Çãõéíú1!')).toBeUndefined()
+    expect(checkNewPassword('Çã1!abc')).toBe('A senha precisa ter pelo menos 8 caracteres.')
+  })
+
+  it('applies the same composition rules as the API to account passwords', () => {
+    expect(checkNewPassword('senha-segura1')).toBe('A senha precisa ter pelo menos uma letra maiúscula.')
+    expect(checkNewPassword('Senha-segura')).toBe('A senha precisa ter pelo menos um número.')
+    expect(checkNewPassword('SenhaSegura1')).toBe('A senha precisa ter pelo menos um caractere especial, como ! @ # ou -.')
+    // A space is not special; an accented capital and an emoji count.
+    expect(checkNewPassword('Senha Segura1')).toBe('A senha precisa ter pelo menos um caractere especial, como ! @ # ou -.')
+    expect(checkNewPassword('Érica#2026')).toBeUndefined()
+    expect(checkNewPassword('Senha1234😀')).toBeUndefined()
+    // Link passwords keep only the length rule.
+    expect(checkLinkPassword('senhadolink')).toBeUndefined()
   })
 
   it('rejects URLs that are not http or https', () => {
@@ -33,23 +45,30 @@ describe('validation', () => {
   })
 
   it('rejects passwords over the API limit of 1024 bytes', () => {
-    // 512 two-byte characters: long enough in characters, 1024 bytes exactly.
-    expect(checkNewPassword('é'.repeat(512))).toBeUndefined()
-    expect(checkNewPassword('é'.repeat(513))).toBe('A senha está longa demais. Use uma mais curta.')
+    // É and é take two bytes, 1 and ! one each: 1024 bytes exactly.
+    expect(checkNewPassword('É' + 'é'.repeat(510) + '1!')).toBeUndefined()
+    expect(checkNewPassword('É' + 'é'.repeat(511) + '1!')).toBe('A senha está longa demais. Use uma mais curta.')
     expect(checkLinkPassword('a'.repeat(1025))).toBe('A senha do link está longa demais. Use uma mais curta.')
   })
 
   it('lists exactly the rules the API enforces', () => {
     const state = (rules: ReturnType<typeof passwordRules>) => rules.map((rule) => [rule.label, rule.met])
 
-    expect(state(passwordRules({ password: 'curta' }))).toEqual([['Pelo menos 8 caracteres', false]])
-    expect(state(passwordRules({ password: 'uma senha bem comprida', confirmation: 'uma senha bem comprida', current: 'antiga123' }))).toEqual([
-      ['Pelo menos 8 caracteres', true],
-      ['Diferente da senha atual', true],
-      ['As duas senhas são iguais', true],
+    expect(state(passwordRules({ password: 'curta' }))).toEqual([
+      ['Pelo menos 8 caracteres', false],
+      ['Uma letra maiúscula', false],
+      ['Um número', false],
+      ['Um caractere especial (! @ # - …)', false],
     ])
-    expect(passwordRules({ password: 'antiga123', current: 'antiga123' })[1]).toEqual({ label: 'Diferente da senha atual', met: false })
-    expect(passwordRules({ password: '', confirmation: '' })[1].met).toBe(false)
+    expect(state(passwordRules({ password: 'Senha-nova-123', current: 'Senha-antiga1' }))).toEqual([
+      ['Pelo menos 8 caracteres', true],
+      ['Uma letra maiúscula', true],
+      ['Um número', true],
+      ['Um caractere especial (! @ # - …)', true],
+      ['Diferente da senha atual', true],
+    ])
+    expect(passwordRules({ password: 'Antiga-123', current: 'Antiga-123' })[4]).toEqual({ label: 'Diferente da senha atual', met: false })
+    expect(passwordRules({ password: '' }).every((rule) => !rule.met)).toBe(true)
     // Counts characters, not UTF-16 units, like the API.
     expect(passwordRules({ password: '😀'.repeat(8) })[0].met).toBe(true)
     expect(passwordRules({ password: 'a'.repeat(1025) }).map((rule) => rule.label)).toContain('Não muito longa (o limite foi ultrapassado)')

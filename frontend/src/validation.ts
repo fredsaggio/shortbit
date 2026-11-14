@@ -4,9 +4,10 @@
 
 export type FieldErrors<Field extends string> = Partial<Record<Field, string>>
 
-// Same limits as the API (services/user_service.go and url_service.go). There
-// are no composition rules on purpose: NIST SP 800-63B says verifiers shall not
-// impose them, and length is what makes a password strong.
+// Same limits as the API (services/password_policy.go and url_service.go).
+// Account passwords also need an uppercase letter, a digit and a special
+// character: a product decision against NIST SP 800-63B (ADR 0004). Link
+// passwords keep only the length rule.
 export const minPasswordLength = 8
 export const maxPasswordBytes = 1024
 export const maxFullNameLength = 100
@@ -30,6 +31,13 @@ export function checkRequired(value: string, message: string): string | undefine
 const characterCount = (value: string) => [...value].length
 const byteCount = (value: string) => new TextEncoder().encode(value).length
 
+// The same character classes as the API: any Unicode uppercase letter (É
+// counts), any decimal digit, and as special anything that is neither a
+// letter, a digit nor whitespace.
+const hasUppercase = (value: string) => /\p{Lu}/u.test(value)
+const hasDigit = (value: string) => /\p{Nd}/u.test(value)
+const hasSpecial = (value: string) => /[^\p{L}\p{Nd}\s]/u.test(value)
+
 export function checkNewPassword(value: string): string | undefined {
   if (!value) {
     return 'Crie uma senha.'
@@ -39,6 +47,15 @@ export function checkNewPassword(value: string): string | undefined {
   }
   if (byteCount(value) > maxPasswordBytes) {
     return 'A senha está longa demais. Use uma mais curta.'
+  }
+  if (!hasUppercase(value)) {
+    return 'A senha precisa ter pelo menos uma letra maiúscula.'
+  }
+  if (!hasDigit(value)) {
+    return 'A senha precisa ter pelo menos um número.'
+  }
+  if (!hasSpecial(value)) {
+    return 'A senha precisa ter pelo menos um caractere especial, como ! @ # ou -.'
   }
   return undefined
 }
@@ -63,25 +80,25 @@ export type PasswordRule = {
 
 type PasswordRuleInput = {
   password: string
-  /** Adds "the two match" when the form has a confirmation field. */
-  confirmation?: string
   /** Adds "different from the current one" when changing a password. */
   current?: string
 }
 
 // The live checklist under account password fields: exactly what the API
 // enforces. The byte limit shows up only once it is broken.
-export function passwordRules({ password, confirmation, current }: PasswordRuleInput): PasswordRule[] {
-  const rules: PasswordRule[] = [{ label: `Pelo menos ${minPasswordLength} caracteres`, met: characterCount(password) >= minPasswordLength }]
+export function passwordRules({ password, current }: PasswordRuleInput): PasswordRule[] {
+  const rules: PasswordRule[] = [
+    { label: `Pelo menos ${minPasswordLength} caracteres`, met: characterCount(password) >= minPasswordLength },
+    { label: 'Uma letra maiúscula', met: hasUppercase(password) },
+    { label: 'Um número', met: hasDigit(password) },
+    { label: 'Um caractere especial (! @ # - …)', met: hasSpecial(password) },
+  ]
 
   if (byteCount(password) > maxPasswordBytes) {
     rules.push({ label: 'Não muito longa (o limite foi ultrapassado)', met: false })
   }
   if (current !== undefined) {
     rules.push({ label: 'Diferente da senha atual', met: password !== '' && password !== current })
-  }
-  if (confirmation !== undefined) {
-    rules.push({ label: 'As duas senhas são iguais', met: confirmation !== '' && confirmation === password })
   }
 
   return rules
