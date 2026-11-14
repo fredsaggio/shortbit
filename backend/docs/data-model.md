@@ -1,7 +1,7 @@
 # Modelo de dados
 
-> Status: migrations `00001` a `00007`
-> Última atualização: 12 de novembro de 2026
+> Status: migrations `00001` a `00008`
+> Última atualização: 14 de novembro de 2026
 
 PostgreSQL é a fonte da verdade. Tokens secretos são armazenados somente como hash.
 
@@ -19,6 +19,7 @@ erDiagram
     users {
         uuid id PK
         text email UK
+        text full_name
         timestamptz email_verified_at
         timestamptz created_at
         timestamptz updated_at
@@ -126,7 +127,7 @@ flowchart LR
 
 ### `users`
 
-Identidade local principal. Usa UUIDv7, email canônico e email obrigatoriamente confirmado.
+Identidade local principal. Usa UUIDv7, email canônico e email obrigatoriamente confirmado. `full_name` (migration `00008`) é opcional no banco porque contas antigas não têm nome; quando presente, não pode ser vazio e tem até 100 caracteres. O cadastro com senha sempre envia o nome, e o login com Google o preenche quando falta. `password_registration_attempts.full_name` guarda o nome até a confirmação.
 
 ### `password_credentials`
 

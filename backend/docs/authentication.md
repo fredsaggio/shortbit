@@ -1,7 +1,7 @@
 # Autenticação
 
 > Status: cadastro, login, recuperação de senha e duração de sessões concluídos
-> Última atualização: 26 de setembro de 2026
+> Última atualização: 14 de novembro de 2026
 
 ## Visão geral
 
@@ -40,7 +40,7 @@ Uma conta criada originalmente pelo Google não pode adicionar ou recuperar senh
 
 ## Cadastro com senha ✅
 
-O cadastro não cria imediatamente uma linha em `users`. Primeiro existe uma tentativa temporária.
+O cadastro recebe email, senha e nome completo, e não cria imediatamente uma linha em `users`. Primeiro existe uma tentativa temporária, que também guarda o nome.
 
 ```mermaid
 sequenceDiagram
@@ -179,16 +179,49 @@ flowchart TD
 
 O handler protegido usa o `user_id` do contexto. Ele nunca aceita que o cliente escolha a identidade por query, header ou body.
 
-## `GET /me` ✅
+## Conta: `GET /me`, nome e troca de senha ✅
 
-`GET /me` comprova que a sessão está válida e retorna a identidade local atualmente autenticada:
+`GET /me` comprova que a sessão está válida e retorna a conta autenticada, com o nome completo e como ela entra:
 
 ```json
 {
   "id": "019...",
-  "email": "usuario@example.com"
+  "email": "usuario@example.com",
+  "full_name": "Ana Souza",
+  "has_password": true,
+  "has_google": false,
+  "created_at": "2026-11-14T12:00:00Z"
 }
 ```
+
+### Nome completo
+
+O cadastro com senha exige `full_name`, guardado na tentativa e copiado para `users` na confirmação. O login com Google pede o escopo `profile` e usa o claim `name` para preencher o nome **só quando a conta ainda não tem um**, então um nome editado pela pessoa nunca é sobrescrito. `PATCH /me` altera o nome. Em todos os casos o nome é normalizado (espaços das pontas removidos, espaços repetidos juntados), tem de 1 a 100 caracteres e não aceita caracteres de controle ou invisíveis.
+
+### Troca de senha
+
+`POST /me/password` segue o [OWASP Authentication Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html) e o [Session Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html):
+
+```mermaid
+flowchart TD
+    Request[POST /me/password] --> Limit{Limite por conta?}
+    Limit -- Estourou --> TooMany[429]
+    Limit -- Ok --> Confirm{Nova = confirmação e 8+ caracteres?}
+    Confirm -- Não --> Bad[400]
+    Confirm -- Sim --> HasPassword{Conta tem senha?}
+    HasPassword -- Não --> Google[409: entra só com Google]
+    HasPassword -- Sim --> Current{Senha atual confere? Argon2id}
+    Current -- Não --> Bad
+    Current -- Sim --> Tx[Transação: troca o hash, apaga todas as sessões, cria a nova]
+    Tx --> Cookie[204 + novo cookie user_session]
+```
+
+- A **senha atual é obrigatória**, porque uma sessão roubada não deve bastar para trocar a senha.
+- O **limite é por conta** (5 seguidas, depois 5 a cada 15 minutos) e vem antes da comparação Argon2id.
+- **Todas as sessões são encerradas** e este navegador recebe um **ID de sessão novo** com o mesmo prazo do anterior; quem estiver logado em outro aparelho precisa entrar de novo.
+- A nova senha não pode ser igual à atual.
+
+O mínimo continua em 8 caracteres, igual ao cadastro e à recuperação. O OWASP considera fracas senhas com menos de 15 caracteres quando não há MFA; aumentar o mínimo é uma decisão de produto ainda em aberto.
 
 ## Logout ✅
 

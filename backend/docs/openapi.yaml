@@ -22,7 +22,9 @@ tags:
   - name: Recuperação
     description: Recuperação de senha por código enviado por e-mail.
   - name: Sessões
-    description: Login, logout e dados da conta autenticada.
+    description: Login e logout.
+  - name: Conta
+    description: Dados da conta autenticada, nome completo e troca de senha.
   - name: Google
     description: Fluxo OAuth com Google.
   - name: Links
@@ -95,7 +97,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/EmailPasswordRequest'
+              $ref: '#/components/schemas/RegistrationRequest'
       responses:
         '202':
           description: Tentativa iniciada e código enviado; sem corpo.
@@ -281,20 +283,113 @@ paths:
           $ref: '#/components/responses/InternalError'
   /me:
     get:
-      tags: [Sessões]
-      operationId: getCurrentUser
-      summary: Consultar conta autenticada
+      tags: [Conta]
+      operationId: getCurrentAccount
+      summary: Consultar a conta autenticada
+      description: |
+        Dados da conta e como ela entra: com senha (`has_password`), com
+        Google (`has_google`) ou com os dois.
       security:
         - userSession: []
       responses:
         '200':
-          description: Dados básicos da conta.
+          description: Dados da conta.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserResponse'
+                $ref: '#/components/schemas/AccountResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    patch:
+      tags: [Conta]
+      operationId: updateCurrentAccount
+      summary: Alterar o nome completo
+      security:
+        - userSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [full_name]
+              properties:
+                full_name:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                  example: Ana Souza
+      responses:
+        '200':
+          description: Conta atualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /me/password:
+    post:
+      tags: [Conta]
+      operationId: changePassword
+      summary: Trocar a senha
+      description: |
+        Exige a senha atual. Em sucesso, troca a senha, encerra todas as
+        sessões da conta (outros aparelhos saem) e devolve um cookie
+        `user_session` novo para este navegador, com o mesmo prazo da sessão
+        anterior. Limite por conta: 5 tentativas seguidas e depois 5 a cada
+        15 minutos. Contas que só entram com Google recebem 409.
+      security:
+        - userSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [current_password, new_password, new_password_confirmation]
+              properties:
+                current_password:
+                  type: string
+                  writeOnly: true
+                new_password:
+                  type: string
+                  writeOnly: true
+                  minLength: 8
+                new_password_confirmation:
+                  type: string
+                  writeOnly: true
+                  description: Deve ser igual a `new_password`.
+      responses:
+        '204':
+          description: Senha trocada; sem corpo.
+          headers:
+            Set-Cookie:
+              description: Novo cookie `user_session`.
+              schema:
+                type: string
+        '400':
+          description: Senha atual incorreta, confirmação diferente, senha nova igual à atual, curta ou longa.
+          content:
+            text/plain:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
@@ -686,10 +781,10 @@ components:
           type: string
           format: email
           example: pessoa@example.com
-    EmailPasswordRequest:
+    RegistrationRequest:
       type: object
       additionalProperties: false
-      required: [email, password]
+      required: [email, password, full_name]
       properties:
         email:
           type: string
@@ -700,6 +795,12 @@ components:
           writeOnly: true
           minLength: 8
           example: senha-forte
+        full_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Espaços nas pontas são removidos e espaços repetidos viram um só. Caracteres de controle são rejeitados.
+          example: Ana Souza
     CodeRequest:
       type: object
       additionalProperties: false
@@ -752,6 +853,29 @@ components:
         email:
           type: string
           format: email
+    AccountResponse:
+      type: object
+      additionalProperties: false
+      required: [id, email, full_name, has_password, has_google, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        full_name:
+          type: [string, 'null']
+          description: Nulo em contas antigas que ainda não têm nome.
+        has_password:
+          type: boolean
+          description: A conta entra com email e senha e pode trocar a senha.
+        has_google:
+          type: boolean
+          description: A conta tem login com Google vinculado.
+        created_at:
+          type: string
+          format: date-time
     PublicURLRequest:
       type: object
       additionalProperties: false

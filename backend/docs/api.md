@@ -1,7 +1,7 @@
 # API HTTP
 
 > Status: contratos implementados e planejados
-> Última atualização: 29 de setembro de 2026
+> Última atualização: 14 de novembro de 2026
 
 Base local:
 
@@ -34,6 +34,8 @@ e em [`docs/openapi.yaml`](openapi.yaml). Esta página Markdown também registra
 | `POST` | `/sessions` | Não | ✅ |
 | `DELETE` | `/sessions/current` | Cookie opcional | ✅ |
 | `GET` | `/me` | Sim | ✅ |
+| `PATCH` | `/me` | Sim | ✅ |
+| `POST` | `/me/password` | Sim | ✅ |
 | `GET` | `/auth/google` | Não | ✅ |
 | `GET` | `/auth/google/callback` | Cookies temporários | ✅ |
 | `POST` | `/password-resets` | Não | ✅ |
@@ -70,9 +72,12 @@ Executa `Ping` no PostgreSQL com timeout.
 ```json
 {
   "email": "usuario@example.com",
-  "password": "senha12345"
+  "password": "senha12345",
+  "full_name": "Ana Souza"
 }
 ```
+
+`full_name` é obrigatório: de 1 a 100 caracteres depois de remover os espaços das pontas e juntar espaços repetidos. Caracteres de controle e invisíveis são rejeitados. O nome fica guardado na tentativa e vai para a conta na confirmação.
 
 Sucesso:
 
@@ -85,7 +90,7 @@ Respostas relevantes:
 
 | Status | Motivo |
 |---:|---|
-| `400` | JSON, email ou senha inválidos |
+| `400` | JSON, email, senha ou nome completo inválidos |
 | `409` | Email já cadastrado |
 | `429` | Rate limit por IP ou email |
 | `500` | Falha interna ou no envio do email |
@@ -164,7 +169,7 @@ Set-Cookie: user_session=...
 
 `remember_me` é opcional e assume `false` quando omitido. Sem ele, a sessão expira no servidor após 12h por padrão e o cookie não tem `Expires`/`Max-Age`. Com `true`, a sessão e o cookie persistente duram 30 dias por padrão. Ambos os prazos são configuráveis e absolutos; atividade não os renova.
 
-## Usuário atual ✅
+## Conta ✅
 
 ### `GET /me`
 
@@ -173,11 +178,43 @@ Requer `user_session` válida.
 ```json
 {
   "id": "019...",
-  "email": "usuario@example.com"
+  "email": "usuario@example.com",
+  "full_name": "Ana Souza",
+  "has_password": true,
+  "has_google": false,
+  "created_at": "2026-11-14T12:00:00Z"
 }
 ```
 
-Retorna `401` quando o cookie não existe, é desconhecido ou está expirado.
+`full_name` é `null` em contas criadas antes do nome existir e ainda não preenchidas. `has_password` indica se a conta entra com senha (e pode trocá-la); `has_google`, se tem login com Google vinculado. Retorna `401` quando o cookie não existe, é desconhecido ou está expirado.
+
+### `PATCH /me`
+
+Altera o nome completo, com as mesmas regras do cadastro. Recebe `{"full_name": "Ana Souza"}` e devolve a conta atualizada, no formato do `GET /me`. Nome inválido retorna `400`.
+
+### `POST /me/password`
+
+```json
+{
+  "current_password": "senha12345",
+  "new_password": "nova-senha-1",
+  "new_password_confirmation": "nova-senha-1"
+}
+```
+
+Segue o [OWASP Authentication Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html): exige a senha atual. Em sucesso, numa única transação, troca a senha, **encerra todas as sessões da conta** e cria uma nova para este navegador (renovação do ID de sessão, conforme o [Session Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)). A nova sessão mantém o prazo da anterior, então um login "lembrado" continua lembrado.
+
+```text
+204 No Content
+Set-Cookie: user_session=<novo token>
+```
+
+| Status | Motivo |
+|---:|---|
+| `400` | Senha atual incorreta, confirmação diferente, nova senha igual à atual, curta ou longa |
+| `401` | Sem sessão válida |
+| `409` | A conta só entra com Google e não tem senha |
+| `429` | Mais de 5 tentativas seguidas; depois, 5 a cada 15 minutos, contadas por conta |
 
 ## Logout ✅
 
@@ -201,7 +238,7 @@ Cria cookies temporários e responde com redirect para o Google:
 302 Found
 ```
 
-Não recebe `remember_me`. O login Google cria uma sessão lembrada por padrão.
+Não recebe `remember_me`. O login Google cria uma sessão lembrada por padrão. Pede os escopos `openid`, `email` e `profile`; o claim `name` preenche o nome completo da conta só se ela ainda não tiver um, para não sobrescrever um nome editado.
 
 ### `GET /auth/google/callback`
 
