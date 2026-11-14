@@ -108,12 +108,33 @@ describe('DashboardPage', () => {
     expect(api.calls('POST', '/urls')).toHaveLength(0)
   })
 
-  it('fills the form with the URL typed on the home page before login', async () => {
+  it('shortens the URL typed on the home page before login, once', async () => {
     savePendingLink('https://example.com/da-home')
-    fakeApi({ ...signedIn, 'GET /urls': { status: 200, body: { urls: [], next_cursor: null } } })
+    const api = fakeApi({
+      ...signedIn,
+      'GET /urls': { status: 200, body: { urls: [], next_cursor: null } },
+      'POST /urls': { status: 201, body: { short_code: 'Ab3dX9', short_url: 'http://localhost:8080/Ab3dX9' } },
+    })
     renderApp('/painel')
 
-    expect(await screen.findByLabelText('URL de destino')).toHaveValue('https://example.com/da-home')
+    const result = await screen.findByRole('link', { name: 'http://localhost:8080/Ab3dX9' })
+    expect(result).toBeInTheDocument()
+    expect(api.calls('POST', '/urls')).toHaveLength(1)
+    expect(api.calls('POST', '/urls')[0].body).toEqual({ url: 'https://example.com/da-home', visibility: 'public' })
     expect(sessionStorage.getItem('shortbit:pending-url')).toBeNull()
+    expect(screen.getByLabelText('URL de destino')).toHaveValue('')
+  })
+
+  it('keeps the home page URL in the form when creating it fails', async () => {
+    savePendingLink('https://example.com/da-home')
+    fakeApi({
+      ...signedIn,
+      'GET /urls': { status: 200, body: { urls: [], next_cursor: null } },
+      'POST /urls': { status: 400, body: 'url inválida' },
+    })
+    renderApp('/painel')
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+    expect(screen.getByLabelText('URL de destino')).toHaveValue('https://example.com/da-home')
   })
 })

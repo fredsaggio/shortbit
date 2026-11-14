@@ -42,7 +42,7 @@ function ShortenCard() {
 
     if (state.status !== 'authenticated') {
       savePendingLink(url.trim())
-      navigate('/cadastro', { state: { message: 'Crie sua conta grátis para encurtar o seu link. Ele já vai estar no painel.' } })
+      navigate('/cadastro', { state: { message: 'Crie sua conta grátis ou entre: o seu link curto fica pronto assim que você entrar.' } })
       return
     }
 

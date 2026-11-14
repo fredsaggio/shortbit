@@ -1,5 +1,6 @@
 import { BarChart3, ChevronRight, CircleCheck, Globe, Link2, LinkIcon, Lock, RotateCw } from 'lucide-react'
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import { toast } from 'sonner'
 import { Link } from 'react-router'
 import { isAbortError, messageOf } from '../api/client.ts'
 import { createLink, listLinks, shortLinkURL } from '../api/links.ts'
@@ -21,15 +22,39 @@ const visibilityItemClass =
   'h-11 flex-1 gap-2 rounded-md px-4 text-[15px] font-semibold text-muted-foreground transition-colors hover:bg-surface hover:text-navy data-[state=on]:bg-navy data-[state=on]:text-white data-[state=on]:shadow-sm sm:flex-none'
 
 function CreateLinkCard({ onCreated }: { onCreated: () => void }) {
-  const [url, setUrl] = useState(readPendingLink)
+  // A URL typed on the home page before signing in is shortened as soon as
+  // the dashboard opens, so the visitor lands on a link ready to copy.
+  const [pendingURL] = useState(readPendingLink)
+  const autoCreateStarted = useRef(false)
+  const [url, setUrl] = useState('')
   const [visibility, setVisibility] = useState<Visibility>('public')
   const [password, setPassword] = useState('')
-  const [submitting, setSubmitting] = useState(false)
+  const [submitting, setSubmitting] = useState(pendingURL !== '')
   const [error, setError] = useState('')
   const [created, setCreated] = useState<CreatedLink | null>(null)
   const fields = useFieldErrors<'url' | 'linkPassword'>()
 
-  useEffect(clearPendingLink, [])
+  useEffect(() => {
+    // React runs effects twice in development; the ref keeps it to one link.
+    if (!pendingURL || autoCreateStarted.current) {
+      return
+    }
+    autoCreateStarted.current = true
+    clearPendingLink()
+    createLink({ url: pendingURL, visibility: 'public' })
+      .then(
+        (link) => {
+          setCreated(link)
+          toast.success('Seu link curto está pronto', { description: link.short_url })
+          onCreated()
+        },
+        (createError: unknown) => {
+          setUrl(pendingURL)
+          setError(messageOf(createError))
+        },
+      )
+      .finally(() => setSubmitting(false))
+  }, [pendingURL, onCreated])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()

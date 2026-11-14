@@ -1,5 +1,5 @@
-// A URL typed on the home page before signing in waits here, per tab, and
-// fills the dashboard form after login. Storage can be unavailable (private
+// A URL typed on the home page before signing in waits here, per tab, and is
+// shortened by the dashboard right after login. Storage can be unavailable (private
 // mode, blocked site data), so every access is guarded.
 const key = 'shortbit:pending-url'
 
