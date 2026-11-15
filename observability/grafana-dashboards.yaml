@@ -1,0 +1,12 @@
+# Loads the shortbit dashboard into the local Grafana of docker-compose.yml.
+# In Grafana Cloud, import observability/shortbit-dashboard.json instead
+# (backend/docs/observability.md).
+apiVersion: 1
+
+providers:
+  - name: shortbit
+    type: file
+    allowUiUpdates: true
+    options:
+      path: /otel-lgtm/shortbit
+      foldersFromFilesStructure: false

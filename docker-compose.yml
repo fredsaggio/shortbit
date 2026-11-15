@@ -52,6 +52,26 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  # Grafana with Prometheus, Loki and an OpenTelemetry collector in one
+  # container, for development only: the API and worker send metrics and logs
+  # to it on 4318, and Grafana opens on http://localhost:3000 (admin/admin).
+  # Production sends to Grafana Cloud instead (backend/docs/observability.md).
+  grafana-shortener:
+    image: grafana/otel-lgtm:0.39.0
+    container_name: grafana-shortener
+    ports:
+      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:4318:4318"
+    environment:
+      # Read-only access without login; the port listens on localhost only.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - grafana-shortener:/data
+      - ./observability/shortbit-dashboard.json:/otel-lgtm/shortbit/shortbit-dashboard.json:ro
+      - ./observability/grafana-dashboards.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/shortbit.yaml:ro
+    restart: unless-stopped
+
   # The app, built from the root Dockerfile (the production image). It uses
   # the host network so the localhost addresses in .env (Postgres on 5433,
   # Redis, RabbitMQ) work unchanged; only the variables listed here reach the
@@ -79,6 +99,9 @@ services:
       RUN_MIGRATIONS: "true"
       # Clicks go to the worker service below (ADR 0002).
       RUN_CLICK_WORKER: "false"
+      # Metrics and logs go to the local Grafana above.
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://localhost:4318
+      OTEL_RESOURCE_ATTRIBUTES: deployment.environment.name=local
     depends_on:
       postgres-shortener:
         condition: service_healthy
@@ -86,6 +109,8 @@ services:
         condition: service_healthy
       rabbitmq-shortener:
         condition: service_healthy
+      grafana-shortener:
+        condition: service_started
     restart: unless-stopped
 
   worker-shortener:
@@ -96,6 +121,8 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:?Defina DATABASE_URL no .env}
       RABBITMQ_URL: ${RABBITMQ_URL:?Defina RABBITMQ_URL no .env}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://localhost:4318
+      OTEL_RESOURCE_ATTRIBUTES: deployment.environment.name=local
     depends_on:
       # The API applies the migrations the worker relies on.
       api-shortener:
@@ -107,3 +134,4 @@ services:
 volumes:
   postgres-shortener:
   rabbitmq-shortener:
+  grafana-shortener:
