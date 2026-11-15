@@ -125,3 +125,40 @@ func (r *UserRepository) ReplacePasswordAndSessions(ctx context.Context, userID 
 
 	return nil
 }
+
+// DeleteAccount removes the account and everything tied to it, in one
+// transaction, and returns the codes of the deleted links so their cached
+// destinations can be dropped. Links go first: urls.user_id is ON DELETE
+// RESTRICT, so an account is never removed with links still pointing at it.
+// Sessions, the password, the Google identity, password reset attempts and
+// link unlock sessions go by ON DELETE CASCADE.
+func (r *UserRepository) DeleteAccount(ctx context.Context, userID uuid.UUID) ([]string, error) {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin account deletion: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	rows, err := tx.Query(ctx, `DELETE FROM urls WHERE user_id = @userID RETURNING short_code`, pgx.StrictNamedArgs{"userID": userID})
+	if err != nil {
+		return nil, fmt.Errorf("delete account links: %w", err)
+	}
+	shortCodes, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return nil, fmt.Errorf("read deleted link codes: %w", err)
+	}
+
+	deleted, err := tx.Exec(ctx, `DELETE FROM users WHERE id = @userID`, pgx.StrictNamedArgs{"userID": userID})
+	if err != nil {
+		return nil, fmt.Errorf("delete account: %w", err)
+	}
+	if deleted.RowsAffected() != 1 {
+		return nil, ErrUserNotFound
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit account deletion: %w", err)
+	}
+
+	return shortCodes, nil
+}

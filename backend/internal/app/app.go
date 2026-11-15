@@ -108,12 +108,13 @@ func CompositionRoot(pool db.DB, cfg config.Config, googleClient services.Google
 	updateURLHandler := middleware.Authenticator(authService)(http.HandlerFunc(urlHandler.Update))
 	deleteURLHandler := middleware.Authenticator(authService)(http.HandlerFunc(urlHandler.Delete))
 
-	accountService := services.NewAccountService(userRepository, userSessionRepository, passwordHasher, sessiontoken.Generate, cfg.Session.TTL)
+	accountService := services.NewAccountService(userRepository, userSessionRepository, passwordHasher, sessiontoken.Generate, cfg.Session.TTL, destinationCache)
 	passwordChangeRateLimiter := middleware.NewRateLimiter(passwordChangeRateLimitRequestsPerSecond, passwordChangeRateLimitBurst, passwordChangeRateLimitMaxEntries, passwordChangeRateLimitStaleAfter)
 	accountHandler := handlers.NewAccountHandler(accountService, passwordChangeRateLimiter, cfg.Session.CookieSecure)
 	meHandler := middleware.Authenticator(authService)(http.HandlerFunc(accountHandler.Get))
 	updateMeHandler := middleware.Authenticator(authService)(http.HandlerFunc(accountHandler.Update))
 	changePasswordHandler := middleware.Authenticator(authService)(http.HandlerFunc(accountHandler.ChangePassword))
+	deleteMeHandler := middleware.Authenticator(authService)(http.HandlerFunc(accountHandler.Delete))
 
 	return &server.Handlers{
 		UserHandler:              userHandler,
@@ -130,5 +131,6 @@ func CompositionRoot(pool db.DB, cfg config.Config, googleClient services.Google
 		MeHandler:                meHandler,
 		UpdateMeHandler:          updateMeHandler,
 		ChangePasswordHandler:    changePasswordHandler,
+		DeleteMeHandler:          deleteMeHandler,
 	}, passwordRegisterCleanup, nil
 }

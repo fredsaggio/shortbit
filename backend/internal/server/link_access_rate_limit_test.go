@@ -33,10 +33,10 @@ func TestLinkAccessRouteHasRateLimitPerIPAndCode(t *testing.T) {
 		UpdateMeHandler:          http.NotFoundHandler(),
 		ChangePasswordHandler:    http.NotFoundHandler(),
 		UpdateURLHandler:         http.NotFoundHandler(),
-		DeleteURLHandler:         http.NotFoundHandler(),
-		CreateURLHandler:         http.NotFoundHandler(),
-		ListURLHandler:           http.NotFoundHandler(),
-		GetURLHandler:            http.NotFoundHandler(),
+		DeleteURLHandler:         http.NotFoundHandler(), DeleteMeHandler: http.NotFoundHandler(),
+		CreateURLHandler: http.NotFoundHandler(),
+		ListURLHandler:   http.NotFoundHandler(),
+		GetURLHandler:    http.NotFoundHandler(),
 	}
 	srv := NewServer(h, nil)
 	srv.linkAccessLimiter = middleware.NewRateLimiter(0.001, 2, 10, time.Minute)

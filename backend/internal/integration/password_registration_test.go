@@ -480,7 +480,7 @@ func passwordRegistrationTestRouter(pool *pgxpool.Pool, codeSender registrationA
 	authService := services.NewAuthService(userRepository, sessionRepository, passwordHasher, sessiontoken.Generate, 24*time.Hour, 720*time.Hour)
 	loginLimiter := middleware.NewRateLimiter(1, 5, 100, time.Minute)
 	sessionHandler := handlers.NewSessionHandler(authService, loginLimiter, false)
-	accountService := services.NewAccountService(userRepository, sessionRepository, passwordHasher, sessiontoken.Generate, 24*time.Hour)
+	accountService := services.NewAccountService(userRepository, sessionRepository, passwordHasher, sessiontoken.Generate, 24*time.Hour, nil)
 	accountHandler := handlers.NewAccountHandler(accountService, middleware.NewRateLimiter(1_000, 100, 100, time.Minute), false)
 	meHandler := middleware.Authenticator(authService)(http.HandlerFunc(accountHandler.Get))
 
@@ -495,7 +495,7 @@ func passwordRegistrationTestRouter(pool *pgxpool.Pool, codeSender registrationA
 		UpdateMeHandler:       http.NotFoundHandler(),
 		ChangePasswordHandler: http.NotFoundHandler(),
 		UpdateURLHandler:      http.NotFoundHandler(),
-		DeleteURLHandler:      http.NotFoundHandler(),
+		DeleteURLHandler:      http.NotFoundHandler(), DeleteMeHandler: http.NotFoundHandler(),
 	}
 
 	return server.NewServer(applicationHandlers, pool).NewRouterHTTP()

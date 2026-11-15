@@ -20,6 +20,7 @@ type AccountService interface {
 	GetAccount(ctx context.Context, userID uuid.UUID) (models.Account, error)
 	UpdateFullName(ctx context.Context, userID uuid.UUID, fullName string) (models.Account, error)
 	ChangePassword(ctx context.Context, userID uuid.UUID, sessionToken, currentPassword, newPassword, confirmation string) (services.PasswordChangeResult, error)
+	DeleteAccount(ctx context.Context, userID uuid.UUID, password, email string) error
 }
 
 type PasswordChangeRateLimiter interface {
@@ -43,6 +44,12 @@ type changePasswordRequest struct {
 	CurrentPassword         string `json:"current_password"`
 	NewPassword             string `json:"new_password"`
 	NewPasswordConfirmation string `json:"new_password_confirmation"`
+}
+
+// The account with a password sends it; a Google-only account sends its email.
+type deleteAccountRequest struct {
+	Password string `json:"password"`
+	Email    string `json:"email"`
 }
 
 type AccountHandler struct {
@@ -150,6 +157,47 @@ func (h *AccountHandler) ChangePassword(w http.ResponseWriter, r *http.Request) 
 	}
 
 	setUserSessionCookie(w, result.Session.Token, result.Session.ExpiresAt, result.RememberMe, h.cookieSecure)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// Delete handles DELETE /me. It shares the per-account limit of password
+// changes, so guessing the password through either endpoint draws on the same
+// budget, checked before any Argon2id comparison.
+func (h *AccountHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID, ok := ctxval.UserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "erro interno do servidor", http.StatusInternalServerError)
+		return
+	}
+
+	if allowed, retryAfter := h.rateLimiter.Allow(userID.String()); !allowed {
+		w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
+		http.Error(w, "muitas tentativas, tente novamente mais tarde", http.StatusTooManyRequests)
+		return
+	}
+
+	var req deleteAccountRequest
+	if !decodeSingleJSON(w, r, &req) {
+		return
+	}
+
+	if err := h.accounts.DeleteAccount(ctx, userID, req.Password, req.Email); err != nil {
+		switch {
+		case errors.Is(err, services.ErrIncorrectCurrentPassword):
+			http.Error(w, "senha incorreta", http.StatusBadRequest)
+		case errors.Is(err, services.ErrAccountEmailMismatch):
+			http.Error(w, "o email não confere com o da conta", http.StatusBadRequest)
+		case errors.Is(err, services.ErrUnauthenticated):
+			http.Error(w, "autenticação necessária", http.StatusUnauthorized)
+		default:
+			slog.ErrorContext(ctx, "delete account failed", "error", err)
+			http.Error(w, "erro interno do servidor", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	clearUserSessionCookie(w, h.cookieSecure)
 	w.WriteHeader(http.StatusNoContent)
 }
 

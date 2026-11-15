@@ -64,6 +64,7 @@ type Handlers struct {
 	MeHandler                http.Handler
 	UpdateMeHandler          http.Handler
 	ChangePasswordHandler    http.Handler
+	DeleteMeHandler          http.Handler
 }
 
 // Frontend registers the web app routes; frontend.Handler implements it.
@@ -173,6 +174,7 @@ func (srv *Server) registerRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /me", srv.h.MeHandler)
 	mux.Handle("PATCH /me", srv.h.UpdateMeHandler)
 	mux.Handle("POST /me/password", srv.h.ChangePasswordHandler)
+	mux.Handle("DELETE /me", srv.h.DeleteMeHandler)
 
 	loginHandler := srv.loginRateLimiter.MiddlewareByIP(http.HandlerFunc(srv.h.SessionHandler.LoginWithPassword))
 	mux.Handle("POST /sessions", loginHandler)

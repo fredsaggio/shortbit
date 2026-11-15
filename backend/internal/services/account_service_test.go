@@ -25,6 +25,10 @@ type accountRepositoryStub struct {
 	hashErr      error
 	replaceErr   error
 
+	deleteCodes []string
+	deleteErr   error
+	deleted     bool
+
 	updatedName string
 	replaced    *struct {
 		hash      string
@@ -56,6 +60,14 @@ func (s *accountRepositoryStub) ReplacePasswordAndSessions(_ context.Context, _ 
 	return s.replaceErr
 }
 
+func (s *accountRepositoryStub) DeleteAccount(context.Context, uuid.UUID) ([]string, error) {
+	if s.deleteErr != nil {
+		return nil, s.deleteErr
+	}
+	s.deleted = true
+	return s.deleteCodes, nil
+}
+
 type sessionLookupStub struct {
 	session models.UserSession
 	err     error
@@ -78,7 +90,7 @@ func (fakePasswordHasher) Compare(password, encodedHash string) (bool, error) {
 
 func newAccountService(repo *accountRepositoryStub, session models.UserSession) *services.AccountService {
 	generateToken := func() (string, []byte, error) { return "new-session-token", []byte("new-session-hash"), nil }
-	return services.NewAccountService(repo, sessionLookupStub{session: session}, fakePasswordHasher{}, generateToken, accountSessionTTL)
+	return services.NewAccountService(repo, sessionLookupStub{session: session}, fakePasswordHasher{}, generateToken, accountSessionTTL, nil)
 }
 
 func currentSession(ttl time.Duration) models.UserSession {

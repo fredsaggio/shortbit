@@ -25,6 +25,12 @@ type accountServiceStub struct {
 	changeResult   services.PasswordChangeResult
 	gotFullName    string
 	gotChangeInput []string
+	gotDeleteInput []string
+}
+
+func (s *accountServiceStub) DeleteAccount(_ context.Context, _ uuid.UUID, password, email string) error {
+	s.gotDeleteInput = []string{password, email}
+	return s.err
 }
 
 func (s *accountServiceStub) GetAccount(context.Context, uuid.UUID) (models.Account, error) {
