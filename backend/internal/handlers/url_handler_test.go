@@ -25,6 +25,16 @@ type urlServiceStub struct {
 	listFunc           func(context.Context, uuid.UUID, int, *repositories.URLCursor) (services.ListURLResult, error)
 	getByShortCodeFunc func(context.Context, uuid.UUID, string) (models.URL, error)
 	resolveFunc        func(context.Context, string, string) (services.RedirectResult, error)
+	updateFunc         func(context.Context, uuid.UUID, string, services.URLUpdate) (models.URL, error)
+	deleteFunc         func(context.Context, uuid.UUID, string) error
+}
+
+func (s urlServiceStub) Update(ctx context.Context, userID uuid.UUID, shortCode string, update services.URLUpdate) (models.URL, error) {
+	return s.updateFunc(ctx, userID, shortCode, update)
+}
+
+func (s urlServiceStub) Delete(ctx context.Context, userID uuid.UUID, shortCode string) error {
+	return s.deleteFunc(ctx, userID, shortCode)
 }
 
 func (s urlServiceStub) Create(ctx context.Context, userID uuid.UUID, originalURL string, visibility models.Visibility, password string) (services.CreateURLResult, error) {

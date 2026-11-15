@@ -20,6 +20,8 @@ func (noopDestinationCache) Get(context.Context, string) (int64, string, bool, e
 
 func (noopDestinationCache) Set(context.Context, string, int64, string) error { return nil }
 
+func (noopDestinationCache) Delete(context.Context, ...string) error { return nil }
+
 // unavailableClickPublisher makes the redirect count clicks synchronously, so
 // a test can read click_count right after the redirect.
 type unavailableClickPublisher struct{}

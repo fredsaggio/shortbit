@@ -25,6 +25,8 @@ type URLService interface {
 	Create(ctx context.Context, userID uuid.UUID, originalURL string, visibility models.Visibility, password string) (services.CreateURLResult, error)
 	List(ctx context.Context, userID uuid.UUID, limit int, cursor *repositories.URLCursor) (services.ListURLResult, error)
 	GetByShortCode(ctx context.Context, userID uuid.UUID, shortCode string) (models.URL, error)
+	Update(ctx context.Context, userID uuid.UUID, shortCode string, update services.URLUpdate) (models.URL, error)
+	Delete(ctx context.Context, userID uuid.UUID, shortCode string) error
 }
 
 type RedirectService interface {
@@ -35,6 +37,14 @@ type createURLRequest struct {
 	URL        string            `json:"url"`
 	Visibility models.Visibility `json:"visibility"`
 	Password   string            `json:"password"`
+}
+
+// Absent fields stay as they are; on a private link an empty password keeps
+// the current one.
+type updateURLRequest struct {
+	URL        *string            `json:"url"`
+	Visibility *models.Visibility `json:"visibility"`
+	Password   *string            `json:"password"`
 }
 
 type createURLResponse struct {
@@ -102,28 +112,11 @@ func (h *URLHandler) Create(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, services.ErrUnauthenticated):
 			http.Error(w, "autenticação necessária", http.StatusUnauthorized)
 
-		case errors.Is(err, services.ErrInvalidOriginalURL):
-			http.Error(w, "URL original inválida", http.StatusBadRequest)
-
-		case errors.Is(err, services.ErrURLTooLong):
-			http.Error(w, "URL original muito longa", http.StatusBadRequest)
-
-		case errors.Is(err, services.ErrURLPointsToShortDomain):
-			http.Error(w, "não é permitido encurtar o próprio domínio", http.StatusBadRequest)
-
-		case errors.Is(err, services.ErrInvalidURLVisibility):
-			http.Error(w, "visibilidade inválida", http.StatusBadRequest)
-
-		case errors.Is(err, services.ErrUnexpectedLinkPassword):
-			http.Error(w, "link público não deve ter senha", http.StatusBadRequest)
-
-		case errors.Is(err, services.ErrLinkPasswordTooShort):
-			http.Error(w, "senha do link muito curta", http.StatusBadRequest)
-
-		case errors.Is(err, services.ErrLinkPasswordTooLong):
-			http.Error(w, "senha do link muito longa", http.StatusBadRequest)
-
 		default:
+			if message, ok := linkInputErrorMessage(err); ok {
+				http.Error(w, message, http.StatusBadRequest)
+				return
+			}
 			slog.ErrorContext(ctx, "create URL failed", "error", err)
 			http.Error(w, "erro interno do servidor", http.StatusInternalServerError)
 		}
@@ -298,4 +291,117 @@ func (h *URLHandler) Redirect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, result.OriginalURL, http.StatusFound)
+}
+
+// linkInputErrorMessage maps the validation errors shared by creating and
+// editing a link to their 400 messages.
+func linkInputErrorMessage(err error) (string, bool) {
+	switch {
+	case errors.Is(err, services.ErrInvalidOriginalURL):
+		return "URL original inválida", true
+	case errors.Is(err, services.ErrURLTooLong):
+		return "URL original muito longa", true
+	case errors.Is(err, services.ErrURLPointsToShortDomain):
+		return "não é permitido encurtar o próprio domínio", true
+	case errors.Is(err, services.ErrInvalidURLVisibility):
+		return "visibilidade inválida", true
+	case errors.Is(err, services.ErrUnexpectedLinkPassword):
+		return "link público não deve ter senha", true
+	case errors.Is(err, services.ErrLinkPasswordTooShort):
+		return "senha do link muito curta", true
+	case errors.Is(err, services.ErrLinkPasswordTooLong):
+		return "senha do link muito longa", true
+	case errors.Is(err, services.ErrLinkPasswordRequired):
+		return "informe a senha do link", true
+	case errors.Is(err, services.ErrEmptyURLUpdate):
+		return "informe o que alterar", true
+	}
+	return "", false
+}
+
+// Update handles PATCH /urls/{code}: the owner changes the destination, the
+// visibility or the password, and gets the link back as GET returns it.
+func (h *URLHandler) Update(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	userID, ok := ctxval.UserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "autenticação necessária", http.StatusUnauthorized)
+		return
+	}
+
+	var req updateURLRequest
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil {
+		http.Error(w, "corpo da requisição inválido", http.StatusBadRequest)
+		return
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		http.Error(w, "corpo da requisição deve conter apenas um objeto JSON", http.StatusBadRequest)
+		return
+	}
+
+	updated, err := h.serv.Update(ctx, userID, r.PathValue("code"), services.URLUpdate{
+		OriginalURL: req.URL,
+		Visibility:  req.Visibility,
+		Password:    req.Password,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, services.ErrUnauthenticated):
+			http.Error(w, "autenticação necessária", http.StatusUnauthorized)
+		case errors.Is(err, services.ErrURLNotFound):
+			http.Error(w, "url não encontrada", http.StatusNotFound)
+		default:
+			if message, ok := linkInputErrorMessage(err); ok {
+				http.Error(w, message, http.StatusBadRequest)
+				return
+			}
+			slog.ErrorContext(ctx, "update URL failed", "error", err)
+			http.Error(w, "erro interno do servidor", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	resp := listedURLResponse{
+		ShortCode:   updated.ShortCode,
+		OriginalURL: updated.OriginalURL,
+		Visibility:  updated.Visibility,
+		ClickCount:  updated.ClickCount,
+		CreatedAt:   updated.CreatedAt,
+		UpdatedAt:   updated.UpdatedAt,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(&resp); err != nil {
+		slog.ErrorContext(ctx, "encode updated URL failed", "error", err)
+	}
+}
+
+// Delete handles DELETE /urls/{code}. Another user's link answers 404, as GET
+// does, so the API never reveals whose a code is.
+func (h *URLHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	userID, ok := ctxval.UserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "autenticação necessária", http.StatusUnauthorized)
+		return
+	}
+
+	if err := h.serv.Delete(ctx, userID, r.PathValue("code")); err != nil {
+		switch {
+		case errors.Is(err, services.ErrUnauthenticated):
+			http.Error(w, "autenticação necessária", http.StatusUnauthorized)
+		case errors.Is(err, services.ErrURLNotFound):
+			http.Error(w, "url não encontrada", http.StatusNotFound)
+		default:
+			slog.ErrorContext(ctx, "delete URL failed", "error", err)
+			http.Error(w, "erro interno do servidor", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }

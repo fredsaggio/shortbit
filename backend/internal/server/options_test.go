@@ -21,6 +21,8 @@ func newOptionsTestHandlers() *Handlers {
 		MeHandler:             http.NotFoundHandler(),
 		UpdateMeHandler:       http.NotFoundHandler(),
 		ChangePasswordHandler: http.NotFoundHandler(),
+		UpdateURLHandler:      http.NotFoundHandler(),
+		DeleteURLHandler:      http.NotFoundHandler(),
 	}
 }
 

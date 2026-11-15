@@ -80,7 +80,7 @@ func CompositionRoot(pool db.DB, cfg config.Config, googleClient services.Google
 		return nil, nil, fmt.Errorf("initialize shortcode generator: %w", err)
 	}
 	urlRepository := repositories.NewURLRepository(pool)
-	urlService, err := services.NewURLService(urlRepository, shortCodeGenerator, passwordHasher, services.URLServiceConfig{
+	urlService, err := services.NewURLService(urlRepository, shortCodeGenerator, passwordHasher, destinationCache, services.URLServiceConfig{
 		PublicBaseURL:       cfg.URL.BaseURL,
 		MaxOriginalURLBytes: cfg.URL.MaxOriginalURLBytes,
 	})
@@ -105,6 +105,8 @@ func CompositionRoot(pool db.DB, cfg config.Config, googleClient services.Google
 	getURLHandler := middleware.Authenticator(authService)(
 		http.HandlerFunc(urlHandler.GetByShortCode),
 	)
+	updateURLHandler := middleware.Authenticator(authService)(http.HandlerFunc(urlHandler.Update))
+	deleteURLHandler := middleware.Authenticator(authService)(http.HandlerFunc(urlHandler.Delete))
 
 	accountService := services.NewAccountService(userRepository, userSessionRepository, passwordHasher, sessiontoken.Generate, cfg.Session.TTL)
 	passwordChangeRateLimiter := middleware.NewRateLimiter(passwordChangeRateLimitRequestsPerSecond, passwordChangeRateLimitBurst, passwordChangeRateLimitMaxEntries, passwordChangeRateLimitStaleAfter)
@@ -123,6 +125,8 @@ func CompositionRoot(pool db.DB, cfg config.Config, googleClient services.Google
 		CreateURLHandler:         createURLHandler,
 		ListURLHandler:           listURLHandler,
 		GetURLHandler:            getURLHandler,
+		UpdateURLHandler:         updateURLHandler,
+		DeleteURLHandler:         deleteURLHandler,
 		MeHandler:                meHandler,
 		UpdateMeHandler:          updateMeHandler,
 		ChangePasswordHandler:    changePasswordHandler,

@@ -58,6 +58,8 @@ func TestPasswordResetIntegration(t *testing.T) {
 		MeHandler:             middleware.Authenticator(authService)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })),
 		UpdateMeHandler:       http.NotFoundHandler(),
 		ChangePasswordHandler: http.NotFoundHandler(),
+		UpdateURLHandler:      http.NotFoundHandler(),
+		DeleteURLHandler:      http.NotFoundHandler(),
 	}, pool).NewRouterHTTP()
 
 	login := performJSONRequest(t, router, http.MethodPost, "/sessions", `{"email":"reset-flow@example.com","password":"Senha-antiga123"}`)

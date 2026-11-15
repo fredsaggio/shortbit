@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"strings"
 	"unicode/utf8"
@@ -29,6 +30,8 @@ var (
 	ErrLinkPasswordTooLong    = errors.New("password too long")
 	ErrInvalidURLListLimit    = errors.New("invalid URL list limit")
 	ErrURLNotFound            = errors.New("url not found")
+	ErrEmptyURLUpdate         = errors.New("nothing to update")
+	ErrLinkPasswordRequired   = errors.New("link password required")
 )
 
 type URLRepository interface {
@@ -36,6 +39,21 @@ type URLRepository interface {
 	Create(ctx context.Context, url models.URL) (models.URL, error)
 	List(ctx context.Context, userID uuid.UUID, limit int, cursor *repositories.URLCursor) ([]models.URL, error)
 	GetByShortcode(ctx context.Context, userID uuid.UUID, shortCode string) (models.URL, error)
+	Update(ctx context.Context, userID uuid.UUID, shortCode string, edit repositories.URLEdit) (models.URL, error)
+	Delete(ctx context.Context, userID uuid.UUID, shortCode string) error
+}
+
+// DestinationInvalidator drops cached destinations of edited or deleted links.
+type DestinationInvalidator interface {
+	Delete(ctx context.Context, shortCodes ...string) error
+}
+
+// URLUpdate holds the fields of an edit; nil leaves a field as it is. On a
+// private link, an empty Password keeps the current one.
+type URLUpdate struct {
+	OriginalURL *string
+	Visibility  *models.Visibility
+	Password    *string
 }
 
 type ShortCodeGenerator interface {
@@ -61,12 +79,13 @@ type URLService struct {
 	repo                URLRepository
 	generator           ShortCodeGenerator
 	hasher              PasswordHasher
+	destinations        DestinationInvalidator
 	publicBaseURL       string
 	publicHost          string
 	maxOriginalURLBytes int
 }
 
-func NewURLService(repo URLRepository, generator ShortCodeGenerator, hasher PasswordHasher, config URLServiceConfig) (*URLService, error) {
+func NewURLService(repo URLRepository, generator ShortCodeGenerator, hasher PasswordHasher, destinations DestinationInvalidator, config URLServiceConfig) (*URLService, error) {
 	// Package URL pra parsear a string e pegar as informações separadas (scheme, rawquery, etc)
 	base, err := url.Parse(config.PublicBaseURL)
 	if err != nil || (base.Scheme != "http" && base.Scheme != "https") ||
@@ -82,6 +101,7 @@ func NewURLService(repo URLRepository, generator ShortCodeGenerator, hasher Pass
 		repo:                repo,
 		generator:           generator,
 		hasher:              hasher,
+		destinations:        destinations,
 		publicBaseURL:       strings.TrimRight(config.PublicBaseURL, "/"),
 		publicHost:          strings.TrimSuffix(base.Hostname(), "."),
 		maxOriginalURLBytes: config.MaxOriginalURLBytes,
@@ -93,21 +113,8 @@ func (s *URLService) Create(ctx context.Context, userID uuid.UUID, originalURL s
 		return CreateURLResult{}, ErrUnauthenticated
 	}
 
-	if originalURL == "" || originalURL != strings.TrimSpace(originalURL) {
-		return CreateURLResult{}, ErrInvalidOriginalURL
-	}
-
-	if len(originalURL) > s.maxOriginalURLBytes {
-		return CreateURLResult{}, ErrURLTooLong
-	}
-
-	parsed, err := url.Parse(originalURL)
-	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Hostname() == "" || parsed.User != nil || parsed.Opaque != "" {
-		return CreateURLResult{}, ErrInvalidOriginalURL
-	}
-
-	if strings.EqualFold(strings.TrimSuffix(parsed.Hostname(), "."), s.publicHost) {
-		return CreateURLResult{}, ErrURLPointsToShortDomain
+	if err := s.validateOriginalURL(originalURL); err != nil {
+		return CreateURLResult{}, err
 	}
 
 	if !visibility.IsValid() {
@@ -122,18 +129,9 @@ func (s *URLService) Create(ctx context.Context, userID uuid.UUID, originalURL s
 			return CreateURLResult{}, ErrUnexpectedLinkPassword
 		}
 	case models.VisibilityPrivate:
-		if utf8.RuneCountInString(password) < minLinkPasswordCharacters {
-			return CreateURLResult{}, ErrLinkPasswordTooShort
-		}
-
-		if len(password) > maxLinkPasswordBytes {
-			return CreateURLResult{}, ErrLinkPasswordTooLong
-		}
-
-		hash, err := s.hasher.Hash(password)
-
+		hash, err := s.hashLinkPassword(password)
 		if err != nil {
-			return CreateURLResult{}, fmt.Errorf("hash link password: %w", err)
+			return CreateURLResult{}, err
 		}
 
 		passwordHash = &hash
@@ -211,4 +209,149 @@ func (s *URLService) GetByShortCode(ctx context.Context, userID uuid.UUID, short
 	}
 
 	return link, nil
+}
+
+// Update edits one of the owner's links. Switching to private needs a
+// password; a new password ends every unlock session made with the old one.
+// The cached destination is dropped before and after the write, so a redirect
+// racing the edit cannot leave the old destination cached.
+func (s *URLService) Update(ctx context.Context, userID uuid.UUID, shortCode string, update URLUpdate) (models.URL, error) {
+	if userID == uuid.Nil() {
+		return models.URL{}, ErrUnauthenticated
+	}
+	if update.OriginalURL == nil && update.Visibility == nil && update.Password == nil {
+		return models.URL{}, ErrEmptyURLUpdate
+	}
+
+	current, err := s.repo.GetByShortcode(ctx, userID, shortCode)
+	if err != nil {
+		if errors.Is(err, repositories.ErrURLNotFound) {
+			return models.URL{}, ErrURLNotFound
+		}
+		return models.URL{}, fmt.Errorf("get URL to update: %w", err)
+	}
+
+	edit := repositories.URLEdit{OriginalURL: current.OriginalURL, Visibility: current.Visibility, KeepPasswordHash: true}
+
+	if update.OriginalURL != nil {
+		if err := s.validateOriginalURL(*update.OriginalURL); err != nil {
+			return models.URL{}, err
+		}
+		edit.OriginalURL = *update.OriginalURL
+	}
+
+	if update.Visibility != nil {
+		if !update.Visibility.IsValid() {
+			return models.URL{}, ErrInvalidURLVisibility
+		}
+		edit.Visibility = *update.Visibility
+	}
+
+	newPassword := ""
+	if update.Password != nil {
+		newPassword = *update.Password
+	}
+
+	switch edit.Visibility {
+	case models.VisibilityPublic:
+		if newPassword != "" {
+			return models.URL{}, ErrUnexpectedLinkPassword
+		}
+		edit.KeepPasswordHash = false
+		edit.PasswordHash = nil
+	case models.VisibilityPrivate:
+		if newPassword == "" {
+			if current.Visibility == models.VisibilityPublic {
+				return models.URL{}, ErrLinkPasswordRequired
+			}
+			break
+		}
+		hash, err := s.hashLinkPassword(newPassword)
+		if err != nil {
+			return models.URL{}, err
+		}
+		edit.PasswordHash = &hash
+		edit.KeepPasswordHash = false
+		edit.RevokeAccessSessions = true
+	}
+
+	s.invalidateDestinations(ctx, shortCode)
+	updated, err := s.repo.Update(ctx, userID, shortCode, edit)
+	if err != nil {
+		if errors.Is(err, repositories.ErrURLNotFound) {
+			return models.URL{}, ErrURLNotFound
+		}
+		return models.URL{}, fmt.Errorf("update URL: %w", err)
+	}
+	s.invalidateDestinations(ctx, shortCode)
+
+	return updated, nil
+}
+
+// Delete removes one of the owner's links for good. Anyone opening it after
+// that gets a not found; the short code is never handed out again.
+func (s *URLService) Delete(ctx context.Context, userID uuid.UUID, shortCode string) error {
+	if userID == uuid.Nil() {
+		return ErrUnauthenticated
+	}
+
+	s.invalidateDestinations(ctx, shortCode)
+	if err := s.repo.Delete(ctx, userID, shortCode); err != nil {
+		if errors.Is(err, repositories.ErrURLNotFound) {
+			return ErrURLNotFound
+		}
+		return fmt.Errorf("delete URL: %w", err)
+	}
+	s.invalidateDestinations(ctx, shortCode)
+
+	return nil
+}
+
+func (s *URLService) validateOriginalURL(originalURL string) error {
+	if originalURL == "" || originalURL != strings.TrimSpace(originalURL) {
+		return ErrInvalidOriginalURL
+	}
+
+	if len(originalURL) > s.maxOriginalURLBytes {
+		return ErrURLTooLong
+	}
+
+	parsed, err := url.Parse(originalURL)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Hostname() == "" || parsed.User != nil || parsed.Opaque != "" {
+		return ErrInvalidOriginalURL
+	}
+
+	if strings.EqualFold(strings.TrimSuffix(parsed.Hostname(), "."), s.publicHost) {
+		return ErrURLPointsToShortDomain
+	}
+
+	return nil
+}
+
+func (s *URLService) hashLinkPassword(password string) (string, error) {
+	if utf8.RuneCountInString(password) < minLinkPasswordCharacters {
+		return "", ErrLinkPasswordTooShort
+	}
+
+	if len(password) > maxLinkPasswordBytes {
+		return "", ErrLinkPasswordTooLong
+	}
+
+	hash, err := s.hasher.Hash(password)
+	if err != nil {
+		return "", fmt.Errorf("hash link password: %w", err)
+	}
+
+	return hash, nil
+}
+
+// A failed invalidation leaves the old destination cached until its entry
+// expires (URL_CACHE_TTL); the database write itself already happened.
+func (s *URLService) invalidateDestinations(ctx context.Context, shortCodes ...string) {
+	if s.destinations == nil {
+		return
+	}
+	if err := s.destinations.Delete(ctx, shortCodes...); err != nil {
+		slog.WarnContext(ctx, "drop cached URL destinations failed", "error", err)
+	}
 }

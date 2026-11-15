@@ -494,6 +494,8 @@ func passwordRegistrationTestRouter(pool *pgxpool.Pool, codeSender registrationA
 		MeHandler:             meHandler,
 		UpdateMeHandler:       http.NotFoundHandler(),
 		ChangePasswordHandler: http.NotFoundHandler(),
+		UpdateURLHandler:      http.NotFoundHandler(),
+		DeleteURLHandler:      http.NotFoundHandler(),
 	}
 
 	return server.NewServer(applicationHandlers, pool).NewRouterHTTP()

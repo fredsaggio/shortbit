@@ -31,6 +31,7 @@ type PrivateLinkResolver interface {
 type DestinationCache interface {
 	Get(ctx context.Context, shortCode string) (int64, string, bool, error)
 	Set(ctx context.Context, shortCode string, urlID int64, originalURL string) error
+	Delete(ctx context.Context, shortCodes ...string) error
 }
 
 type ClickPublisher interface {

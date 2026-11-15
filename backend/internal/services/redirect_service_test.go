@@ -72,8 +72,9 @@ type destinationCacheStub struct {
 	getErr      error
 	setErr      error
 
-	gets []string
-	sets []struct {
+	gets    []string
+	deleted []string
+	sets    []struct {
 		shortCode   string
 		urlID       int64
 		originalURL string
@@ -83,6 +84,11 @@ type destinationCacheStub struct {
 func (c *destinationCacheStub) Get(_ context.Context, shortCode string) (int64, string, bool, error) {
 	c.gets = append(c.gets, shortCode)
 	return c.urlID, c.originalURL, c.found, c.getErr
+}
+
+func (c *destinationCacheStub) Delete(_ context.Context, shortCodes ...string) error {
+	c.deleted = append(c.deleted, shortCodes...)
+	return nil
 }
 
 func (c *destinationCacheStub) Set(_ context.Context, shortCode string, urlID int64, originalURL string) error {

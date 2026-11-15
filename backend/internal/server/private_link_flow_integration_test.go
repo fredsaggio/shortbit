@@ -39,6 +39,8 @@ func (noopDestinationCache) Get(context.Context, string) (int64, string, bool, e
 
 func (noopDestinationCache) Set(context.Context, string, int64, string) error { return nil }
 
+func (noopDestinationCache) Delete(context.Context, ...string) error { return nil }
+
 type unavailableClickPublisher struct{}
 
 func (unavailableClickPublisher) Publish(context.Context, messaging.ClickEvent) error {

@@ -66,3 +66,25 @@ func (c *RedisDestinationCache) Set(ctx context.Context, shortCode string, urlID
 
 	return nil
 }
+
+// Delete drops cached destinations, so an edited or deleted link stops
+// resolving from the cache at once instead of when its entry expires.
+func (c *RedisDestinationCache) Delete(ctx context.Context, shortCodes ...string) error {
+	if len(shortCodes) == 0 {
+		return nil
+	}
+
+	opCtx, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
+
+	keys := make([]string, 0, len(shortCodes))
+	for _, shortCode := range shortCodes {
+		keys = append(keys, destinationKey(shortCode))
+	}
+
+	if err := c.client.Del(opCtx, keys...).Err(); err != nil {
+		return fmt.Errorf("delete cached URL destinations: %w", err)
+	}
+
+	return nil
+}

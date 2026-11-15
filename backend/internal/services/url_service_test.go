@@ -18,6 +18,16 @@ type urlRepositoryStub struct {
 	createFunc         func(context.Context, models.URL) (models.URL, error)
 	listFunc           func(context.Context, uuid.UUID, int, *repositories.URLCursor) ([]models.URL, error)
 	getByShortcodeFunc func(context.Context, uuid.UUID, string) (models.URL, error)
+	updateFunc         func(context.Context, uuid.UUID, string, repositories.URLEdit) (models.URL, error)
+	deleteFunc         func(context.Context, uuid.UUID, string) error
+}
+
+func (s urlRepositoryStub) Update(ctx context.Context, userID uuid.UUID, shortCode string, edit repositories.URLEdit) (models.URL, error) {
+	return s.updateFunc(ctx, userID, shortCode, edit)
+}
+
+func (s urlRepositoryStub) Delete(ctx context.Context, userID uuid.UUID, shortCode string) error {
+	return s.deleteFunc(ctx, userID, shortCode)
 }
 
 func (s urlRepositoryStub) ReserveID(ctx context.Context) (int64, error) {
@@ -61,7 +71,7 @@ func TestNewURLServiceValidatesConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			service, err := services.NewURLService(nil, nil, nil, tt.config)
+			service, err := services.NewURLService(nil, nil, nil, nil, tt.config)
 			if tt.valid {
 				if err != nil || service == nil {
 					t.Fatalf("NewURLService() = (%v, %v), want non-nil service and no error", service, err)
@@ -446,7 +456,7 @@ func TestURLServiceGetByShortCodeWrapsRepositoryError(t *testing.T) {
 
 func newURLServiceForTest(t *testing.T, repo services.URLRepository, generator services.ShortCodeGenerator, hasher services.PasswordHasher, baseURL string) *services.URLService {
 	t.Helper()
-	service, err := services.NewURLService(repo, generator, hasher, services.URLServiceConfig{
+	service, err := services.NewURLService(repo, generator, hasher, nil, services.URLServiceConfig{
 		PublicBaseURL:       baseURL,
 		MaxOriginalURLBytes: 256,
 	})

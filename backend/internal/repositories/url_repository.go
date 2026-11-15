@@ -241,3 +241,79 @@ func (r *URLRepository) ResolvePrivate(ctx context.Context, linkID int64, tokenH
 
 	return originalURL, nil
 }
+
+// URLEdit is the full new state of a link. PasswordHash is used only when
+// KeepPasswordHash is false; nil then clears it, as a public link requires.
+type URLEdit struct {
+	OriginalURL          string
+	Visibility           models.Visibility
+	PasswordHash         *string
+	KeepPasswordHash     bool
+	RevokeAccessSessions bool
+}
+
+// Update applies an edit to one of the owner's links. With
+// RevokeAccessSessions, every unlock session of the link ends in the same
+// transaction, so a new password locks out whoever used the old one.
+func (r *URLRepository) Update(ctx context.Context, userID uuid.UUID, shortCode string, edit URLEdit) (models.URL, error) {
+	const updateQuery = `
+		UPDATE urls
+		SET original_url = @originalURL,
+			visibility = @visibility,
+			password_hash = CASE WHEN CAST(@keepPasswordHash AS boolean) THEN password_hash ELSE CAST(@passwordHash AS text) END
+		WHERE user_id = @userID AND short_code = @shortCode
+		RETURNING id, short_code, user_id, original_url, visibility, click_count, created_at, updated_at
+	`
+	const revokeQuery = `DELETE FROM link_access_sessions WHERE link_id = @linkID`
+
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return models.URL{}, fmt.Errorf("begin URL update: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var updated models.URL
+	err = tx.QueryRow(ctx, updateQuery, pgx.StrictNamedArgs{
+		"originalURL":      edit.OriginalURL,
+		"visibility":       edit.Visibility,
+		"keepPasswordHash": edit.KeepPasswordHash,
+		"passwordHash":     edit.PasswordHash,
+		"userID":           userID,
+		"shortCode":        shortCode,
+	}).Scan(&updated.ID, &updated.ShortCode, &updated.UserID, &updated.OriginalURL, &updated.Visibility,
+		&updated.ClickCount, &updated.CreatedAt, &updated.UpdatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.URL{}, ErrURLNotFound
+		}
+		return models.URL{}, fmt.Errorf("update URL: %w", err)
+	}
+
+	if edit.RevokeAccessSessions {
+		if _, err := tx.Exec(ctx, revokeQuery, pgx.StrictNamedArgs{"linkID": updated.ID}); err != nil {
+			return models.URL{}, fmt.Errorf("revoke link access sessions: %w", err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return models.URL{}, fmt.Errorf("commit URL update: %w", err)
+	}
+
+	return updated, nil
+}
+
+// Delete removes one of the owner's links; its unlock sessions go with it
+// (ON DELETE CASCADE). IDs are never reused, so neither is the short code.
+func (r *URLRepository) Delete(ctx context.Context, userID uuid.UUID, shortCode string) error {
+	const q = `DELETE FROM urls WHERE user_id = @userID AND short_code = @shortCode`
+
+	tag, err := r.db.Exec(ctx, q, pgx.StrictNamedArgs{"userID": userID, "shortCode": shortCode})
+	if err != nil {
+		return fmt.Errorf("delete URL: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrURLNotFound
+	}
+
+	return nil
+}
