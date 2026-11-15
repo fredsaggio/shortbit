@@ -255,7 +255,7 @@ export function Layout() {
           </div>
         </div>
         <div className="border-t border-white/10">
-          <p className="mx-auto max-w-7xl px-4 py-5 text-xs sm:px-6">© {currentYear} shortbit · Projeto de estudo</p>
+          <p className="mx-auto max-w-7xl px-4 py-5 text-xs sm:px-6">© {currentYear} shortbit. Todos os direitos reservados.</p>
         </div>
       </footer>
     </div>
