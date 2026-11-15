@@ -44,6 +44,9 @@ jobs:
           go -C backend vet -tags integration ./...
       - name: Unit tests with the race detector
         run: go -C backend test -race -count=1 ./...
+      # /docs renders this file in the browser; invalid YAML breaks the page.
+      - name: OpenAPI file parses
+        run: python3 -c "import yaml; yaml.safe_load(open('backend/docs/openapi.yaml'))"
 
   integration:
     name: Backend integration tests
