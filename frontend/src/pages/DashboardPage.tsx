@@ -1,4 +1,4 @@
-import { BarChart3, ChevronRight, CircleCheck, Globe, Link2, LinkIcon, Lock, MoreVertical, Pencil, QrCode, RotateCw, Trash2 } from 'lucide-react'
+import { BarChart3, ChevronRight, Globe, Link2, LinkIcon, Lock, MoreVertical, Pencil, QrCode, RotateCw, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { Link, useNavigate } from 'react-router'
@@ -10,6 +10,7 @@ import { Button } from '../components/Button.tsx'
 import { ConfirmDialog } from '../components/ConfirmDialog.tsx'
 import { QrCodeDialog } from '../components/QrCodeDialog.tsx'
 import { CopyButton } from '../components/CopyButton.tsx'
+import { CreatedLinkBanner } from '../components/CreatedLinkBanner.tsx'
 import { LinkListSkeleton } from '../components/PageLoader.tsx'
 import { PasswordStrength } from '../components/PasswordStrength.tsx'
 import { TextField } from '../components/TextField.tsx'
@@ -167,18 +168,7 @@ function CreateLinkCard({ onCreated }: { onCreated: () => void }) {
         </div>
       </form>
 
-      {created && (
-        <div
-          role="status"
-          className="mt-5 flex flex-wrap items-center gap-3 rounded-xl border border-success/25 bg-success-soft p-4 animate-in fade-in zoom-in-95 duration-200"
-        >
-          <CircleCheck className="size-5 text-success" aria-hidden="true" />
-          <a href={created.short_url} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate font-bold text-action hover:underline">
-            {created.short_url}
-          </a>
-          <CopyButton text={created.short_url} />
-        </div>
-      )}
+      {created && <CreatedLinkBanner link={created} className="mt-5" />}
     </section>
   )
 }

@@ -1,6 +1,6 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { fakeApi, signedOut } from '../test/fakeApi.ts'
+import { fakeApi, signedOut, user } from '../test/fakeApi.ts'
 import { renderApp } from '../test/renderApp.tsx'
 
 describe('HomePage', () => {
@@ -55,5 +55,25 @@ describe('HomePage', () => {
     expect(await screen.findByText('A senha do link precisa ter pelo menos 8 caracteres.')).toBeInTheDocument()
     expect(screen.getByTestId('current-path')).toHaveTextContent('/')
     expect(sessionStorage.getItem('shortbit:pending-link')).toBeNull()
+  })
+
+  it('creates the link right away when signed in and offers its QR code', async () => {
+    const api = fakeApi({
+      'GET /me': { status: 200, body: user },
+      'POST /urls': { status: 201, body: { short_code: 'Ab3dX9', short_url: 'http://localhost:8080/Ab3dX9' } },
+    })
+    const { user: actions } = renderApp('/')
+
+    await actions.type(await screen.findByLabelText('URL para encurtar'), 'https://example.com/um-link-bem-longo')
+    await actions.click(screen.getByRole('button', { name: 'Encurtar' }))
+
+    const shortLink = await screen.findByRole('link', { name: 'http://localhost:8080/Ab3dX9' })
+    const result = shortLink.closest<HTMLElement>('[role="status"]')
+    if (!result) throw new Error('created link is not inside its status banner')
+    expect(api.calls('POST', '/urls')).toHaveLength(1)
+
+    await actions.click(within(result).getByRole('button', { name: 'QR code' }))
+    const dialog = await screen.findByRole('dialog', { name: 'QR code do link' })
+    expect(await within(dialog).findByRole('img', { name: 'QR code de localhost:8080/Ab3dX9' })).toBeInTheDocument()
   })
 })

@@ -237,4 +237,24 @@ describe('DashboardPage', () => {
     const dialog = await screen.findByRole('dialog', { name: 'QR code do link' })
     expect(await within(dialog).findByRole('img', { name: 'QR code de localhost:8080/Ab3dX9' })).toBeInTheDocument()
   })
+
+  it('offers the QR code of the link just created', async () => {
+    fakeApi({
+      ...signedIn,
+      'GET /urls': { status: 200, body: { urls: [], next_cursor: null } },
+      'POST /urls': { status: 201, body: { short_code: 'Ab3dX9', short_url: 'http://localhost:8080/Ab3dX9' } },
+    })
+    const { user: actions } = renderApp('/painel')
+
+    await actions.type(await screen.findByLabelText('URL de destino'), 'https://example.com')
+    await actions.click(screen.getByRole('button', { name: 'Criar link curto' }))
+
+    const shortLink = await screen.findByRole('link', { name: 'http://localhost:8080/Ab3dX9' })
+    const result = shortLink.closest<HTMLElement>('[role="status"]')
+    if (!result) throw new Error('created link is not inside its status banner')
+    await actions.click(within(result).getByRole('button', { name: 'QR code' }))
+
+    const dialog = await screen.findByRole('dialog', { name: 'QR code do link' })
+    expect(await within(dialog).findByRole('img', { name: 'QR code de localhost:8080/Ab3dX9' })).toBeInTheDocument()
+  })
 })

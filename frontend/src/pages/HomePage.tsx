@@ -1,4 +1,4 @@
-import { ArrowRight, BarChart3, CircleCheck, Lock, Zap } from 'lucide-react'
+import { ArrowRight, BarChart3, Lock, Zap } from 'lucide-react'
 import { useId, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { messageOf } from '../api/client.ts'
@@ -8,7 +8,7 @@ import { useAuth } from '../auth/AuthContext.ts'
 import { Alert } from '../components/Alert.tsx'
 import { Button } from '../components/Button.tsx'
 import { buttonSizes, buttonTones } from '../components/buttonStyles.ts'
-import { CopyButton } from '../components/CopyButton.tsx'
+import { CreatedLinkBanner } from '../components/CreatedLinkBanner.tsx'
 import { ClickBars } from '../components/home/ClickBars.tsx'
 import { FloatingLinks } from '../components/home/FloatingLinks.tsx'
 import { LinkMarquee } from '../components/home/LinkMarquee.tsx'
@@ -132,15 +132,7 @@ function ShortenCard() {
           </div>
         </form>
         {error && <Alert tone="error" className="mt-4">{error}</Alert>}
-        {created && (
-          <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-success/25 bg-success-soft p-4 animate-in fade-in zoom-in-95 duration-200">
-            <CircleCheck className="size-5 text-success" aria-hidden="true" />
-            <a href={created.short_url} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate font-bold text-action hover:underline">
-              {created.short_url}
-            </a>
-            <CopyButton text={created.short_url} />
-          </div>
-        )}
+        {created && <CreatedLinkBanner link={created} className="mt-4" />}
       </div>
     </div>
   )
