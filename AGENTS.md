@@ -27,6 +27,7 @@ Não coloque co-author em nenhum commit criado por você, em nenhuma hipótese.
 - `backend/migrations/`: migrations Goose, embarcadas no binário de testes.
 - `backend/docs/`: `authentication.md`, `short-links.md`, `api.md`, `openapi.yaml`, `data-model.md`, `glossary.md`, `development.md`, `deployment.md` e `decisions/` (ADRs). Leia só quando mexer no assunto.
 - Deploy: `Dockerfile` e `render.yaml` na raiz. Uma imagem só: a API serve o frontend e roda o worker (ADR 0003). Passo a passo em `backend/docs/deployment.md`.
+- CI: `.github/workflows/ci.yml` roda as mesmas checagens da seção "Antes de terminar uma mudança" a cada push e PR na `main`, e o Render só faz deploy quando elas passam. Actions ficam fixadas pelo SHA do commit, com a versão em comentário.
 - `IMPLEMENTATION_PLAN.md` (ordem das fases e progresso) e `PROJECT_CONTEXT.md` (produto e regras gerais) ficam só na máquina do usuário, ignorados pelo Git.
 
 ## Comandos (rodar na raiz)

@@ -95,7 +95,7 @@ No Google Cloud Console, no cliente OAuth já usado localmente ou num novo:
 3. Espere o primeiro deploy. No log, procure `database migrations up to date`, `serving the web app` e `click worker started`.
 4. Teste em `https://shortbit.onrender.com` antes de apontar o domínio.
 
-Cada push na `main` gera um deploy novo.
+Cada push na `main` roda o CI do GitHub Actions (`.github/workflows/ci.yml`): `gofmt`, `go vet`, testes unitários com `-race`, testes de integração, lint, testes e build do frontend, e o build da imagem Docker. O Render só faz o deploy do commit quando todas essas checagens passam (`autoDeployTrigger: checksPass` no `render.yaml`); um commit que quebra os testes nunca chega ao ar.
 
 ### 7. Domínio no Registro.br
 

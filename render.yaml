@@ -14,7 +14,8 @@ services:
     # Liveness only: /health/ready pings Postgres, and frequent checks would
     # keep the free Neon database from ever suspending.
     healthCheckPath: /health/live
-    autoDeployTrigger: commit
+    # Deploy a commit only after the GitHub Actions checks (.github/workflows/ci.yml) pass.
+    autoDeployTrigger: checksPass
     envVars:
       - key: PORT
         value: "8080"
