@@ -81,7 +81,7 @@ function ShortenCard() {
   return (
     <div className="mx-auto mt-10 w-full max-w-4xl rounded-[28px] border border-white/10 bg-white/5 p-1.5 shadow-raised motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-6 motion-safe:duration-700 motion-safe:[animation-delay:450ms] motion-safe:[animation-fill-mode:both] sm:mt-12 sm:p-2">
       <div className="rounded-[22px] bg-card p-5 text-left sm:p-8">
-        <h2 className="text-xl font-bold text-navy sm:text-2xl">Encurte um link longo de graça</h2>
+        <h2 className="text-xl font-bold text-navy sm:text-2xl">Cole o link que você quer encurtar</h2>
         <form className="mt-4 grid gap-4" onSubmit={handleSubmit} noValidate>
           <TextField
             label="URL para encurtar"
