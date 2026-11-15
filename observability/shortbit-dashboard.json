@@ -1,19 +1,20 @@
 {
   "title": "shortbit",
   "uid": "shortbit-overview",
-  "description": "API, redirects, cliques e segurança do shortbit (backend/docs/observability.md).",
+  "description": "Links, tráfego, cliques e segurança do shortbit (backend/docs/observability.md).",
   "tags": [
     "shortbit"
   ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 2,
-  "refresh": "1m",
+  "refresh": "5m",
+  "graphTooltip": 1,
   "time": {
-    "from": "now-6h",
+    "from": "now-24h",
     "to": "now"
   },
   "editable": true,
+  "liveNow": false,
   "templating": {
     "list": [
       {
@@ -47,13 +48,15 @@
           "value": [
             "$__all"
           ]
-        }
+        },
+        "hide": 0
       }
     ]
   },
   "annotations": {
     "list": []
   },
+  "links": [],
   "panels": [
     {
       "type": "row",
@@ -70,19 +73,20 @@
     },
     {
       "type": "stat",
-      "title": "Requisições por minuto",
+      "title": "Aberturas",
       "id": 2,
-      "description": "Todas as rotas menos o health check da hospedagem, média do intervalo.",
+      "description": "Visitantes levados ao destino no período (link e QR code).",
       "datasource": {
         "type": "prometheus",
         "uid": "${prometheus}"
       },
       "gridPos": {
-        "h": 4,
-        "w": 6,
+        "h": 5,
+        "w": 4,
         "x": 0,
         "y": 1
       },
+      "maxDataPoints": 48,
       "targets": [
         {
           "refId": "A",
@@ -90,55 +94,61 @@
             "type": "prometheus",
             "uid": "${prometheus}"
           },
-          "expr": "sum(rate(http_server_request_duration_seconds_count{job=~\"$service\", http_route!=\"/health/live\"}[$__rate_interval])) * 60",
-          "instant": true
+          "expr": "sum(increase(shortbit_redirects_total{job=~\"$service\", result=\"redirected\"}[$__interval]))",
+          "legendFormat": ""
         }
       ],
       "options": {
         "reduceOptions": {
           "calcs": [
-            "lastNotNull"
+            "sum"
           ],
           "fields": "",
           "values": false
         },
         "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "value"
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center",
+        "wideLayout": true
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "reqpm",
+          "unit": "short",
           "noValue": "0",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "text",
+                "color": "#0058dd",
                 "value": null
               }
             ]
-          },
-          "decimals": 1
+          }
         },
         "overrides": []
       }
     },
     {
       "type": "stat",
-      "title": "Erros do servidor (5xx)",
+      "title": "Pelo QR code",
       "id": 3,
-      "description": "Parte das respostas que foram 5xx. — quando não houve requisições.",
+      "description": "Aberturas de quem leu um QR code baixado depois da contagem por origem.",
       "datasource": {
         "type": "prometheus",
         "uid": "${prometheus}"
       },
       "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 6,
+        "h": 5,
+        "w": 4,
+        "x": 4,
         "y": 1
       },
+      "maxDataPoints": 48,
       "targets": [
         {
           "refId": "A",
@@ -146,63 +156,123 @@
             "type": "prometheus",
             "uid": "${prometheus}"
           },
-          "expr": "100 * sum(rate(http_server_request_duration_seconds_count{job=~\"$service\", http_route!=\"/health/live\", http_response_status_code=~\"5..\"}[$__rate_interval])) / sum(rate(http_server_request_duration_seconds_count{job=~\"$service\", http_route!=\"/health/live\"}[$__rate_interval]))",
-          "instant": true
+          "expr": "sum(increase(shortbit_redirects_total{job=~\"$service\", result=\"redirected\", source=\"qr\"}[$__interval]))",
+          "legendFormat": ""
         }
       ],
       "options": {
         "reduceOptions": {
           "calcs": [
-            "lastNotNull"
+            "sum"
           ],
           "fields": "",
           "values": false
         },
         "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "value"
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center",
+        "wideLayout": true
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "percent",
-          "noValue": "—",
+          "unit": "short",
+          "noValue": "0",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "#f36600",
                 "value": null
-              },
-              {
-                "color": "orange",
-                "value": 1
-              },
-              {
-                "color": "red",
-                "value": 5
               }
             ]
-          },
-          "decimals": 2
+          }
         },
         "overrides": []
       }
     },
     {
       "type": "stat",
-      "title": "Redirect p95",
+      "title": "Links criados",
       "id": 4,
-      "description": "95% dos redirects respondem em até este tempo. — quando não houve redirect no intervalo.",
+      "description": "Links criados no período.",
       "datasource": {
         "type": "prometheus",
         "uid": "${prometheus}"
       },
       "gridPos": {
-        "h": 4,
-        "w": 6,
+        "h": 5,
+        "w": 4,
+        "x": 8,
+        "y": 1
+      },
+      "maxDataPoints": 48,
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "sum(increase(http_server_request_duration_seconds_count{job=~\"$service\", http_route=\"/urls\", http_request_method=\"POST\", http_response_status_code=\"201\"}[$__interval]))",
+          "legendFormat": ""
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center",
+        "wideLayout": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "0",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#a352cc",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Cadastros",
+      "id": 5,
+      "description": "Contas confirmadas com senha. O primeiro login com Google não entra aqui.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
         "x": 12,
         "y": 1
       },
+      "maxDataPoints": 48,
       "targets": [
         {
           "refId": "A",
@@ -210,39 +280,103 @@
             "type": "prometheus",
             "uid": "${prometheus}"
           },
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{job=~\"$service\", http_route=\"/{code}\"}[$__rate_interval])))",
-          "instant": true
+          "expr": "sum(increase(shortbit_security_events_total{job=~\"$service\", event=\"account_created\"}[$__interval]))",
+          "legendFormat": ""
         }
       ],
       "options": {
         "reduceOptions": {
           "calcs": [
-            "lastNotNull"
+            "sum"
           ],
           "fields": "",
           "values": false
         },
         "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "value"
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center",
+        "wideLayout": true
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "s",
-          "noValue": "—",
+          "unit": "short",
+          "noValue": "0",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "#56a64b",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Erros 5xx",
+      "id": 6,
+      "description": "Respostas 5xx no período. Qualquer valor acima de zero merece olhar os logs.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 16,
+        "y": 1
+      },
+      "maxDataPoints": 48,
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "sum(increase(http_server_request_duration_seconds_count{job=~\"$service\", http_route!=\"/health/live\", http_response_status_code=~\"5..\"}[$__interval]))",
+          "legendFormat": ""
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center",
+        "wideLayout": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "0",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#56a64b",
                 "value": null
               },
               {
-                "color": "orange",
-                "value": 0.3
-              },
-              {
-                "color": "red",
+                "color": "#e02f44",
                 "value": 1
               }
             ]
@@ -253,19 +387,726 @@
     },
     {
       "type": "stat",
-      "title": "Acertos do cache",
-      "id": 5,
-      "description": "Redirects públicos atendidos pelo Redis, sem ir ao PostgreSQL. — quando não houve redirect público.",
+      "title": "Redirect p95",
+      "id": 7,
+      "description": "95% dos redirects do período responderam em até este tempo.",
       "datasource": {
         "type": "prometheus",
         "uid": "${prometheus}"
       },
       "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 18,
+        "h": 5,
+        "w": 4,
+        "x": 20,
         "y": 1
       },
+      "maxDataPoints": 48,
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (increase(http_server_request_duration_seconds_bucket{job=~\"$service\", http_route=\"/{code}\"}[$__range])))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "wideLayout": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "—",
+          "decimals": null,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#56a64b",
+                "value": null
+              },
+              {
+                "color": "#f2cc0c",
+                "value": 0.3
+              },
+              {
+                "color": "#e02f44",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "row",
+      "title": "Links",
+      "id": 8,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Aberturas por origem",
+      "id": 9,
+      "description": "Visitantes levados ao destino, por intervalo.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 16,
+        "x": 0,
+        "y": 7
+      },
+      "maxDataPoints": 48,
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "sum(increase(shortbit_redirects_total{job=~\"$service\", result=\"redirected\", source=\"link\"}[$__interval]))",
+          "legendFormat": "Pelo link"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "sum(increase(shortbit_redirects_total{job=~\"$service\", result=\"redirected\", source=\"qr\"}[$__interval]))",
+          "legendFormat": "Pelo QR code"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "sum"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "decimals": 0,
+          "noValue": "0",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 85,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "axisSoftMin": 0,
+            "axisBorderShow": false,
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Pelo link"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#0058dd"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Pelo QR code"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#f36600"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "piechart",
+      "title": "O que aconteceu ao abrir um link",
+      "id": 10,
+      "description": "Link inexistente costuma ser robô testando endereços.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 16,
+        "y": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "sum(increase(shortbit_redirects_total{job=~\"$service\", result=\"redirected\"}[$__range]))",
+          "legendFormat": "Foi ao destino",
+          "instant": true,
+          "range": false
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "sum(increase(shortbit_redirects_total{job=~\"$service\", result=\"password_required\"}[$__range]))",
+          "legendFormat": "Pediu a senha",
+          "instant": true,
+          "range": false
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "sum(increase(shortbit_redirects_total{job=~\"$service\", result=\"not_found\"}[$__range]))",
+          "legendFormat": "Link inexistente",
+          "instant": true,
+          "range": false
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "sum(increase(shortbit_redirects_total{job=~\"$service\", result=\"failed\"}[$__range]))",
+          "legendFormat": "Falhou",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "pieType": "donut",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "tooltip": {
+          "mode": "single"
+        },
+        "displayLabels": []
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Foi ao destino"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#56a64b"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Pediu a senha"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#f2cc0c"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Link inexistente"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#8e8e8e"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Falhou"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#e02f44"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "row",
+      "title": "Tráfego",
+      "id": 11,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Respostas por tipo",
+      "id": 12,
+      "description": "Todas as requisições menos o health check da hospedagem.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 17
+      },
+      "maxDataPoints": 48,
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "sum(increase(http_server_request_duration_seconds_count{job=~\"$service\", http_route!=\"/health/live\", http_response_status_code=~\"2..\"}[$__interval]))",
+          "legendFormat": "2xx sucesso"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "sum(increase(http_server_request_duration_seconds_count{job=~\"$service\", http_route!=\"/health/live\", http_response_status_code=~\"3..\"}[$__interval]))",
+          "legendFormat": "3xx redirecionamento"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "sum(increase(http_server_request_duration_seconds_count{job=~\"$service\", http_route!=\"/health/live\", http_response_status_code=~\"4..\"}[$__interval]))",
+          "legendFormat": "4xx erro do visitante"
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "sum(increase(http_server_request_duration_seconds_count{job=~\"$service\", http_route!=\"/health/live\", http_response_status_code=~\"5..\"}[$__interval]))",
+          "legendFormat": "5xx erro do servidor"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "sum"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "decimals": 0,
+          "noValue": "0",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 85,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "axisSoftMin": 0,
+            "axisBorderShow": false,
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "2xx sucesso"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#56a64b"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "3xx redirecionamento"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#0058dd"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "4xx erro do visitante"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#f36600"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "5xx erro do servidor"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#e02f44"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "Rotas mais acessadas",
+      "id": 13,
+      "description": "Total no período, sem o health check. /{code} é a abertura de links curtos.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 17
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "label_replace(topk(8, sum by (http_route) (increase(http_server_request_duration_seconds_count{job=~\"$service\", http_route!=\"/health/live\", http_route!=\"none\"}[$__range]))), \"http_route\", \"/ (página inicial)\", \"http_route\", \"/\\\\{\\\\$\\\\}\")",
+          "legendFormat": "{{http_route}}",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "valueMode": "text",
+        "showUnfilled": true,
+        "namePlacement": "left",
+        "sizing": "auto",
+        "minVizHeight": 16,
+        "maxVizHeight": 22,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "min": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#0058dd"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Tempo de resposta",
+      "id": 14,
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 26
+      },
+      "maxDataPoints": 120,
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(http_server_request_duration_seconds_bucket{job=~\"$service\", http_route!=\"/health/live\"}[$__rate_interval])))",
+          "legendFormat": "Mediana"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{job=~\"$service\", http_route!=\"/health/live\"}[$__rate_interval])))",
+          "legendFormat": "p95"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{job=~\"$service\", http_route=\"/{code}\"}[$__rate_interval])))",
+          "legendFormat": "p95 do redirect"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "noValue": "Sem dados no período",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "lineInterpolation": "smooth",
+            "spanNulls": true,
+            "axisBorderShow": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Mediana"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#56a64b"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p95"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#f2cc0c"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p95 do redirect"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#0058dd"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Acertos do cache de links",
+      "id": 15,
+      "description": "Parte dos redirects públicos atendida pelo Redis, sem ir ao PostgreSQL. Só links populares entram no cache.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 26
+      },
+      "maxDataPoints": 120,
       "targets": [
         {
           "refId": "A",
@@ -274,300 +1115,88 @@
             "uid": "${prometheus}"
           },
           "expr": "100 * sum(rate(shortbit_destination_cache_lookups_total{job=~\"$service\", result=\"hit\"}[$__rate_interval])) / sum(rate(shortbit_destination_cache_lookups_total{job=~\"$service\"}[$__rate_interval]))",
-          "instant": true
+          "legendFormat": "Acertos"
         }
       ],
       "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
         },
-        "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "value"
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "fieldConfig": {
         "defaults": {
           "unit": "percent",
-          "noValue": "—",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
+          "min": 0,
+          "noValue": "Nenhum redirect de link público no período",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "lineInterpolation": "smooth",
+            "spanNulls": true,
+            "axisBorderShow": false
+          },
+          "decimals": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Acertos"
+            },
+            "properties": [
               {
-                "color": "text",
-                "value": null
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#a352cc"
+                }
               }
             ]
-          },
-          "decimals": 1
-        },
-        "overrides": []
+          }
+        ]
       }
     },
     {
       "type": "row",
-      "title": "Tráfego",
-      "id": 6,
+      "title": "Contagem de cliques",
+      "id": 16,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 5
-      },
-      "panels": []
-    },
-    {
-      "type": "timeseries",
-      "title": "Requisições por rota",
-      "id": 7,
-      "description": "none = respondida antes de escolher a rota, como no bloqueio por limite. O health check da hospedagem fica de fora.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${prometheus}"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 6
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${prometheus}"
-          },
-          "expr": "sum by (http_route) (rate(http_server_request_duration_seconds_count{job=~\"$service\", http_route!=\"/health/live\"}[$__rate_interval]))",
-          "legendFormat": "{{http_route}}"
-        }
-      ],
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps",
-          "min": 0,
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 10,
-            "drawStyle": "line",
-            "stacking": {
-              "mode": "none",
-              "group": "A"
-            },
-            "showPoints": "never"
-          }
-        },
-        "overrides": []
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "Respostas por status",
-      "id": 8,
-      "description": "Sem o health check da hospedagem.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${prometheus}"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 6
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${prometheus}"
-          },
-          "expr": "sum by (http_response_status_code) (rate(http_server_request_duration_seconds_count{job=~\"$service\", http_route!=\"/health/live\"}[$__rate_interval]))",
-          "legendFormat": "{{http_response_status_code}}"
-        }
-      ],
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps",
-          "min": 0,
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 10,
-            "drawStyle": "line",
-            "stacking": {
-              "mode": "normal",
-              "group": "A"
-            },
-            "showPoints": "never"
-          }
-        },
-        "overrides": []
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "Tempo de resposta p95 por rota",
-      "id": 9,
-      "description": "Sem o health check da hospedagem.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${prometheus}"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 14
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${prometheus}"
-          },
-          "expr": "histogram_quantile(0.95, sum by (le, http_route) (rate(http_server_request_duration_seconds_bucket{job=~\"$service\", http_route!=\"/health/live\"}[$__rate_interval])))",
-          "legendFormat": "{{http_route}}"
-        }
-      ],
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s",
-          "min": 0,
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 10,
-            "drawStyle": "line",
-            "stacking": {
-              "mode": "none",
-              "group": "A"
-            },
-            "showPoints": "never"
-          }
-        },
-        "overrides": []
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "Redirects por resultado e origem",
-      "id": 10,
-      "description": "source: link (abriu o link curto) ou qr (leu o QR code).",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${prometheus}"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 14
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${prometheus}"
-          },
-          "expr": "sum by (result, source) (rate(shortbit_redirects_total{job=~\"$service\"}[$__rate_interval]))",
-          "legendFormat": "{{result}} · {{source}}"
-        }
-      ],
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps",
-          "min": 0,
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 10,
-            "drawStyle": "line",
-            "stacking": {
-              "mode": "normal",
-              "group": "A"
-            },
-            "showPoints": "never"
-          }
-        },
-        "overrides": []
-      }
-    },
-    {
-      "type": "row",
-      "title": "Cliques",
-      "id": 11,
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 22
+        "y": 35
       },
       "panels": []
     },
     {
       "type": "timeseries",
       "title": "Como os cliques foram registrados",
-      "id": 12,
-      "description": "queued: pela fila. synchronous: plano B direto no PostgreSQL, a fila falhou. not_recorded: nenhum dos dois, o visitante recebeu 503.",
+      "id": 17,
+      "description": "Plano B ou perdido indicam o RabbitMQ fora do ar.",
       "datasource": {
         "type": "prometheus",
         "uid": "${prometheus}"
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
+        "h": 9,
+        "w": 8,
         "x": 0,
-        "y": 23
+        "y": 36
       },
+      "maxDataPoints": 48,
       "targets": [
         {
           "refId": "A",
@@ -575,15 +1204,36 @@
             "type": "prometheus",
             "uid": "${prometheus}"
           },
-          "expr": "sum by (outcome) (rate(shortbit_click_events_published_total{job=~\"$service\"}[$__rate_interval]))",
-          "legendFormat": "{{outcome}}"
+          "expr": "sum(increase(shortbit_click_events_published_total{job=~\"$service\", outcome=\"queued\"}[$__interval]))",
+          "legendFormat": "Pela fila"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "sum(increase(shortbit_click_events_published_total{job=~\"$service\", outcome=\"synchronous\"}[$__interval]))",
+          "legendFormat": "Direto no banco (plano B)"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "sum(increase(shortbit_click_events_published_total{job=~\"$service\", outcome=\"not_recorded\"}[$__interval]))",
+          "legendFormat": "Perdido"
         }
       ],
       "options": {
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": [
+            "sum"
+          ]
         },
         "tooltip": {
           "mode": "multi",
@@ -592,37 +1242,96 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "reqps",
+          "unit": "short",
           "min": 0,
+          "decimals": 0,
+          "noValue": "0",
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 10,
-            "drawStyle": "line",
+            "drawStyle": "bars",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 85,
+            "gradientMode": "none",
+            "showPoints": "never",
             "stacking": {
               "mode": "normal",
               "group": "A"
             },
-            "showPoints": "never"
+            "axisSoftMin": 0,
+            "axisBorderShow": false,
+            "scaleDistribution": {
+              "type": "linear"
+            }
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Pela fila"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#56a64b"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Direto no banco (plano B)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#f2cc0c"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Perdido"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#e02f44"
+                }
+              }
+            ]
+          }
+        ]
       }
     },
     {
       "type": "timeseries",
       "title": "O que o worker fez",
-      "id": 13,
-      "description": "counted, duplicate (reentrega já contada), discarded (link apagado), failed (vai tentar de novo), dead_lettered (evento inválido).",
+      "id": 18,
+      "description": "Repetido é reentrega da fila já contada; não soma de novo.",
       "datasource": {
         "type": "prometheus",
         "uid": "${prometheus}"
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 23
+        "h": 9,
+        "w": 8,
+        "x": 8,
+        "y": 36
       },
+      "maxDataPoints": 48,
       "targets": [
         {
           "refId": "A",
@@ -630,15 +1339,54 @@
             "type": "prometheus",
             "uid": "${prometheus}"
           },
-          "expr": "sum by (outcome) (rate(shortbit_click_events_processed_total{job=~\"$service\"}[$__rate_interval]))",
-          "legendFormat": "{{outcome}}"
+          "expr": "sum(increase(shortbit_click_events_processed_total{job=~\"$service\", outcome=\"counted\"}[$__interval]))",
+          "legendFormat": "Contado"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "sum(increase(shortbit_click_events_processed_total{job=~\"$service\", outcome=\"duplicate\"}[$__interval]))",
+          "legendFormat": "Repetido"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "sum(increase(shortbit_click_events_processed_total{job=~\"$service\", outcome=\"discarded\"}[$__interval]))",
+          "legendFormat": "Link apagado"
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "sum(increase(shortbit_click_events_processed_total{job=~\"$service\", outcome=\"failed\"}[$__interval]))",
+          "legendFormat": "Falhou"
+        },
+        {
+          "refId": "E",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "sum(increase(shortbit_click_events_processed_total{job=~\"$service\", outcome=\"dead_lettered\"}[$__interval]))",
+          "legendFormat": "Inválido"
         }
       ],
       "options": {
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": [
+            "sum"
+          ]
         },
         "tooltip": {
           "mode": "multi",
@@ -647,37 +1395,126 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "reqps",
+          "unit": "short",
           "min": 0,
+          "decimals": 0,
+          "noValue": "0",
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 10,
-            "drawStyle": "line",
+            "drawStyle": "bars",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 85,
+            "gradientMode": "none",
+            "showPoints": "never",
             "stacking": {
               "mode": "normal",
               "group": "A"
             },
-            "showPoints": "never"
+            "axisSoftMin": 0,
+            "axisBorderShow": false,
+            "scaleDistribution": {
+              "type": "linear"
+            }
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Contado"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#56a64b"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Repetido"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#0058dd"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Link apagado"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#8e8e8e"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Falhou"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#e02f44"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Inválido"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#a352cc"
+                }
+              }
+            ]
+          }
+        ]
       }
     },
     {
       "type": "timeseries",
-      "title": "Atraso entre o clique e a contagem",
-      "id": 14,
-      "description": "Quanto o número da página do link atrasa em relação ao clique.",
+      "title": "Atraso até o clique aparecer",
+      "id": 19,
+      "description": "Tempo entre o clique e o número mudar na página do link.",
       "datasource": {
         "type": "prometheus",
         "uid": "${prometheus}"
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 31
+        "h": 9,
+        "w": 8,
+        "x": 16,
+        "y": 36
       },
+      "maxDataPoints": 120,
       "targets": [
         {
           "refId": "A",
@@ -686,7 +1523,7 @@
             "uid": "${prometheus}"
           },
           "expr": "histogram_quantile(0.5, sum by (le) (rate(shortbit_click_events_lag_seconds_bucket{job=~\"$service\"}[$__rate_interval])))",
-          "legendFormat": "p50"
+          "legendFormat": "Mediana"
         },
         {
           "refId": "B",
@@ -713,121 +1550,84 @@
         "defaults": {
           "unit": "s",
           "min": 0,
+          "noValue": "Nenhum clique contado no período",
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 10,
             "drawStyle": "line",
-            "stacking": {
-              "mode": "none",
-              "group": "A"
-            },
-            "showPoints": "never"
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "lineInterpolation": "smooth",
+            "spanNulls": true,
+            "axisBorderShow": false
           }
         },
-        "overrides": []
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "Conexões com o PostgreSQL",
-      "id": 15,
-      "description": "Em uso colado no máximo por muito tempo = requisições esperando conexão.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${prometheus}"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 31
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${prometheus}"
-          },
-          "expr": "sum(db_client_connections_in_use{job=~\"$service\"})",
-          "legendFormat": "em uso"
-        },
-        {
-          "refId": "B",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${prometheus}"
-          },
-          "expr": "sum(db_client_connections_idle{job=~\"$service\"})",
-          "legendFormat": "ociosas"
-        },
-        {
-          "refId": "C",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${prometheus}"
-          },
-          "expr": "sum(db_client_connections_max{job=~\"$service\"})",
-          "legendFormat": "máximo"
-        }
-      ],
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "min": 0,
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 10,
-            "drawStyle": "line",
-            "stacking": {
-              "mode": "none",
-              "group": "A"
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Mediana"
             },
-            "showPoints": "never"
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#56a64b"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p95"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#f2cc0c"
+                }
+              }
+            ]
           }
-        },
-        "overrides": []
+        ]
       }
     },
     {
       "type": "row",
       "title": "Segurança",
-      "id": 16,
+      "id": 20,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 39
+        "y": 45
       },
       "panels": []
     },
     {
-      "type": "timeseries",
-      "title": "Eventos de segurança",
-      "id": 17,
-      "description": "login_failed, google_login_failed, rate_limited, link_password_failed, verification_code_failed e mudanças de conta.",
+      "type": "stat",
+      "title": "Senhas erradas",
+      "id": 21,
+      "description": "Login, troca de senha e exclusão de conta com a senha errada.",
       "datasource": {
         "type": "prometheus",
         "uid": "${prometheus}"
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
+        "h": 4,
+        "w": 6,
         "x": 0,
-        "y": 40
+        "y": 46
       },
+      "maxDataPoints": 48,
       "targets": [
         {
           "refId": "A",
@@ -835,7 +1635,287 @@
             "type": "prometheus",
             "uid": "${prometheus}"
           },
-          "expr": "sum by (event) (increase(shortbit_security_events_total{job=~\"$service\"}[$__rate_interval]))",
+          "expr": "sum(increase(shortbit_security_events_total{job=~\"$service\", event=~\"login_failed\"}[$__interval]))",
+          "legendFormat": ""
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center",
+        "wideLayout": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "0",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#56a64b",
+                "value": null
+              },
+              {
+                "color": "#f2cc0c",
+                "value": 5
+              },
+              {
+                "color": "#e02f44",
+                "value": 50
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Senhas de link",
+      "id": 22,
+      "description": "Tentativas erradas de abrir links privados.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 46
+      },
+      "maxDataPoints": 48,
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "sum(increase(shortbit_security_events_total{job=~\"$service\", event=~\"link_password_failed\"}[$__interval]))",
+          "legendFormat": ""
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center",
+        "wideLayout": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "0",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#56a64b",
+                "value": null
+              },
+              {
+                "color": "#f2cc0c",
+                "value": 5
+              },
+              {
+                "color": "#e02f44",
+                "value": 50
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Códigos errados",
+      "id": 23,
+      "description": "Códigos de cadastro ou de recuperação de senha errados ou travados.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 46
+      },
+      "maxDataPoints": 48,
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "sum(increase(shortbit_security_events_total{job=~\"$service\", event=~\"verification_code_failed\"}[$__interval]))",
+          "legendFormat": ""
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center",
+        "wideLayout": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "0",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#56a64b",
+                "value": null
+              },
+              {
+                "color": "#f2cc0c",
+                "value": 5
+              },
+              {
+                "color": "#e02f44",
+                "value": 50
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Bloqueios",
+      "id": 24,
+      "description": "Requisições recusadas pelos limites de tentativas (429).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 46
+      },
+      "maxDataPoints": 48,
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "sum(increase(shortbit_security_events_total{job=~\"$service\", event=~\"rate_limited\"}[$__interval]))",
+          "legendFormat": ""
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center",
+        "wideLayout": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "0",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#56a64b",
+                "value": null
+              },
+              {
+                "color": "#f2cc0c",
+                "value": 5
+              },
+              {
+                "color": "#e02f44",
+                "value": 50
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Eventos de segurança",
+      "id": 25,
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 50
+      },
+      "maxDataPoints": 48,
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "sum by (event) (increase(shortbit_security_events_total{job=~\"$service\"}[$__interval]))",
           "legendFormat": "{{event}}"
         }
       ],
@@ -843,7 +1923,10 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": [
+            "sum"
+          ]
         },
         "tooltip": {
           "mode": "multi",
@@ -854,34 +1937,182 @@
         "defaults": {
           "unit": "short",
           "min": 0,
+          "decimals": 0,
+          "noValue": "0",
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 80,
             "drawStyle": "bars",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 85,
+            "gradientMode": "none",
+            "showPoints": "never",
             "stacking": {
               "mode": "normal",
               "group": "A"
             },
-            "showPoints": "never"
+            "axisSoftMin": 0,
+            "axisBorderShow": false,
+            "scaleDistribution": {
+              "type": "linear"
+            }
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "login_failed"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#e02f44"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "link_password_failed"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#f36600"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "verification_code_failed"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#f2cc0c"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "rate_limited"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#a352cc"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "google_login_failed"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#ff9830"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "account_created"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#56a64b"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "password_changed"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#0058dd"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "password_reset_completed"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#5794f2"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "account_deleted"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#8e8e8e"
+                }
+              }
+            ]
+          }
+        ]
       }
     },
     {
       "type": "logs",
       "title": "Últimos eventos de segurança",
-      "id": 18,
+      "id": 26,
       "description": "Clique numa linha para ver event, reason, limiter e user_id. Nunca há email ou IP.",
       "datasource": {
         "type": "loki",
         "uid": "${loki}"
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 12,
         "x": 12,
-        "y": 40
+        "y": 50
       },
       "targets": [
         {
@@ -899,199 +2130,342 @@
         "sortOrder": "Descending",
         "enableLogDetails": true,
         "dedupStrategy": "none",
-        "prettifyLogMessage": false
+        "prettifyLogMessage": false,
+        "showLabels": false,
+        "showCommonLabels": false
       }
     },
     {
       "type": "row",
-      "title": "Aplicação",
-      "id": 19,
-      "collapsed": false,
+      "title": "Aplicação e logs",
+      "id": 32,
+      "collapsed": true,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 48
+        "y": 59
       },
-      "panels": []
-    },
-    {
-      "type": "timeseries",
-      "title": "Memória do Go",
-      "id": 20,
-      "description": "",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${prometheus}"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 49
-      },
-      "targets": [
+      "panels": [
         {
-          "refId": "A",
+          "type": "timeseries",
+          "title": "Conexões com o PostgreSQL",
+          "id": 27,
+          "description": "Em uso colado no máximo por muito tempo = requisições esperando conexão.",
           "datasource": {
             "type": "prometheus",
             "uid": "${prometheus}"
           },
-          "expr": "sum by (job) (go_memory_used_bytes{job=~\"$service\"})",
-          "legendFormat": "{{job}}"
-        }
-      ],
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "bytes",
-          "min": 0,
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 10,
-            "drawStyle": "line",
-            "stacking": {
-              "mode": "none",
-              "group": "A"
+          "gridPos": {
+            "h": 9,
+            "w": 8,
+            "x": 0,
+            "y": 60
+          },
+          "maxDataPoints": 120,
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${prometheus}"
+              },
+              "expr": "sum(db_client_connections_in_use{job=~\"$service\"})",
+              "legendFormat": "Em uso"
             },
-            "showPoints": "never"
+            {
+              "refId": "B",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${prometheus}"
+              },
+              "expr": "sum(db_client_connections_idle{job=~\"$service\"})",
+              "legendFormat": "Ociosas"
+            },
+            {
+              "refId": "C",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${prometheus}"
+              },
+              "expr": "sum(db_client_connections_max{job=~\"$service\"})",
+              "legendFormat": "Máximo"
+            }
+          ],
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "min": 0,
+              "noValue": "Sem dados no período",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 12,
+                "gradientMode": "opacity",
+                "showPoints": "never",
+                "lineInterpolation": "smooth",
+                "spanNulls": true,
+                "axisBorderShow": false
+              },
+              "decimals": 0
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Em uso"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#0058dd"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Ociosas"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#56a64b"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Máximo"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#8e8e8e"
+                    }
+                  }
+                ]
+              }
+            ]
           }
         },
-        "overrides": []
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "Goroutines",
-      "id": 21,
-      "description": "",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${prometheus}"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 49
-      },
-      "targets": [
         {
-          "refId": "A",
+          "type": "timeseries",
+          "title": "Memória do Go",
+          "id": 28,
+          "description": "",
           "datasource": {
             "type": "prometheus",
             "uid": "${prometheus}"
           },
-          "expr": "sum by (job) (go_goroutine_count{job=~\"$service\"})",
-          "legendFormat": "{{job}}"
-        }
-      ],
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "min": 0,
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 10,
-            "drawStyle": "line",
-            "stacking": {
-              "mode": "none",
-              "group": "A"
+          "gridPos": {
+            "h": 9,
+            "w": 8,
+            "x": 8,
+            "y": 60
+          },
+          "maxDataPoints": 120,
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${prometheus}"
+              },
+              "expr": "sum by (job) (go_memory_used_bytes{job=~\"$service\"})",
+              "legendFormat": "{{job}}"
+            }
+          ],
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
             },
-            "showPoints": "never"
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "min": 0,
+              "noValue": "Sem dados no período",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 12,
+                "gradientMode": "opacity",
+                "showPoints": "never",
+                "lineInterpolation": "smooth",
+                "spanNulls": true,
+                "axisBorderShow": false
+              }
+            },
+            "overrides": []
           }
         },
-        "overrides": []
-      }
-    },
-    {
-      "type": "logs",
-      "title": "Erros e avisos",
-      "id": 22,
-      "description": "",
-      "datasource": {
-        "type": "loki",
-        "uid": "${loki}"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 49
-      },
-      "targets": [
         {
-          "refId": "A",
+          "type": "timeseries",
+          "title": "Goroutines",
+          "id": 29,
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "gridPos": {
+            "h": 9,
+            "w": 8,
+            "x": 16,
+            "y": 60
+          },
+          "maxDataPoints": 120,
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${prometheus}"
+              },
+              "expr": "sum by (job) (go_goroutine_count{job=~\"$service\"})",
+              "legendFormat": "{{job}}"
+            }
+          ],
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "min": 0,
+              "noValue": "Sem dados no período",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 12,
+                "gradientMode": "opacity",
+                "showPoints": "never",
+                "lineInterpolation": "smooth",
+                "spanNulls": true,
+                "axisBorderShow": false
+              },
+              "decimals": 0
+            },
+            "overrides": []
+          }
+        },
+        {
+          "type": "logs",
+          "title": "Erros e avisos",
+          "id": 30,
+          "description": "",
           "datasource": {
             "type": "loki",
             "uid": "${loki}"
           },
-          "expr": "{service_name=~\"$service\"} | severity_text=~\"ERROR|WARN\" != \"security event\""
-        }
-      ],
-      "options": {
-        "showTime": true,
-        "wrapLogMessage": true,
-        "sortOrder": "Descending",
-        "enableLogDetails": true,
-        "dedupStrategy": "none",
-        "prettifyLogMessage": false
-      }
-    },
-    {
-      "type": "logs",
-      "title": "Acessos",
-      "id": 23,
-      "description": "Uma linha por requisição, sem o health check da hospedagem: rota, status, duração. Filtre por request_id para seguir uma requisição.",
-      "datasource": {
-        "type": "loki",
-        "uid": "${loki}"
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 24,
-        "x": 0,
-        "y": 57
-      },
-      "targets": [
+          "gridPos": {
+            "h": 9,
+            "w": 24,
+            "x": 0,
+            "y": 69
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "loki",
+                "uid": "${loki}"
+              },
+              "expr": "{service_name=~\"$service\"} | severity_text=~\"ERROR|WARN\" != \"security event\""
+            }
+          ],
+          "options": {
+            "showTime": true,
+            "wrapLogMessage": true,
+            "sortOrder": "Descending",
+            "enableLogDetails": true,
+            "dedupStrategy": "none",
+            "prettifyLogMessage": false,
+            "showLabels": false,
+            "showCommonLabels": false
+          }
+        },
         {
-          "refId": "A",
+          "type": "logs",
+          "title": "Acessos",
+          "id": 31,
+          "description": "Uma linha por requisição, sem o health check: rota, status, duração. Filtre por request_id para seguir uma requisição.",
           "datasource": {
             "type": "loki",
             "uid": "${loki}"
           },
-          "expr": "{service_name=~\"$service\"} |= \"http request\" | route != \"/health/live\""
+          "gridPos": {
+            "h": 10,
+            "w": 24,
+            "x": 0,
+            "y": 78
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "loki",
+                "uid": "${loki}"
+              },
+              "expr": "{service_name=~\"$service\"} |= \"http request\" | route != \"/health/live\""
+            }
+          ],
+          "options": {
+            "showTime": true,
+            "wrapLogMessage": true,
+            "sortOrder": "Descending",
+            "enableLogDetails": true,
+            "dedupStrategy": "none",
+            "prettifyLogMessage": false,
+            "showLabels": false,
+            "showCommonLabels": false
+          }
         }
-      ],
-      "options": {
-        "showTime": true,
-        "wrapLogMessage": true,
-        "sortOrder": "Descending",
-        "enableLogDetails": true,
-        "dedupStrategy": "none",
-        "prettifyLogMessage": false
-      }
+      ]
     }
   ]
 }
