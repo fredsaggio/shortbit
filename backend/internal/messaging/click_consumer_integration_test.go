@@ -8,6 +8,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"uuid"
 
 	"github.com/fredsaggio/url-shortener/internal/db/dbtest"
 	"github.com/fredsaggio/url-shortener/internal/messaging"
@@ -66,7 +67,7 @@ func TestClickConsumerIntegration(t *testing.T) {
 		handler := newRecordingHandler(0)
 		stop := startConsumer(t, rabbitURL, handler)
 
-		event := messaging.NewClickEvent(42, time.Now())
+		event := messaging.NewClickEvent(42, models.ClickSourceLink, time.Now())
 		if err := publisher.Publish(t.Context(), event); err != nil {
 			t.Fatalf("Publish() error = %v", err)
 		}
@@ -83,7 +84,7 @@ func TestClickConsumerIntegration(t *testing.T) {
 		handler := newRecordingHandler(1)
 		stop := startConsumer(t, rabbitURL, handler)
 
-		event := messaging.NewClickEvent(42, time.Now())
+		event := messaging.NewClickEvent(42, models.ClickSourceLink, time.Now())
 		if err := publisher.Publish(t.Context(), event); err != nil {
 			t.Fatalf("Publish() error = %v", err)
 		}
@@ -105,30 +106,35 @@ func TestClickConsumerIntegration(t *testing.T) {
 		handler := newRecordingHandler(0)
 		stop := startConsumer(t, rabbitURL, handler)
 
-		if err := ch.PublishWithContext(t.Context(), messaging.ClickExchange, messaging.ClickRoutingKey, false, false, amqp.Publishing{
-			ContentType: "application/json",
-			MessageId:   "malformed",
-			Body:        []byte("not json"),
-		}); err != nil {
-			t.Fatalf("publish malformed event: %v", err)
+		unknownSource := `{"event_id":"` + uuid.NewV7().String() + `","url_id":42,"occurred_at":"2026-11-14T12:00:00Z","source":"email"}`
+		for id, body := range map[string]string{"malformed": "not json", "unknown-source": unknownSource} {
+			if err := ch.PublishWithContext(t.Context(), messaging.ClickExchange, messaging.ClickRoutingKey, false, false, amqp.Publishing{
+				ContentType: "application/json",
+				MessageId:   id,
+				Body:        []byte(body),
+			}); err != nil {
+				t.Fatalf("publish %s event: %v", id, err)
+			}
 		}
 
+		deadLettered := map[string]bool{}
 		deadline := time.Now().Add(handledEventTimeout)
-		for {
+		for len(deadLettered) < 2 {
 			delivery, ok, err := ch.Get(messaging.ClickDeadLetterQueue, true)
 			if err != nil {
 				t.Fatalf("Get() dead-letter error = %v", err)
 			}
 			if ok {
-				if delivery.MessageId != "malformed" {
-					t.Errorf("dead-lettered MessageId = %q, want malformed", delivery.MessageId)
-				}
-				break
+				deadLettered[delivery.MessageId] = true
+				continue
 			}
 			if time.Now().After(deadline) {
-				t.Fatal("malformed event was not dead-lettered")
+				t.Fatalf("dead-lettered = %v, want malformed and unknown-source", deadLettered)
 			}
 			time.Sleep(100 * time.Millisecond)
+		}
+		if !deadLettered["malformed"] || !deadLettered["unknown-source"] {
+			t.Errorf("dead-lettered = %v, want malformed and unknown-source", deadLettered)
 		}
 
 		stop()
@@ -148,8 +154,8 @@ func TestClickConsumerIntegration(t *testing.T) {
 		stop := startConsumer(t, rabbitURL, handler)
 		defer stop()
 
-		first := messaging.NewClickEvent(url.ID, time.Now())
-		second := messaging.NewClickEvent(url.ID, time.Now())
+		first := messaging.NewClickEvent(url.ID, models.ClickSourceLink, time.Now())
+		second := messaging.NewClickEvent(url.ID, models.ClickSourceLink, time.Now())
 
 		// Publishing first twice simulates a redelivery, or a late event
 		// whose click the synchronous fallback already counted.

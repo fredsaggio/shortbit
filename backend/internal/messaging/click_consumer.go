@@ -113,7 +113,7 @@ func (c *ClickConsumer) release(ch *amqp.Channel, deliveries <-chan amqp.Deliver
 
 func (c *ClickConsumer) handle(ctx context.Context, delivery amqp.Delivery) {
 	var event ClickEvent
-	if err := json.Unmarshal(delivery.Body, &event); err != nil || event.EventID == uuid.Nil() || event.URLID <= 0 {
+	if err := json.Unmarshal(delivery.Body, &event); err != nil || event.EventID == uuid.Nil() || event.URLID <= 0 || !event.Click().Source.Valid() {
 		slog.Error("invalid click event dead-lettered", "message_id", delivery.MessageId, "error", err)
 		if err := delivery.Reject(false); err != nil {
 			slog.Warn("dead-letter invalid click event failed", "message_id", delivery.MessageId, "error", err)

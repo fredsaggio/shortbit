@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/fredsaggio/url-shortener/internal/models"
 	"testing"
 	"time"
 
@@ -38,7 +39,7 @@ func TestClickPublisherIntegration(t *testing.T) {
 		ch := openChannel(t, rabbitURL)
 		purgeQueue(t, ch, messaging.ClickQueue)
 
-		event := messaging.NewClickEvent(42, time.Now())
+		event := messaging.NewClickEvent(42, models.ClickSourceLink, time.Now())
 		if err := publisher.Publish(t.Context(), event); err != nil {
 			t.Fatalf("Publish() error = %v", err)
 		}
@@ -82,7 +83,7 @@ func TestClickPublisherIntegration(t *testing.T) {
 			}
 		})
 
-		err := publisher.Publish(t.Context(), messaging.NewClickEvent(42, time.Now()))
+		err := publisher.Publish(t.Context(), messaging.NewClickEvent(42, models.ClickSourceLink, time.Now()))
 
 		if !errors.Is(err, messaging.ErrClickReturned) {
 			t.Fatalf("Publish() error = %v, want %v", err, messaging.ErrClickReturned)
@@ -94,7 +95,7 @@ func TestClickPublisherIntegration(t *testing.T) {
 		purgeQueue(t, ch, messaging.ClickQueue)
 		purgeQueue(t, ch, messaging.ClickDeadLetterQueue)
 
-		event := messaging.NewClickEvent(42, time.Now())
+		event := messaging.NewClickEvent(42, models.ClickSourceLink, time.Now())
 		if err := publisher.Publish(t.Context(), event); err != nil {
 			t.Fatalf("Publish() error = %v", err)
 		}
@@ -150,7 +151,7 @@ func waitPublisherReady(t *testing.T, publisher *messaging.ClickPublisher) {
 
 	deadline := time.Now().Add(publisherReadyTimeout)
 	for {
-		err := publisher.Publish(t.Context(), messaging.NewClickEvent(1, time.Now()))
+		err := publisher.Publish(t.Context(), messaging.NewClickEvent(1, models.ClickSourceLink, time.Now()))
 		if err == nil {
 			return
 		}

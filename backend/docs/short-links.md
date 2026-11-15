@@ -170,9 +170,9 @@ URLs criadas não expiram automaticamente. A sessão temporária usada para desb
 
 ## Analytics
 
-O MVP começa com `click_count` total. A consulta administrativa exige que `urls.user_id` seja o usuário autenticado.
+Cada link tem o total (`click_count`) e a contagem por dia e por origem em `url_daily_clicks` ([ADR 0005](decisions/0005-daily-clicks-and-qr-source.md)). A origem é `qr` quando o redirect recebe `?qr=1`, a marca que o QR code do front leva, e `link` nos outros casos. A marca só rotula o clique: o destino e o cache não mudam. No link privado, a página de senha mantém a marca no formulário e no redirect depois do desbloqueio. Consultar qualquer dado de cliques exige que `urls.user_id` seja o usuário autenticado.
 
-Analytics por evento, localização, dispositivo ou série temporal ficam fora do MVP.
+Localização, dispositivo e eventos individuais ficam fora do MVP.
 
 ## Cache seletivo e contagem pela fila ✅
 

@@ -57,5 +57,5 @@ func (h *LinkAccessSessionHandler) RedirectPrivateLink(w http.ResponseWriter, r 
 	}
 
 	setLinkAccessSessionCookie(w, shortCode, result.Token, result.ExpiresAt, h.cookieSecure)
-	http.Redirect(w, r, "/"+shortCode, http.StatusSeeOther)
+	http.Redirect(w, r, keepClickSource(r, "/"+shortCode), http.StatusSeeOther)
 }

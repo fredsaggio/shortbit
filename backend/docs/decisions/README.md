@@ -48,3 +48,4 @@ Quais benefícios, limitações e trabalhos futuros surgem dessa escolha?
 - [0002 — Contagem de cliques via RabbitMQ e cache Redis de destinos quentes](0002-click-events-rabbitmq-redis-cache.md) — aceita; implementada.
 - [0003 — Deploy gratuito em um único serviço web](0003-free-single-service-deploy.md) — aceita; implementada.
 - [0004 — Regras de composição na senha da conta](0004-account-password-composition.md) — aceita; implementada.
+- [0005 — Cliques por dia e por origem (link ou QR code)](0005-daily-clicks-and-qr-source.md) — aceita; implementada.

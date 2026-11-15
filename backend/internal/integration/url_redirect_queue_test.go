@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/fredsaggio/url-shortener/internal/models"
 	"net/http"
 	"sync"
 	"testing"
@@ -137,7 +138,7 @@ func startClickPublisher(t *testing.T, rabbitURL string) *messaging.ClickPublish
 
 	deadline := time.Now().Add(clickCountTimeout)
 	for {
-		err := publisher.Publish(t.Context(), messaging.NewClickEvent(1, time.Now()))
+		err := publisher.Publish(t.Context(), messaging.NewClickEvent(1, models.ClickSourceLink, time.Now()))
 		if !errors.Is(err, messaging.ErrPublisherUnavailable) {
 			break
 		}

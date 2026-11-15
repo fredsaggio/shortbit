@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"time"
-	"uuid"
 
 	"github.com/fredsaggio/url-shortener/internal/db"
+	"github.com/fredsaggio/url-shortener/internal/models"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -18,7 +18,10 @@ func NewClickEventRepository(db db.DB) *ClickEventRepository {
 	return &ClickEventRepository{db: db}
 }
 
-func (r *ClickEventRepository) CountClickOnce(ctx context.Context, eventID uuid.UUID, urlID int64) (bool, error) {
+// CountClickOnce adds the click to the link's total and to its day and
+// source, all in one transaction keyed by the event ID, so a redelivered
+// event changes nothing. The day is the click's date in America/Sao_Paulo.
+func (r *ClickEventRepository) CountClickOnce(ctx context.Context, click models.Click) (bool, error) {
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
 		return false, fmt.Errorf("begin count click transaction: %w", err)
@@ -30,7 +33,7 @@ func (r *ClickEventRepository) CountClickOnce(ctx context.Context, eventID uuid.
 		VALUES (@eventID)
 		ON CONFLICT (event_id) DO NOTHING
 	`
-	recorded, err := tx.Exec(ctx, recordEvent, pgx.StrictNamedArgs{"eventID": eventID})
+	recorded, err := tx.Exec(ctx, recordEvent, pgx.StrictNamedArgs{"eventID": click.EventID})
 	if err != nil {
 		return false, fmt.Errorf("record processed click event: %w", err)
 	}
@@ -43,12 +46,26 @@ func (r *ClickEventRepository) CountClickOnce(ctx context.Context, eventID uuid.
 		SET click_count = click_count + 1
 		WHERE id = @urlID
 	`
-	updated, err := tx.Exec(ctx, countClick, pgx.StrictNamedArgs{"urlID": urlID})
+	updated, err := tx.Exec(ctx, countClick, pgx.StrictNamedArgs{"urlID": click.URLID})
 	if err != nil {
 		return false, fmt.Errorf("count click: %w", err)
 	}
 	if updated.RowsAffected() != 1 {
 		return false, ErrURLNotFound
+	}
+
+	const countDailyClick = `
+		INSERT INTO url_daily_clicks (url_id, day, source, clicks)
+		VALUES (@urlID, (@occurredAt::timestamptz AT TIME ZONE 'America/Sao_Paulo')::date, @source, 1)
+		ON CONFLICT (url_id, day, source) DO UPDATE
+		SET clicks = url_daily_clicks.clicks + 1
+	`
+	if _, err := tx.Exec(ctx, countDailyClick, pgx.StrictNamedArgs{
+		"urlID":      click.URLID,
+		"occurredAt": click.OccurredAt,
+		"source":     string(click.Source),
+	}); err != nil {
+		return false, fmt.Errorf("count daily click: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {

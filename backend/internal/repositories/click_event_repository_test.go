@@ -4,6 +4,7 @@ package repositories_test
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -24,7 +25,7 @@ func TestClickEventRepositoryIntegration(t *testing.T) {
 	t.Run("counts a new event", func(t *testing.T) {
 		before := clickCount(t, pool, url.ID)
 
-		counted, err := clickEventRepository.CountClickOnce(t.Context(), uuid.NewV7(), url.ID)
+		counted, err := clickEventRepository.CountClickOnce(t.Context(), models.Click{EventID: uuid.NewV7(), URLID: url.ID, Source: models.ClickSourceLink, OccurredAt: time.Now()})
 		if err != nil {
 			t.Fatalf("CountClickOnce() error = %v", err)
 		}
@@ -41,11 +42,11 @@ func TestClickEventRepositoryIntegration(t *testing.T) {
 		eventID := uuid.NewV7()
 		before := clickCount(t, pool, url.ID)
 
-		if _, err := clickEventRepository.CountClickOnce(t.Context(), eventID, url.ID); err != nil {
+		if _, err := clickEventRepository.CountClickOnce(t.Context(), models.Click{EventID: eventID, URLID: url.ID, Source: models.ClickSourceLink, OccurredAt: time.Now()}); err != nil {
 			t.Fatalf("first CountClickOnce() error = %v", err)
 		}
 
-		counted, err := clickEventRepository.CountClickOnce(t.Context(), eventID, url.ID)
+		counted, err := clickEventRepository.CountClickOnce(t.Context(), models.Click{EventID: eventID, URLID: url.ID, Source: models.ClickSourceLink, OccurredAt: time.Now()})
 		if err != nil {
 			t.Fatalf("second CountClickOnce() error = %v", err)
 		}
@@ -68,7 +69,7 @@ func TestClickEventRepositoryIntegration(t *testing.T) {
 
 		for range deliveries {
 			wg.Go(func() {
-				if _, err := clickEventRepository.CountClickOnce(t.Context(), eventID, url.ID); err != nil {
+				if _, err := clickEventRepository.CountClickOnce(t.Context(), models.Click{EventID: eventID, URLID: url.ID, Source: models.ClickSourceLink, OccurredAt: time.Now()}); err != nil {
 					errs <- err
 				}
 			})
@@ -87,7 +88,7 @@ func TestClickEventRepositoryIntegration(t *testing.T) {
 	t.Run("reports a missing URL without recording the event", func(t *testing.T) {
 		eventID := uuid.NewV7()
 
-		_, err := clickEventRepository.CountClickOnce(t.Context(), eventID, url.ID+1_000_000)
+		_, err := clickEventRepository.CountClickOnce(t.Context(), models.Click{EventID: eventID, URLID: url.ID + 1_000_000, Source: models.ClickSourceLink, OccurredAt: time.Now()})
 		if !errors.Is(err, repositories.ErrURLNotFound) {
 			t.Fatalf("CountClickOnce() error = %v, want %v", err, repositories.ErrURLNotFound)
 		}
@@ -179,4 +180,49 @@ func clickCount(t *testing.T, pool *pgxpool.Pool, urlID int64) int64 {
 	}
 
 	return count
+}
+
+func TestClickEventRepositoryCountsByDayAndSource(t *testing.T) {
+	pool := dbtest.Open(t)
+	repo := repositories.NewClickEventRepository(pool)
+	url := createClickTestURL(t, pool)
+
+	// 02:30 UTC on the 15th is still 23:30 on the 14th in São Paulo.
+	lateEvening := time.Date(2026, 11, 15, 2, 30, 0, 0, time.UTC)
+	nextMorning := time.Date(2026, 11, 15, 12, 0, 0, 0, time.UTC)
+	count := func(source models.ClickSource, at time.Time, eventID uuid.UUID) {
+		t.Helper()
+		if _, err := repo.CountClickOnce(t.Context(), models.Click{EventID: eventID, URLID: url.ID, Source: source, OccurredAt: at}); err != nil {
+			t.Fatalf("CountClickOnce() error = %v", err)
+		}
+	}
+
+	count(models.ClickSourceLink, lateEvening, uuid.NewV7())
+	count(models.ClickSourceQR, lateEvening, uuid.NewV7())
+	count(models.ClickSourceQR, lateEvening, uuid.NewV7())
+	redelivered := uuid.NewV7()
+	count(models.ClickSourceQR, nextMorning, redelivered)
+	count(models.ClickSourceQR, nextMorning, redelivered)
+
+	rows, err := pool.Query(t.Context(), `SELECT day::text, source, clicks FROM url_daily_clicks WHERE url_id = $1 ORDER BY day, source`, url.ID)
+	if err != nil {
+		t.Fatalf("query daily clicks: %v", err)
+	}
+	defer rows.Close()
+	var got []string
+	for rows.Next() {
+		var day, source string
+		var clicks int64
+		if err := rows.Scan(&day, &source, &clicks); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		got = append(got, fmt.Sprintf("%s %s %d", day, source, clicks))
+	}
+	want := []string{"2026-11-14 link 1", "2026-11-14 qr 2", "2026-11-15 qr 1"}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("daily clicks = %v, want %v", got, want)
+	}
+	if total := clickCount(t, pool, url.ID); total != 4 {
+		t.Errorf("click_count = %d, want 4 (the redelivery counts once)", total)
+	}
 }

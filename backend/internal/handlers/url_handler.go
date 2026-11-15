@@ -30,7 +30,7 @@ type URLService interface {
 }
 
 type RedirectService interface {
-	Resolve(ctx context.Context, shortCode, token string) (services.RedirectResult, error)
+	Resolve(ctx context.Context, shortCode, token string, source models.ClickSource) (services.RedirectResult, error)
 }
 
 type createURLRequest struct {
@@ -260,7 +260,7 @@ func (h *URLHandler) Redirect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.redirect.Resolve(ctx, shortCode, token)
+	result, err := h.redirect.Resolve(ctx, shortCode, token, clickSourceOf(r))
 
 	if err != nil {
 		if errors.Is(err, services.ErrURLNotFound) {

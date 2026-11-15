@@ -5,14 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"uuid"
 
 	"github.com/fredsaggio/url-shortener/internal/messaging"
+	"github.com/fredsaggio/url-shortener/internal/models"
 	"github.com/fredsaggio/url-shortener/internal/repositories"
 )
 
 type ClickEventStore interface {
-	CountClickOnce(ctx context.Context, eventID uuid.UUID, urlID int64) (bool, error)
+	CountClickOnce(ctx context.Context, click models.Click) (bool, error)
 }
 
 type ClickCountService struct {
@@ -24,7 +24,7 @@ func NewClickCountService(store ClickEventStore) *ClickCountService {
 }
 
 func (s *ClickCountService) HandleClick(ctx context.Context, event messaging.ClickEvent) error {
-	counted, err := s.store.CountClickOnce(ctx, event.EventID, event.URLID)
+	counted, err := s.store.CountClickOnce(ctx, event.Click())
 	if err != nil {
 		// Retrying an event for a missing URL would never succeed.
 		if errors.Is(err, repositories.ErrURLNotFound) {

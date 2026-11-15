@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/fredsaggio/url-shortener/internal/messaging"
+	"github.com/fredsaggio/url-shortener/internal/models"
 	"github.com/fredsaggio/url-shortener/internal/repositories"
 	"github.com/fredsaggio/url-shortener/internal/sessiontoken"
 )
@@ -67,8 +68,9 @@ func NewRedirectService(public PublicLinkResolver, private PrivateLinkResolver, 
 	}
 }
 
-func (s *RedirectService) Resolve(ctx context.Context, shortCode, token string) (RedirectResult, error) {
-	originalURL, err := s.ResolvePublic(ctx, shortCode)
+// Resolve finds where a short link goes and counts the click with its source.
+func (s *RedirectService) Resolve(ctx context.Context, shortCode, token string, source models.ClickSource) (RedirectResult, error) {
+	originalURL, err := s.ResolvePublic(ctx, shortCode, source)
 	if err == nil {
 		return RedirectResult{OriginalURL: originalURL}, nil
 	}
@@ -95,14 +97,14 @@ func (s *RedirectService) Resolve(ctx context.Context, shortCode, token string) 
 		return RedirectResult{}, fmt.Errorf("resolve private URL: %w", err)
 	}
 
-	if err := s.countClick(ctx, linkID); err != nil {
+	if err := s.countClick(ctx, linkID, source); err != nil {
 		return RedirectResult{}, err
 	}
 
 	return RedirectResult{OriginalURL: originalURL}, nil
 }
 
-func (s *RedirectService) ResolvePublic(ctx context.Context, shortCode string) (string, error) {
+func (s *RedirectService) ResolvePublic(ctx context.Context, shortCode string, source models.ClickSource) (string, error) {
 	urlID, originalURL, cached, err := s.cache.Get(ctx, shortCode)
 	if err != nil {
 		slog.Warn("read cached URL destination failed", "short_code", shortCode, "error", err)
@@ -119,7 +121,7 @@ func (s *RedirectService) ResolvePublic(ctx context.Context, shortCode string) (
 		}
 	}
 
-	if err := s.countClick(ctx, urlID); err != nil {
+	if err := s.countClick(ctx, urlID, source); err != nil {
 		return "", err
 	}
 
@@ -142,8 +144,8 @@ func (s *RedirectService) ResolvePublic(ctx context.Context, shortCode string) (
 
 // The fallback reuses the event ID: if a publish that timed out still reaches
 // the queue, the worker finds the event already processed.
-func (s *RedirectService) countClick(ctx context.Context, urlID int64) error {
-	event := messaging.NewClickEvent(urlID, s.now())
+func (s *RedirectService) countClick(ctx context.Context, urlID int64, source models.ClickSource) error {
+	event := messaging.NewClickEvent(urlID, source, s.now())
 
 	publishErr := s.publisher.Publish(ctx, event)
 	if publishErr == nil {
@@ -152,7 +154,7 @@ func (s *RedirectService) countClick(ctx context.Context, urlID int64) error {
 
 	slog.WarnContext(ctx, "publish click event failed; counting synchronously", "event_id", event.EventID, "url_id", urlID, "error", publishErr)
 
-	if _, err := s.clicks.CountClickOnce(ctx, event.EventID, urlID); err != nil {
+	if _, err := s.clicks.CountClickOnce(ctx, event.Click()); err != nil {
 		if errors.Is(err, repositories.ErrURLNotFound) {
 			return ErrURLNotFound
 		}

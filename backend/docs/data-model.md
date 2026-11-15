@@ -15,6 +15,7 @@ erDiagram
     users ||--o| password_reset_attempts : "pode possuir uma"
     users ||--o{ urls : "possui"
     urls ||--o{ link_access_sessions : "libera acesso com"
+    urls ||--o{ url_daily_clicks : "conta por dia em"
 
     users {
         uuid id PK
@@ -82,6 +83,13 @@ erDiagram
     processed_click_events {
         uuid event_id PK
         timestamptz processed_at
+    }
+
+    url_daily_clicks {
+        bigint url_id PK,FK
+        date day PK
+        text source PK
+        bigint clicks
     }
 ```
 
@@ -172,6 +180,10 @@ Tabela de deduplicação do worker de cliques ([ADR 0002](decisions/0002-click-e
 
 O worker apaga eventos com `processed_at` mais antigo que `PROCESSED_CLICK_EVENT_RETENTION` (7 dias por padrão), a cada hora; o índice em `processed_at` atende essa limpeza.
 
+### `url_daily_clicks` ✅
+
+Cliques de cada link por dia e por origem: `link` (alguém abriu o link curto) ou `qr` (alguém leu o QR code, que leva `?qr=1`). O dia é a data do clique em `America/Sao_Paulo`. Só existem linhas para dias com clique; a API completa os outros com zero. O worker e o fallback somam aqui na mesma transação de `processed_click_events` e `urls.click_count`, então reentregas não contam de novo ([ADR 0005](decisions/0005-daily-clicks-and-qr-source.md)). Apagar a URL apaga as linhas (`ON DELETE CASCADE`).
+
 ## Regras de exclusão
 
 | Relação | Comportamento |
@@ -179,5 +191,6 @@ O worker apaga eventos com `processed_at` mais antigo que `PROCESSED_CLICK_EVENT
 | Usuário → credenciais/identidades/sessões/reset | `ON DELETE CASCADE` |
 | Usuário → URLs | `ON DELETE RESTRICT` |
 | URL → sessões de acesso | `ON DELETE CASCADE` |
+| URL → cliques por dia | `ON DELETE CASCADE` |
 
 Não existe endpoint de exclusão de conta no MVP; essas regras protegem consistência futura.

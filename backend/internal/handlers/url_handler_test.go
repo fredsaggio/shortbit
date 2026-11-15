@@ -25,7 +25,7 @@ type urlServiceStub struct {
 	createFunc         func(context.Context, uuid.UUID, string, models.Visibility, string) (services.CreateURLResult, error)
 	listFunc           func(context.Context, uuid.UUID, int, *repositories.URLCursor) (services.ListURLResult, error)
 	getByShortCodeFunc func(context.Context, uuid.UUID, string) (models.URL, error)
-	resolveFunc        func(context.Context, string, string) (services.RedirectResult, error)
+	resolveFunc        func(context.Context, string, string, models.ClickSource) (services.RedirectResult, error)
 	updateFunc         func(context.Context, uuid.UUID, string, services.URLUpdate) (models.URL, error)
 	deleteFunc         func(context.Context, uuid.UUID, string) error
 }
@@ -50,10 +50,10 @@ func (s urlServiceStub) GetByShortCode(ctx context.Context, userID uuid.UUID, sh
 	return s.getByShortCodeFunc(ctx, userID, shortCode)
 }
 
-type redirectServiceStub func(context.Context, string, string) (services.RedirectResult, error)
+type redirectServiceStub func(context.Context, string, string, models.ClickSource) (services.RedirectResult, error)
 
-func (resolve redirectServiceStub) Resolve(ctx context.Context, shortCode, token string) (services.RedirectResult, error) {
-	return resolve(ctx, shortCode, token)
+func (resolve redirectServiceStub) Resolve(ctx context.Context, shortCode, token string, source models.ClickSource) (services.RedirectResult, error) {
+	return resolve(ctx, shortCode, token, source)
 }
 
 func newURLHandler(serv urlServiceStub) *handlers.URLHandler {
@@ -443,7 +443,7 @@ func TestURLHandlerRedirectPublicURL(t *testing.T) {
 	type contextKey struct{}
 	ctx := context.WithValue(t.Context(), contextKey{}, "request-context")
 	called := false
-	handler := newURLHandler(urlServiceStub{resolveFunc: func(gotCtx context.Context, gotCode, gotToken string) (services.RedirectResult, error) {
+	handler := newURLHandler(urlServiceStub{resolveFunc: func(gotCtx context.Context, gotCode, gotToken string, _ models.ClickSource) (services.RedirectResult, error) {
 		called = true
 		if gotCtx.Value(contextKey{}) != "request-context" || gotCode != "Ab3dX9" || gotToken != "" {
 			t.Errorf("Resolve() arguments = (%v, %q, %q), want request context, Ab3dX9 and no token", gotCtx, gotCode, gotToken)
@@ -471,7 +471,7 @@ func TestURLHandlerRedirectPublicURL(t *testing.T) {
 }
 
 func TestURLHandlerRedirectPrivateURLWithCookie(t *testing.T) {
-	handler := newURLHandler(urlServiceStub{resolveFunc: func(_ context.Context, code, token string) (services.RedirectResult, error) {
+	handler := newURLHandler(urlServiceStub{resolveFunc: func(_ context.Context, code, token string, _ models.ClickSource) (services.RedirectResult, error) {
 		if code != "Ab3dX9" || token != "link-access-token" {
 			t.Errorf("Resolve() arguments = (%q, %q), want shortcode and cookie token", code, token)
 		}
@@ -500,7 +500,7 @@ func TestURLHandlerRedirectPrivateURLRequiresPassword(t *testing.T) {
 		{name: "invalid or expired cookie", token: "invalid-token"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := newURLHandler(urlServiceStub{resolveFunc: func(_ context.Context, code, token string) (services.RedirectResult, error) {
+			handler := newURLHandler(urlServiceStub{resolveFunc: func(_ context.Context, code, token string, _ models.ClickSource) (services.RedirectResult, error) {
 				if code != "Ab3dX9" || token != tt.token {
 					t.Errorf("Resolve() arguments = (%q, %q), want (%q, %q)", code, token, "Ab3dX9", tt.token)
 				}
@@ -529,7 +529,7 @@ func TestURLHandlerRedirectPrivateURLRequiresPassword(t *testing.T) {
 }
 
 func TestURLHandlerRedirectPasswordPageEscapesShortCode(t *testing.T) {
-	handler := newURLHandler(urlServiceStub{resolveFunc: func(context.Context, string, string) (services.RedirectResult, error) {
+	handler := newURLHandler(urlServiceStub{resolveFunc: func(context.Context, string, string, models.ClickSource) (services.RedirectResult, error) {
 		return services.RedirectResult{PasswordRequired: true}, nil
 	}})
 	request := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -556,7 +556,7 @@ func TestURLHandlerRedirectMapsServiceErrors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := newURLHandler(urlServiceStub{resolveFunc: func(_ context.Context, gotCode, _ string) (services.RedirectResult, error) {
+			handler := newURLHandler(urlServiceStub{resolveFunc: func(_ context.Context, gotCode, _ string, _ models.ClickSource) (services.RedirectResult, error) {
 				if gotCode != "Ab3dX9" {
 					t.Errorf("short code = %q, want Ab3dX9", gotCode)
 				}

@@ -3,6 +3,7 @@ package services_test
 import (
 	"context"
 	"errors"
+	"github.com/fredsaggio/url-shortener/internal/models"
 	"testing"
 	"time"
 	"uuid"
@@ -18,11 +19,13 @@ type fakeClickEventStore struct {
 
 	gotEventID uuid.UUID
 	gotURLID   int64
+	gotSource  models.ClickSource
 }
 
-func (s *fakeClickEventStore) CountClickOnce(_ context.Context, eventID uuid.UUID, urlID int64) (bool, error) {
-	s.gotEventID = eventID
-	s.gotURLID = urlID
+func (s *fakeClickEventStore) CountClickOnce(_ context.Context, click models.Click) (bool, error) {
+	s.gotEventID = click.EventID
+	s.gotURLID = click.URLID
+	s.gotSource = click.Source
 	return s.counted, s.err
 }
 
@@ -42,7 +45,7 @@ func TestClickCountServiceHandleClick(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			event := messaging.NewClickEvent(42, time.Now())
+			event := messaging.NewClickEvent(42, models.ClickSourceLink, time.Now())
 
 			err := services.NewClickCountService(tt.store).HandleClick(t.Context(), event)
 

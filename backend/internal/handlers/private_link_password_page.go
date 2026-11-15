@@ -16,12 +16,15 @@ var privateLinkPasswordTemplate = template.Must(template.New("private_link_passw
 
 type privateLinkPasswordPageData struct {
 	ShortCode string
-	Error     string
+	// FormAction keeps the QR marker, so a scan unlocked by password still
+	// counts as a QR code click.
+	FormAction string
+	Error      string
 }
 
 func renderPrivateLinkPasswordPage(w http.ResponseWriter, r *http.Request, shortCode, message string, status int) {
 	var body bytes.Buffer
-	if err := privateLinkPasswordTemplate.Execute(&body, privateLinkPasswordPageData{ShortCode: shortCode, Error: message}); err != nil {
+	if err := privateLinkPasswordTemplate.Execute(&body, privateLinkPasswordPageData{ShortCode: shortCode, FormAction: keepClickSource(r, "/"+shortCode+"/access"), Error: message}); err != nil {
 		slog.ErrorContext(r.Context(), "render private link password page failed", "error", err)
 		problem.Write(w, r, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
 		return
