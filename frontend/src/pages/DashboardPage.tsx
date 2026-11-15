@@ -1,4 +1,4 @@
-import { BarChart3, ChevronRight, CircleCheck, Globe, Link2, LinkIcon, Lock, MoreVertical, Pencil, RotateCw, Trash2 } from 'lucide-react'
+import { BarChart3, ChevronRight, CircleCheck, Globe, Link2, LinkIcon, Lock, MoreVertical, Pencil, QrCode, RotateCw, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { Link, useNavigate } from 'react-router'
@@ -8,6 +8,7 @@ import type { CreatedLink, ShortLink, Visibility } from '../api/types.ts'
 import { Alert } from '../components/Alert.tsx'
 import { Button } from '../components/Button.tsx'
 import { ConfirmDialog } from '../components/ConfirmDialog.tsx'
+import { QrCodeDialog } from '../components/QrCodeDialog.tsx'
 import { CopyButton } from '../components/CopyButton.tsx'
 import { LinkListSkeleton } from '../components/PageLoader.tsx'
 import { PasswordStrength } from '../components/PasswordStrength.tsx'
@@ -187,6 +188,7 @@ function LinkItem({ link, onDeleted }: { link: ShortLink; onDeleted: (code: stri
   const isPrivate = link.visibility === 'private'
   const navigate = useNavigate()
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [showingQrCode, setShowingQrCode] = useState(false)
   const displayURL = shortURL.replace(/^https?:\/\//, '')
 
   return (
@@ -242,6 +244,9 @@ function LinkItem({ link, onDeleted }: { link: ShortLink; onDeleted: (code: stri
                 <DropdownMenuItem className="h-10 cursor-pointer gap-2.5 rounded-md px-2.5 font-medium" onSelect={() => navigate(`/painel/links/${link.short_code}?editar=1`)}>
                   <Pencil className="size-4" aria-hidden="true" /> Editar
                 </DropdownMenuItem>
+                <DropdownMenuItem className="h-10 cursor-pointer gap-2.5 rounded-md px-2.5 font-medium" onSelect={() => setShowingQrCode(true)}>
+                  <QrCode className="size-4" aria-hidden="true" /> QR code
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   className="h-10 cursor-pointer gap-2.5 rounded-md px-2.5 font-medium text-destructive focus:bg-destructive/5 focus:text-destructive"
                   onSelect={() => setConfirmingDelete(true)}
@@ -254,14 +259,16 @@ function LinkItem({ link, onDeleted }: { link: ShortLink; onDeleted: (code: stri
         </div>
       </div>
 
+      <QrCodeDialog open={showingQrCode} onOpenChange={setShowingQrCode} shortCode={link.short_code} />
+
       <ConfirmDialog
         open={confirmingDelete}
         onOpenChange={setConfirmingDelete}
         title="Excluir este link?"
         description={
           <>
-            <strong className="font-semibold text-navy">{displayURL}</strong> deixa de funcionar para quem abrir. Essa ação não pode
-            ser desfeita.
+            <strong className="font-semibold text-navy">{displayURL}</strong> deixa de funcionar para quem abrir o link ou ler o QR code
+            dele. Essa ação não pode ser desfeita.
           </>
         }
         confirmLabel="Excluir link"

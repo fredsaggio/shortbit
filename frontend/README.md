@@ -12,7 +12,7 @@ Os formulários usam `noValidate` e mensagens próprias (`src/validation.ts` e `
 | `/entrar` | Login com senha ou Google | Só sem sessão |
 | `/cadastro` | Cadastro com nome completo e código de confirmação por email | Só sem sessão |
 | `/recuperar-senha` | Recuperação de senha por código | Livre |
-| `/painel` | Criar links (públicos ou privados, com senha), listar, editar e excluir os seus | Com sessão |
+| `/painel` | Criar links (públicos ou privados, com senha), listar, editar, excluir e baixar o QR code dos seus | Com sessão |
 | `/painel/links/:code` | Detalhe de um link e total de cliques | Com sessão |
 | `/conta` | Minha conta: dados, nome completo, troca de senha (contas com senha) e exclusão da conta | Com sessão |
 | `/privacidade` | Política de privacidade (LGPD); o Google pede o link dela no login | Livre |

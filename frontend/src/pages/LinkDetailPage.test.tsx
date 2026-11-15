@@ -1,5 +1,5 @@
 import { screen, waitFor, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ShortLink } from '../api/types.ts'
 import { fakeApi, user } from '../test/fakeApi.ts'
 import { renderApp } from '../test/renderApp.tsx'
@@ -100,5 +100,32 @@ describe('LinkDetailPage', () => {
 
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('Algo deu errado do nosso lado')
     expect(screen.getByTestId('current-path')).toHaveTextContent('/painel/links/Ab3dX9')
+  })
+
+  describe('QR code', () => {
+    afterEach(() => vi.restoreAllMocks())
+
+    it('shows the code of the short link and downloads it as PNG and SVG', async () => {
+      const downloads: { href: string; download: string }[] = []
+      vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+        downloads.push({ href: this.href, download: this.download })
+      })
+      fakeApi({ ...signedIn, 'GET /urls/Ab3dX9': { status: 200, body: publicLink } })
+      const { user: actions } = renderApp('/painel/links/Ab3dX9')
+
+      await actions.click(await screen.findByRole('button', { name: 'QR code' }))
+      const dialog = await screen.findByRole('dialog', { name: 'QR code do link' })
+      const image = await within(dialog).findByRole('img', { name: 'QR code de localhost:8080/Ab3dX9' })
+      expect(image.getAttribute('src')).toMatch(/^data:image\/svg\+xml/)
+
+      await actions.click(within(dialog).getByRole('button', { name: 'Baixar SVG' }))
+      await actions.click(within(dialog).getByRole('button', { name: 'Baixar PNG' }))
+
+      await waitFor(() => expect(downloads).toHaveLength(2))
+      expect(downloads[0]).toMatchObject({ download: 'qrcode-Ab3dX9.svg' })
+      expect(downloads[0].href).toMatch(/^data:image\/svg\+xml/)
+      expect(downloads[1]).toMatchObject({ download: 'qrcode-Ab3dX9.png' })
+      expect(downloads[1].href).toMatch(/^data:image\/png;base64,/)
+    })
   })
 })

@@ -226,4 +226,15 @@ describe('DashboardPage', () => {
     expect(await screen.findByRole('form', { name: 'Editar link' })).toBeInTheDocument()
     expect(screen.getByTestId('current-path')).toHaveTextContent('/painel/links/Ab3dX9')
   })
+
+  it('opens the QR code of a link from its menu', async () => {
+    fakeApi({ ...signedIn, 'GET /urls': { status: 200, body: { urls: [link('Ab3dX9')], next_cursor: null } } })
+    const { user: actions } = renderApp('/painel')
+
+    await actions.click(await screen.findByRole('button', { name: 'Ações do link localhost:8080/Ab3dX9' }))
+    await actions.click(await screen.findByRole('menuitem', { name: 'QR code' }))
+
+    const dialog = await screen.findByRole('dialog', { name: 'QR code do link' })
+    expect(await within(dialog).findByRole('img', { name: 'QR code de localhost:8080/Ab3dX9' })).toBeInTheDocument()
+  })
 })

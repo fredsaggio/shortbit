@@ -1,4 +1,4 @@
-import { ArrowLeft, BarChart3, CalendarDays, ExternalLink, Link2Off, Pencil, RotateCw, Trash2 } from 'lucide-react'
+import { ArrowLeft, BarChart3, CalendarDays, ExternalLink, Link2Off, Pencil, QrCode, RotateCw, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
@@ -11,6 +11,7 @@ import { buttonSizes, buttonTones } from '../components/buttonStyles.ts'
 import { ConfirmDialog } from '../components/ConfirmDialog.tsx'
 import { CopyButton } from '../components/CopyButton.tsx'
 import { EditLinkForm } from '../components/EditLinkForm.tsx'
+import { QrCodeDialog } from '../components/QrCodeDialog.tsx'
 import { VisibilityBadge } from '../components/VisibilityBadge.tsx'
 import { clicksLabel, formatCount, formatDate } from '../format.ts'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -31,6 +32,7 @@ export function LinkDetailPage() {
   const [searchParams] = useSearchParams()
   const [editing, setEditing] = useState(searchParams.has('editar'))
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [showingQrCode, setShowingQrCode] = useState(false)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -107,6 +109,10 @@ export function LinkDetailPage() {
                 <ExternalLink className="size-4" aria-hidden="true" />
                 Abrir
               </a>
+              <Button type="button" variant="outline" onClick={() => setShowingQrCode(true)}>
+                <QrCode className="size-4" aria-hidden="true" />
+                QR code
+              </Button>
               {!editing && (
                 <Button type="button" variant="outline" onClick={() => setEditing(true)}>
                   <Pencil className="size-4" aria-hidden="true" />
@@ -119,11 +125,13 @@ export function LinkDetailPage() {
               </Button>
             </div>
 
+            <QrCodeDialog open={showingQrCode} onOpenChange={setShowingQrCode} shortCode={state.link.short_code} />
+
             <ConfirmDialog
               open={confirmingDelete}
               onOpenChange={setConfirmingDelete}
               title="Excluir este link?"
-              description="Quem abrir o link curto vai ver que ele não existe mais. Essa ação não pode ser desfeita."
+              description="Quem abrir o link curto ou ler o QR code dele vai ver que ele não existe mais. Essa ação não pode ser desfeita."
               confirmLabel="Excluir link"
               busyLabel="Excluindo…"
               onConfirm={async () => {
