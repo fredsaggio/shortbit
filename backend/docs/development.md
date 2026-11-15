@@ -134,6 +134,20 @@ embarcado carrega `/docs/openapi.yaml` no navegador, então editar o YAML basta;
 não há HTML para gerar de novo. O script do ReDoc vem de CDN, e o navegador
 precisa de internet para renderizar a página.
 
+## Tudo em contêineres
+
+```bash
+make up
+```
+
+Sobe PostgreSQL, Redis, RabbitMQ, a API e o worker de cliques, com a mesma imagem de produção (o `Dockerfile` da raiz). A API aplica as migrations ao subir e serve o front em `http://localhost:8080`; o worker roda num contêiner separado (ADR 0002). `make infra/down` para tudo.
+
+- A API e o worker usam a rede do host, então os endereços `localhost` do `.env` (`DATABASE_URL`, `RABBITMQ_URL`) valem sem mudança. Só as variáveis listadas no `docker-compose.yml` entram nos contêineres.
+- O Redis é sempre o do Compose, mesmo que o `.env` tenha um `REDIS_URL` apontando para outro.
+- `FRONTEND_URL` vira `http://localhost:8080`, porque o front vem da própria API. Para o login com Google, `GOOGLE_REDIRECT_URL` continua `http://localhost:8080/auth/google/callback`.
+- Ocupa a porta 8080: não rode `make run` ao mesmo tempo.
+- Depois de mudar o código, `make up` de novo reconstrói a imagem.
+
 ## Testes
 
 Unitários:

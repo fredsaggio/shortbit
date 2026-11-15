@@ -10,6 +10,7 @@ DATABASE_SERVICE := postgres-shortener
 .PHONY: help
 help:
 	@echo "Available commands:"
+	@echo "  make up"
 	@echo "  make infra/up"
 	@echo "  make infra/down"
 	@echo "  make migration/new name=create_example"
@@ -32,6 +33,12 @@ help:
 .PHONY: infra/up
 infra/up:
 	@docker compose up --wait $(DATABASE_SERVICE)
+
+# Sobe tudo em contêineres: PostgreSQL, Redis, RabbitMQ, API (com o front) e worker.
+# Exemplo: make up
+.PHONY: up
+up:
+	@docker compose up -d --build --wait
 
 # Exemplo: make infra/down
 .PHONY: infra/down

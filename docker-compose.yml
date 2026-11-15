@@ -52,6 +52,58 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  # The app, built from the root Dockerfile (the production image). It uses
+  # the host network so the localhost addresses in .env (Postgres on 5433,
+  # Redis, RabbitMQ) work unchanged; only the variables listed here reach the
+  # container. The API serves the web app on http://localhost:8080.
+  api-shortener:
+    build: .
+    image: shortbit:local
+    container_name: api-shortener
+    network_mode: host
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Defina DATABASE_URL no .env}
+      RABBITMQ_URL: ${RABBITMQ_URL:?Defina RABBITMQ_URL no .env}
+      # Always the Redis of this file, even when .env points REDIS_URL at a
+      # hosted one.
+      REDIS_URL: ""
+      REDIS_ADDR: localhost:6379
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?Defina GOOGLE_CLIENT_ID no .env}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:?Defina GOOGLE_CLIENT_SECRET no .env}
+      GOOGLE_REDIRECT_URL: ${GOOGLE_REDIRECT_URL:?Defina GOOGLE_REDIRECT_URL no .env}
+      EMAIL_FROM: ${EMAIL_FROM:?Defina EMAIL_FROM no .env}
+      RESEND_API_KEY: ${RESEND_API_KEY:?Defina RESEND_API_KEY no .env}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
+      # The front comes from the API itself here, not from Vite on 5173.
+      FRONTEND_URL: http://localhost:8080
+      RUN_MIGRATIONS: "true"
+      # Clicks go to the worker service below (ADR 0002).
+      RUN_CLICK_WORKER: "false"
+    depends_on:
+      postgres-shortener:
+        condition: service_healthy
+      redis-shortener:
+        condition: service_healthy
+      rabbitmq-shortener:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker-shortener:
+    image: shortbit:local
+    container_name: worker-shortener
+    network_mode: host
+    entrypoint: ["/app/worker"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Defina DATABASE_URL no .env}
+      RABBITMQ_URL: ${RABBITMQ_URL:?Defina RABBITMQ_URL no .env}
+    depends_on:
+      # The API applies the migrations the worker relies on.
+      api-shortener:
+        condition: service_started
+      rabbitmq-shortener:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   postgres-shortener:
   rabbitmq-shortener:

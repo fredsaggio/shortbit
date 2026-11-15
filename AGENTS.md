@@ -34,6 +34,7 @@ Não coloque co-author em nenhum commit criado por você, em nenhuma hipótese.
 | Comando | O que faz |
 | --- | --- |
 | `make infra/up` / `make infra/down` | Sobe só o PostgreSQL / para tudo. Redis e RabbitMQ sobem com `docker compose up -d --wait redis-shortener rabbitmq-shortener` |
+| `make up` | Sobe tudo em contêineres (infra, API com o front em `:8080` e worker), com a imagem de produção |
 | `make run` | Sobe a API em `:8080` |
 | `make worker` | Sobe o worker de cliques |
 | `make front/install` / `make front/dev` | Instala as dependências do frontend / sobe o Vite em `:5173`, repassando as rotas da API para `:8080` |
