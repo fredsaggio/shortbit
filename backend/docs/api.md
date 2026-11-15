@@ -36,6 +36,7 @@ e em [`docs/openapi.yaml`](openapi.yaml). Esta página Markdown também registra
 | `GET` | `/me` | Sim | ✅ |
 | `PATCH` | `/me` | Sim | ✅ |
 | `POST` | `/me/password` | Sim | ✅ |
+| `DELETE` | `/me` | Sim + senha ou email | ✅ |
 | `GET` | `/auth/google` | Não | ✅ |
 | `GET` | `/auth/google/callback` | Cookies temporários | ✅ |
 | `POST` | `/password-resets` | Não | ✅ |
@@ -43,6 +44,8 @@ e em [`docs/openapi.yaml`](openapi.yaml). Esta página Markdown também registra
 | `POST` | `/urls` | Sim | ✅ |
 | `GET` | `/urls` | Sim | ✅ |
 | `GET` | `/urls/{code}` | Sim + ownership | ✅ |
+| `PATCH` | `/urls/{code}` | Sim + ownership | ✅ |
+| `DELETE` | `/urls/{code}` | Sim + ownership | ✅ |
 | `GET` | `/{code}` | Não; cookie opcional para link privado | ✅ |
 | `POST` | `/{code}/access` | Não | ✅ |
 
@@ -218,6 +221,32 @@ Set-Cookie: user_session=<novo token>
 | `409` | A conta só entra com Google e não tem senha |
 | `429` | Mais de 5 tentativas seguidas; depois, 5 a cada 15 minutos, contadas por conta |
 
+### `DELETE /me` ✅
+
+Exclui a conta da sessão para sempre: o usuário, os links, as sessões de todos os
+aparelhos, a senha, o vínculo com o Google e as tentativas de recuperação. A sessão
+aberta não basta:
+
+```json
+{ "password": "Senha-atual1" }
+```
+
+Conta com senha manda `password`; conta que só entra com Google manda o próprio `email`
+(sem diferença entre maiúsculas e minúsculas):
+
+```json
+{ "email": "ana@example.com" }
+```
+
+Retorna `204` e apaga o cookie `user_session`. Divide o limite por conta da troca de
+senha (5 tentativas, depois 5 a cada 15 minutos), contado antes da comparação Argon2id.
+
+| Status | Motivo |
+|---:|---|
+| `400` | Senha incorreta, email que não confere ou JSON inválido |
+| `401` | Sem sessão |
+| `429` | Limite de tentativas da conta |
+
 ## Logout ✅
 
 ### `DELETE /sessions/current`
@@ -352,6 +381,43 @@ worker estiver desligado.
   "updated_at": "2026-09-27T12:00:00Z"
 }
 ```
+
+### `PATCH /urls/{code}` ✅
+
+Edita um link do usuário da sessão. Todos os campos são opcionais; o que não vier
+fica como está, e ao menos um precisa vir.
+
+```json
+{
+  "url": "https://example.com/novo-destino",
+  "visibility": "private",
+  "password": "senha-do-link"
+}
+```
+
+- `url` troca o destino, com as mesmas regras de `POST /urls`.
+- Mudar para `private` exige `password` quando o link era público.
+- Num link já privado, `password` vazio ou ausente mantém a senha atual. Uma senha nova
+  **encerra todas as sessões de desbloqueio** do link: quem abriu com a senha antiga
+  precisa digitar a nova.
+- Mudar para `public` apaga a senha; mandar `password` com um link público é erro.
+
+Retorna `200` com o link no mesmo formato de `GET /urls/{code}`. O destino guardado no
+cache é descartado antes e depois da gravação, então um link público que vira privado
+para de redirecionar sem senha na hora.
+
+| Status | Motivo |
+|---:|---|
+| `400` | JSON inválido, nada para alterar, URL ou senha inválidas, privado sem senha, senha em link público |
+| `401` | Sem sessão |
+| `404` | Código inexistente ou link de outro usuário |
+
+### `DELETE /urls/{code}` ✅
+
+Apaga um link do usuário da sessão, com as sessões de desbloqueio dele, e descarta o
+destino do cache. Retorna `204`. Quem abrir o link depois recebe `404`. O código nunca é
+reaproveitado, porque vem de um ID que não se repete. Link de outro usuário também
+retorna `404`.
 
 ### `GET /{code}` ✅
 

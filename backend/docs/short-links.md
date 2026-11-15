@@ -88,12 +88,31 @@ Endpoints administrativos nunca confiarão em um `user_id` enviado pelo cliente.
 | `POST /urls` | ✅ Criar link público ou privado |
 | `GET /urls?limit=...&cursor=...` | ✅ Listar somente links do usuário |
 | `GET /urls/{code}` | ✅ Consultar metadados e contador de cliques com ownership |
+| `PATCH /urls/{code}` | ✅ Trocar destino, visibilidade ou senha |
+| `DELETE /urls/{code}` | ✅ Apagar o link |
 
 A listagem usa paginação keyset por `(created_at DESC, id DESC)`, evitando `OFFSET`. `limit` assume 20 quando omitido e aceita de 1 a 20. A consulta pede `limit+1` para detectar a próxima página; o item extra não é enviado. `next_cursor` é uma string Base64URL sem padding que codifica `created_at` e `id` do último link entregue, ou `null` no fim. É apenas posição, não autenticação nem criptografia. A query sempre filtra `user_id` da sessão; a resposta não contém senha nem hash. O contrato JSON está em [API HTTP](api.md).
 
 A consulta individual usa `short_code` e `user_id` na mesma query. Assim,
 um código inexistente e um link de outro usuário resultam no mesmo `404`.
 Ela retorna os metadados e o contador de cliques ao dono, sem hash da senha.
+
+## Edição e exclusão ✅
+
+O dono pode trocar o destino, a visibilidade e a senha de um link, ou apagá-lo. As regras:
+
+- **Para privado** exige senha quando o link era público. **Para público** apaga a senha.
+- **Senha nova** encerra, na mesma transação, todas as sessões de desbloqueio do link: quem
+  abriu com a senha antiga precisa digitar a nova. Trocar só o destino mantém as sessões.
+- **Apagar** remove o link e as sessões dele (`ON DELETE CASCADE`). O código não volta a ser
+  usado, porque vem do ID, que nunca se repete; assim ninguém herda um link já compartilhado.
+- Cliques ainda na fila de um link apagado são descartados pelo worker com um aviso.
+
+**Cache.** Um link público popular tem o destino guardado no Redis. Sem limpar esse cache, um
+link que virou privado continuaria redirecionando sem senha até a entrada expirar. Por isso
+edição e exclusão descartam o destino **antes e depois** da gravação no banco: o segundo
+descarte cobre um redirect que tenha lido o valor antigo durante a edição. Se o Redis falhar
+nesse momento, a gravação vale mesmo assim e o destino antigo dura no máximo `URL_CACHE_TTL`.
 
 ## Redirect público ✅
 

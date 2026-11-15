@@ -339,6 +339,43 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+    delete:
+      tags: [Conta]
+      operationId: deleteCurrentAccount
+      summary: Excluir a conta
+      description: |
+        Exclui para sempre a conta, os links, as sessões de todos os aparelhos,
+        a senha e o vínculo com o Google, e apaga o cookie de sessão. Conta com
+        senha confirma com `password`; conta só Google confirma com o próprio
+        `email`. Divide com a troca de senha o limite por conta (5 tentativas,
+        depois 5 a cada 15 minutos).
+      security:
+        - userSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                password:
+                  type: string
+                  writeOnly: true
+                email:
+                  type: string
+                  format: email
+      responses:
+        '204':
+          description: Conta excluída; o cookie user_session é apagado.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /me/password:
     post:
       tags: [Conta]
@@ -592,6 +629,100 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ListedURL'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Código inexistente ou link pertencente a outro usuário.
+          content:
+            text/plain:
+              schema:
+                type: string
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    patch:
+      tags: [Links]
+      operationId: updateOwnedURL
+      summary: Editar um link meu
+      description: |
+        Troca o destino, a visibilidade ou a senha. Campos ausentes ficam como
+        estão; ao menos um precisa vir. Mudar para privado exige `password`
+        quando o link era público. Num link privado, `password` vazio mantém a
+        senha, e uma senha nova encerra todas as sessões de desbloqueio do link.
+        Mudar para público apaga a senha. O destino em cache é descartado antes
+        e depois da gravação.
+      security:
+        - userSession: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 6
+            pattern: '^[0-9A-Za-z]+$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  description: Novo destino, HTTP ou HTTPS.
+                visibility:
+                  type: string
+                  enum: [public, private]
+                password:
+                  type: string
+                  writeOnly: true
+                  description: Senha do link privado. Vazio mantém a atual.
+      responses:
+        '200':
+          description: Link atualizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListedURL'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Código inexistente ou link pertencente a outro usuário.
+          content:
+            text/plain:
+              schema:
+                type: string
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      tags: [Links]
+      operationId: deleteOwnedURL
+      summary: Apagar um link meu
+      description: |
+        Apaga o link e as sessões de desbloqueio dele, e descarta o destino do
+        cache. Depois disso o link curto responde 404, e o código nunca é
+        reaproveitado.
+      security:
+        - userSession: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 6
+            pattern: '^[0-9A-Za-z]+$'
+      responses:
+        '204':
+          description: Link apagado.
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':

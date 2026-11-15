@@ -223,6 +223,19 @@ flowchart TD
 
 A nova senha segue a mesma regra do cadastro e da recuperação: pelo menos 8 caracteres, com ao menos uma letra maiúscula, um número e um caractere especial. A composição é uma decisão de produto contra a recomendação do NIST SP 800-63B, registrada no [ADR 0004](decisions/0004-account-password-composition.md).
 
+### Exclusão da conta
+
+`DELETE /me` apaga a conta para sempre, numa transação: os links (antes, porque
+`urls.user_id` é `ON DELETE RESTRICT`), o usuário e, por `ON DELETE CASCADE`, as sessões de
+todos os aparelhos, a senha, o vínculo com o Google e as tentativas de recuperação. Depois,
+descarta do cache os destinos dos links apagados e apaga o cookie de sessão.
+
+Como na troca de senha, a sessão aberta não basta ([OWASP Authentication Cheat
+Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html)):
+conta com senha confirma com ela, e conta que só entra com Google, que não tem senha, digita
+o próprio email. O pedido usa o mesmo limite por conta da troca de senha, então tentar
+adivinhar a senha por um endpoint ou pelo outro consome o mesmo saldo.
+
 ## Logout ✅
 
 ```mermaid
