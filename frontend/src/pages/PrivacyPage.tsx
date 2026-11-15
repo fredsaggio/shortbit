@@ -44,7 +44,7 @@ export function PrivacyPage() {
           <ul className="grid list-disc gap-2 pl-5">
             <li>O endereço de destino, o link curto, a data de criação e se o link é público ou privado.</li>
             <li>A senha dos links privados, protegida do mesmo jeito que a senha da sua conta.</li>
-            <li>Quantas vezes cada link foi aberto.</li>
+            <li>Quantas vezes cada link foi aberto em cada dia, e se foi pelo link ou pelo QR code.</li>
           </ul>
         </Section>
 
@@ -66,15 +66,18 @@ export function PrivacyPage() {
         <Section title="Com quem compartilhamos">
           <p>
             Não vendemos seus dados e não os usamos para propaganda. Para o shortbit funcionar, contamos com empresas que
-            hospedam o site, guardam os dados e enviam nossos emails, e com o Google, se você escolher entrar com ele. Algumas
-            dessas empresas ficam fora do Brasil. Elas só usam os dados para manter o shortbit no ar.
+            hospedam o site, guardam os dados e enviam nossos emails, e com o Google, se você escolher entrar com ele. Outra
+            empresa guarda registros técnicos do funcionamento do site, como quais páginas foram abertas e quais deram erro, sem
+            nenhum dado que identifique você. Algumas dessas empresas ficam fora do Brasil. Elas só usam os dados para manter
+            o shortbit no ar.
           </p>
         </Section>
 
         <Section title="Por quanto tempo">
           <p>
             Seus dados e seus links ficam guardados enquanto a sua conta existir. Os códigos que enviamos por email valem por
-            poucos minutos, e os registros internos de cliques são apagados em 7 dias.
+            poucos minutos, os registros internos de cliques são apagados em 7 dias, e os registros técnicos do funcionamento
+            do site, em poucas semanas.
           </p>
         </Section>
 

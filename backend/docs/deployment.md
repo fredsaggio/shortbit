@@ -14,6 +14,7 @@ O shortbit roda de graça em `https://shortbit.com.br` com um único serviço no
 | Email | Resend | Free, com o domínio verificado |
 | DNS | Registro.br | — |
 | Monitor | UptimeRobot (ou parecido) | Free |
+| Métricas e logs | Grafana Cloud | Free |
 
 Crie todos os serviços na região **AWS us-east-1 (N. Virginia)**, a mesma do Render em `virginia`. Assim a latência entre eles fica perto de 1 a 2 ms.
 
@@ -48,6 +49,8 @@ Depois abra `http://localhost:8092`.
 | `RABBITMQ_URL` | `amqps://...` do CloudAMQP | Segredo |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google Cloud | Segredos |
 | `RESEND_API_KEY` | Resend | Segredo |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` / `OTEL_EXPORTER_OTLP_HEADERS` | Grafana Cloud (opcionais) | O cabeçalho é segredo; veja o passo 9 |
+| `OTEL_RESOURCE_ATTRIBUTES` | `deployment.environment.name=production` | Separa produção de desenvolvimento no Grafana |
 
 O `render.yaml` já traz os valores fixos. Os segredos são pedidos pelo Render na criação e nunca vão para o Git.
 
@@ -116,6 +119,10 @@ Duas configurações fora do código precisam estar certas, senão nenhum push g
 No UptimeRobot (ou parecido), crie um monitor HTTP para `https://shortbit.com.br/health/live` a cada 5 minutos. Ele mantém o serviço acordado e te avisa por email se o site cair.
 
 Use `/health/live`, nunca `/health/ready`: o `ready` consulta o banco e impediria o Neon grátis de suspender, gastando as horas de processamento do plano. Pelo mesmo motivo, o health check do Render também é o `live`.
+
+### 9. Métricas e logs (Grafana Cloud)
+
+Opcional, mas é onde se vê o site funcionando: requisições por rota, erros, tempo do redirect, fila de cliques e eventos de segurança. Passo a passo em [observability.md](observability.md#produção-grafana-cloud): criar o stack, gerar o token OTLP, preencher `OTEL_EXPORTER_OTLP_ENDPOINT` e `OTEL_EXPORTER_OTLP_HEADERS` no Render, importar o painel e criar os alertas.
 
 ## Conferências depois do deploy
 

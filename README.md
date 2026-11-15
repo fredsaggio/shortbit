@@ -69,7 +69,7 @@ Tudo o que o projeto usa, por camada. Versões exatas em `backend/go.mod`, `fron
 
 | Tecnologia | Para quê |
 | --- | --- |
-| Docker Compose | Sobe PostgreSQL 18, Redis 8 e RabbitMQ 4 (com painel de administração) |
+| Docker Compose | Sobe PostgreSQL 18, Redis 8, RabbitMQ 4 (com painel de administração), a API, o worker e um Grafana local (`grafana/otel-lgtm`) |
 | Make | Todos os comandos do projeto, a partir da raiz |
 
 ### Produção
@@ -87,6 +87,7 @@ O passo a passo de cada serviço está em [`backend/docs/deployment.md`](backend
 | **Registro.br** | Domínio `shortbit.com.br` e o DNS: registro A e CNAME do site, registros do Resend e MX/SPF do email |
 | **ImprovMX** | Redireciona qualquer `@shortbit.com.br` (como `privacidade@`) para o Gmail do dono |
 | **UptimeRobot** | Chama `/health/live` a cada 5 minutos para o Render não dormir, e avisa por email se o site cair |
+| **Grafana Cloud** | Recebe métricas e logs por OpenTelemetry: painel com requisições, erros, redirects, fila de cliques e eventos de segurança, e alertas por email ([observability.md](backend/docs/observability.md)) |
 | **Let's Encrypt / Google Trust Services** | Certificado HTTPS, emitido e renovado pelo Render |
 
 ### CI/CD
@@ -107,6 +108,7 @@ O passo a passo de cada serviço está em [`backend/docs/deployment.md`](backend
 | Email | Resend |
 | Shortcodes | Sqids |
 | Documentação da API | OpenAPI renderizado com ReDoc |
+| Observabilidade | OpenTelemetry (métricas e logs por OTLP), Grafana |
 | Testes | `go test`, Testcontainers |
 | Infra | Docker Compose |
 

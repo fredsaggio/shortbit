@@ -146,7 +146,7 @@ precisa de internet para renderizar a página.
 make up
 ```
 
-Sobe PostgreSQL, Redis, RabbitMQ, a API e o worker de cliques, com a mesma imagem de produção (o `Dockerfile` da raiz). A API aplica as migrations ao subir e serve o front em `http://localhost:8080`; o worker roda num contêiner separado (ADR 0002). `make infra/down` para tudo.
+Sobe PostgreSQL, Redis, RabbitMQ, a API, o worker de cliques e um Grafana local (`http://localhost:3000`, veja [observability.md](observability.md)), com a mesma imagem de produção (o `Dockerfile` da raiz). A API aplica as migrations ao subir e serve o front em `http://localhost:8080`; o worker roda num contêiner separado (ADR 0002). `make infra/down` para tudo.
 
 - A API e o worker usam a rede do host, então os endereços `localhost` do `.env` (`DATABASE_URL`, `RABBITMQ_URL`) valem sem mudança. Só as variáveis listadas no `docker-compose.yml` entram nos contêineres.
 - O Redis é sempre o do Compose, mesmo que o `.env` tenha um `REDIS_URL` apontando para outro.

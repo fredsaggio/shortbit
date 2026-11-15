@@ -37,6 +37,10 @@ services:
         value: https://shortbit.com.br/auth/google/callback
       - key: EMAIL_FROM
         value: shortbit <nao-responda@shortbit.com.br>
+      # Metrics and logs to Grafana Cloud (backend/docs/observability.md).
+      # Without OTEL_EXPORTER_OTLP_ENDPOINT, nothing is sent.
+      - key: OTEL_RESOURCE_ATTRIBUTES
+        value: deployment.environment.name=production
       # Secrets: Render asks for them when the Blueprint is created.
       - key: DATABASE_URL
         sync: false
@@ -49,4 +53,8 @@ services:
       - key: GOOGLE_CLIENT_SECRET
         sync: false
       - key: RESEND_API_KEY
+        sync: false
+      - key: OTEL_EXPORTER_OTLP_ENDPOINT
+        sync: false
+      - key: OTEL_EXPORTER_OTLP_HEADERS
         sync: false

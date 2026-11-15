@@ -23,9 +23,10 @@ Não coloque co-author em nenhum commit criado por você, em nenhuma hipótese.
 - `frontend/`: interface em React + TypeScript + Vite. Detalhes, rotas e o porquê do proxy sem prefixo em `frontend/README.md`. As rotas do front não podem colidir com os caminhos da API repassados pelo proxy (`/registrations`, `/sessions`, `/me`, `/auth`, `/password-resets`, `/urls`, `/health`, `/docs`).
 - `backend/`: módulo Go (`go.mod` próprio). Comandos Go rodam com `go -C backend ...` ou pelos alvos do `Makefile`.
 - `backend/cmd/api/`: ponto de entrada da API. `backend/cmd/worker/`: worker que consome a fila de cliques (ADR 0002).
-- `backend/internal/`: `app` (composition root e worker de cliques), `server` (rotas e health), `frontend` (serve o build do app em produção), `handlers`, `middleware`, `services` (regras de negócio), `repositories` (PostgreSQL), `models`, `config`, `db`, `cache` (Redis: frequência e destinos), `messaging` (RabbitMQ), `jobs`, `shortcodes` (Sqids), `argon2`, `googleoidc`, `email` (Resend), `sessiontoken`, `verificationcode`, `ctxval`, `integration` (testes HTTP + PostgreSQL).
+- `backend/internal/`: `app` (composition root e worker de cliques), `server` (rotas e health), `frontend` (serve o build do app em produção), `handlers`, `middleware`, `services` (regras de negócio), `repositories` (PostgreSQL), `models`, `config`, `db`, `cache` (Redis: frequência e destinos), `messaging` (RabbitMQ), `jobs`, `shortcodes` (Sqids), `argon2`, `googleoidc`, `email` (Resend), `sessiontoken`, `verificationcode`, `ctxval`, `logging` (logger com redação), `problem` (erros RFC 9457 e página de erro), `telemetry` (métricas, eventos de segurança e envio OTLP), `integration` (testes HTTP + PostgreSQL).
 - `backend/migrations/`: migrations Goose, embarcadas no binário de testes.
-- `backend/docs/`: `authentication.md`, `short-links.md`, `api.md`, `openapi.yaml`, `data-model.md`, `glossary.md`, `development.md`, `deployment.md` e `decisions/` (ADRs). Leia só quando mexer no assunto.
+- `backend/docs/`: `authentication.md`, `short-links.md`, `api.md`, `openapi.yaml`, `data-model.md`, `glossary.md`, `development.md`, `deployment.md`, `observability.md` e `decisions/` (ADRs).
+- `observability/`: painel do Grafana (`shortbit-dashboard.json`) e a configuração que o carrega no Grafana local do Compose. Leia só quando mexer no assunto.
 - Deploy: `Dockerfile` e `render.yaml` na raiz. Uma imagem só: a API serve o frontend e roda o worker (ADR 0003). Passo a passo em `backend/docs/deployment.md`.
 - CI: `.github/workflows/ci.yml` roda as mesmas checagens da seção "Antes de terminar uma mudança" a cada push e PR na `main`, e o Render só faz deploy quando elas passam. Actions ficam fixadas pelo SHA do commit, com a versão em comentário.
 - `IMPLEMENTATION_PLAN.md` (ordem das fases e progresso) e `PROJECT_CONTEXT.md` (produto e regras gerais) ficam só na máquina do usuário, ignorados pelo Git.
@@ -34,7 +35,7 @@ Não coloque co-author em nenhum commit criado por você, em nenhuma hipótese.
 | Comando | O que faz |
 | --- | --- |
 | `make infra/up` / `make infra/down` | Sobe só o PostgreSQL / para tudo. Redis e RabbitMQ sobem com `docker compose up -d --wait redis-shortener rabbitmq-shortener` |
-| `make up` | Sobe tudo em contêineres (infra, API com o front em `:8080` e worker), com a imagem de produção |
+| `make up` | Sobe tudo em contêineres (infra, API com o front em `:8080`, worker e Grafana em `:3000`), com a imagem de produção |
 | `make run` | Sobe a API em `:8080` |
 | `make worker` | Sobe o worker de cliques |
 | `make front/install` / `make front/dev` | Instala as dependências do frontend / sobe o Vite em `:5173`, repassando as rotas da API para `:8080` |
