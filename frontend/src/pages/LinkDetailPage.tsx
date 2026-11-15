@@ -1,13 +1,16 @@
-import { ArrowLeft, BarChart3, CalendarDays, ExternalLink, Link2Off, RotateCw } from 'lucide-react'
+import { ArrowLeft, BarChart3, CalendarDays, ExternalLink, Link2Off, Pencil, RotateCw, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { toast } from 'sonner'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { ApiError, isAbortError, messageOf } from '../api/client.ts'
-import { getLink, shortLinkURL } from '../api/links.ts'
+import { deleteLink, getLink, shortLinkURL } from '../api/links.ts'
 import type { ShortLink } from '../api/types.ts'
 import { Alert } from '../components/Alert.tsx'
 import { Button } from '../components/Button.tsx'
 import { buttonSizes, buttonTones } from '../components/buttonStyles.ts'
+import { ConfirmDialog } from '../components/ConfirmDialog.tsx'
 import { CopyButton } from '../components/CopyButton.tsx'
+import { EditLinkForm } from '../components/EditLinkForm.tsx'
 import { VisibilityBadge } from '../components/VisibilityBadge.tsx'
 import { clicksLabel, formatCount, formatDate } from '../format.ts'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -23,6 +26,11 @@ export function LinkDetailPage() {
   const { code = '' } = useParams()
   const [state, setState] = useState<DetailState>({ status: 'loading' })
   const [reloadKey, setReloadKey] = useState(0)
+  const navigate = useNavigate()
+  // The dashboard's "Editar" opens this page with ?editar=1.
+  const [searchParams] = useSearchParams()
+  const [editing, setEditing] = useState(searchParams.has('editar'))
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -99,25 +107,63 @@ export function LinkDetailPage() {
                 <ExternalLink className="size-4" aria-hidden="true" />
                 Abrir
               </a>
+              {!editing && (
+                <Button type="button" variant="outline" onClick={() => setEditing(true)}>
+                  <Pencil className="size-4" aria-hidden="true" />
+                  Editar
+                </Button>
+              )}
+              <Button type="button" variant="dangerGhost" onClick={() => setConfirmingDelete(true)}>
+                <Trash2 className="size-4" aria-hidden="true" />
+                Excluir
+              </Button>
             </div>
 
-            <dl className="mt-8 grid gap-5 border-t pt-6">
-              <div>
-                <dt className="text-sm font-medium text-muted-foreground">Destino</dt>
-                <dd className="mt-1 break-all">
-                  <a href={state.link.original_url} target="_blank" rel="noreferrer" className="font-semibold text-action underline-offset-4 hover:underline">
-                    {state.link.original_url}
-                  </a>
-                </dd>
+            <ConfirmDialog
+              open={confirmingDelete}
+              onOpenChange={setConfirmingDelete}
+              title="Excluir este link?"
+              description="Quem abrir o link curto vai ver que ele não existe mais. Essa ação não pode ser desfeita."
+              confirmLabel="Excluir link"
+              busyLabel="Excluindo…"
+              onConfirm={async () => {
+                await deleteLink(state.link.short_code)
+                toast.success('Link excluído')
+                navigate('/painel', { replace: true })
+              }}
+            />
+
+            {editing ? (
+              <div className="mt-8 border-t pt-6">
+                <h2 className="mb-5 text-lg font-bold">Editar link</h2>
+                <EditLinkForm
+                  link={state.link}
+                  onSaved={(link) => {
+                    setState({ status: 'ready', link, refreshing: false })
+                    setEditing(false)
+                  }}
+                  onCancel={() => setEditing(false)}
+                />
               </div>
-              <div>
-                <dt className="text-sm font-medium text-muted-foreground">Criado em</dt>
-                <dd className="mt-1 inline-flex items-center gap-2 font-semibold">
-                  <CalendarDays className="size-4 text-muted-foreground" aria-hidden="true" />
-                  {formatDate(state.link.created_at)}
-                </dd>
-              </div>
-            </dl>
+            ) : (
+              <dl className="mt-8 grid gap-5 border-t pt-6">
+                <div>
+                  <dt className="text-sm font-medium text-muted-foreground">Destino</dt>
+                  <dd className="mt-1 break-all">
+                    <a href={state.link.original_url} target="_blank" rel="noreferrer" className="font-semibold text-action underline-offset-4 hover:underline">
+                      {state.link.original_url}
+                    </a>
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-sm font-medium text-muted-foreground">Criado em</dt>
+                  <dd className="mt-1 inline-flex items-center gap-2 font-semibold">
+                    <CalendarDays className="size-4 text-muted-foreground" aria-hidden="true" />
+                    {formatDate(state.link.created_at)}
+                  </dd>
+                </div>
+              </dl>
+            )}
           </section>
 
           <aside aria-label="Cliques" className="relative overflow-hidden rounded-3xl bg-navy p-6 text-white shadow-card sm:p-8">

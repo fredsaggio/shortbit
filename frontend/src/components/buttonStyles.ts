@@ -6,6 +6,9 @@ export const buttonTones = {
   ghost: 'text-navy hover:bg-navy/5',
   onDark: 'bg-white text-navy hover:bg-surface',
   onDarkOutline: 'border-white/40 bg-transparent text-white hover:border-white hover:bg-white/10',
+  // Destructive actions: delete a link, delete the account.
+  danger: 'bg-destructive text-white shadow-sm hover:bg-destructive/90',
+  dangerGhost: 'text-destructive hover:bg-destructive/5',
 } as const
 
 export const buttonSizes = {

@@ -1,12 +1,13 @@
-import { BarChart3, ChevronRight, CircleCheck, Globe, Link2, LinkIcon, Lock, RotateCw } from 'lucide-react'
+import { BarChart3, ChevronRight, CircleCheck, Globe, Link2, LinkIcon, Lock, MoreVertical, Pencil, RotateCw, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { isAbortError, messageOf } from '../api/client.ts'
-import { createLink, listLinks, shortLinkURL } from '../api/links.ts'
+import { createLink, deleteLink, listLinks, shortLinkURL } from '../api/links.ts'
 import type { CreatedLink, ShortLink, Visibility } from '../api/types.ts'
 import { Alert } from '../components/Alert.tsx'
 import { Button } from '../components/Button.tsx'
+import { ConfirmDialog } from '../components/ConfirmDialog.tsx'
 import { CopyButton } from '../components/CopyButton.tsx'
 import { LinkListSkeleton } from '../components/PageLoader.tsx'
 import { PasswordStrength } from '../components/PasswordStrength.tsx'
@@ -17,6 +18,7 @@ import { clicksLabel, formatCount, formatDate } from '../format.ts'
 import { clearPendingLink, readPendingLink } from '../pendingLink.ts'
 import { useFieldErrors } from '../useFieldErrors.ts'
 import { checkLinkPassword, checkURL } from '../validation.ts'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 
 function CreateLinkCard({ onCreated }: { onCreated: () => void }) {
@@ -180,9 +182,12 @@ function CreateLinkCard({ onCreated }: { onCreated: () => void }) {
   )
 }
 
-function LinkItem({ link }: { link: ShortLink }) {
+function LinkItem({ link, onDeleted }: { link: ShortLink; onDeleted: (code: string) => void }) {
   const shortURL = shortLinkURL(link.short_code)
   const isPrivate = link.visibility === 'private'
+  const navigate = useNavigate()
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const displayURL = shortURL.replace(/^https?:\/\//, '')
 
   return (
     <li className="group rounded-2xl border bg-card p-5 shadow-card transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-navy/20 hover:shadow-raised">
@@ -222,9 +227,52 @@ function LinkItem({ link }: { link: ShortLink }) {
             </span>
             <span className="text-xs font-medium text-muted-foreground sm:mt-1 sm:block">{clicksLabel(link.click_count)}</span>
           </div>
-          <CopyButton text={shortURL} size="sm" />
+          <div className="flex items-center gap-1">
+            <CopyButton text={shortURL} size="sm" />
+            {/* Not modal: a modal menu would leave the page inert when it hands
+                over to the confirmation dialog. */}
+            <DropdownMenu modal={false}>
+              <DropdownMenuTrigger
+                className="inline-flex size-9 items-center justify-center rounded-md text-navy transition-colors hover:bg-navy/5 data-[state=open]:bg-navy/10"
+                aria-label={`Ações do link ${displayURL}`}
+              >
+                <MoreVertical className="size-4" aria-hidden="true" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44 rounded-xl p-1.5 shadow-raised">
+                <DropdownMenuItem className="h-10 cursor-pointer gap-2.5 rounded-md px-2.5 font-medium" onSelect={() => navigate(`/painel/links/${link.short_code}?editar=1`)}>
+                  <Pencil className="size-4" aria-hidden="true" /> Editar
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="h-10 cursor-pointer gap-2.5 rounded-md px-2.5 font-medium text-destructive focus:bg-destructive/5 focus:text-destructive"
+                  onSelect={() => setConfirmingDelete(true)}
+                >
+                  <Trash2 className="size-4" aria-hidden="true" /> Excluir
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        onOpenChange={setConfirmingDelete}
+        title="Excluir este link?"
+        description={
+          <>
+            <strong className="font-semibold text-navy">{displayURL}</strong> deixa de funcionar para quem abrir. Essa ação não pode
+            ser desfeita.
+          </>
+        }
+        confirmLabel="Excluir link"
+        busyLabel="Excluindo…"
+        onConfirm={async () => {
+          await deleteLink(link.short_code)
+          setConfirmingDelete(false)
+          toast.success('Link excluído')
+          onDeleted(link.short_code)
+        }}
+      />
     </li>
   )
 }
@@ -327,7 +375,11 @@ export function DashboardPage() {
             <>
               <ul className="grid grid-cols-[minmax(0,1fr)] gap-3" aria-labelledby="links-title">
                 {list.links.map((link) => (
-                  <LinkItem key={link.short_code} link={link} />
+                  <LinkItem
+                    key={link.short_code}
+                    link={link}
+                    onDeleted={(code) => setList((current) => ({ ...current, links: current.links.filter((item) => item.short_code !== code) }))}
+                  />
                 ))}
               </ul>
               {list.error && <Alert tone="error" className="mt-4">{list.error}</Alert>}

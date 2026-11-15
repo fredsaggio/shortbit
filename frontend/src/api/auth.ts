@@ -63,3 +63,11 @@ export function confirmPasswordReset(code: string, password: string, passwordCon
     body: { code, password, password_confirmation: passwordConfirmation },
   })
 }
+
+// An account with a password confirms with it; a Google-only account, which
+// has none, types its email. On success the API also clears the session cookie.
+export type AccountDeletionConfirmation = { password: string } | { email: string }
+
+export function deleteAccount(confirmation: AccountDeletionConfirmation): Promise<void> {
+  return apiRequest<void>('/me', { method: 'DELETE', body: confirmation })
+}

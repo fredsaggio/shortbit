@@ -192,4 +192,38 @@ describe('DashboardPage', () => {
     expect(await screen.findByText('Muito forte', {}, { timeout: 5000 })).toBeInTheDocument()
     expect(field).toHaveAccessibleDescription(/Força da senha: Muito forte/)
   })
+
+  it('deletes a link from its menu after confirming', async () => {
+    const api = fakeApi({
+      ...signedIn,
+      'GET /urls': { status: 200, body: { urls: [link('Ab3dX9'), link('Qz7Rt2')], next_cursor: null } },
+      'DELETE /urls/Ab3dX9': { status: 204 },
+    })
+    const { user: actions } = renderApp('/painel')
+
+    const list = await screen.findByRole('list', { name: 'Seus links' })
+    await actions.click(within(list).getByRole('button', { name: 'Ações do link localhost:8080/Ab3dX9' }))
+    await actions.click(await screen.findByRole('menuitem', { name: 'Excluir' }))
+    const dialog = await screen.findByRole('alertdialog')
+    await actions.click(within(dialog).getByRole('button', { name: 'Excluir link' }))
+
+    await waitFor(() => expect(within(list).getAllByRole('listitem')).toHaveLength(1))
+    expect(within(list).queryByText('localhost:8080/Ab3dX9')).not.toBeInTheDocument()
+    expect(api.calls('DELETE', '/urls/Ab3dX9')).toHaveLength(1)
+  })
+
+  it('opens the edit form from the menu', async () => {
+    fakeApi({
+      ...signedIn,
+      'GET /urls': { status: 200, body: { urls: [link('Ab3dX9')], next_cursor: null } },
+      'GET /urls/Ab3dX9': { status: 200, body: link('Ab3dX9') },
+    })
+    const { user: actions } = renderApp('/painel')
+
+    await actions.click(await screen.findByRole('button', { name: 'Ações do link localhost:8080/Ab3dX9' }))
+    await actions.click(await screen.findByRole('menuitem', { name: 'Editar' }))
+
+    expect(await screen.findByRole('form', { name: 'Editar link' })).toBeInTheDocument()
+    expect(screen.getByTestId('current-path')).toHaveTextContent('/painel/links/Ab3dX9')
+  })
 })

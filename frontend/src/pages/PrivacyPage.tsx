@@ -80,8 +80,8 @@ export function PrivacyPage() {
 
         <Section title="Seus direitos">
           <p>
-            Você pode pedir uma cópia dos seus dados, corrigi-los ou excluir sua conta e seus links. Nome e senha você mesmo
-            muda em Minha conta. Para o resto, escreva para{' '}
+            Em Minha conta, você mesmo muda seu nome e sua senha, e pode excluir sua conta e todos os seus links quando
+            quiser. Para pedir uma cópia dos seus dados ou qualquer outra coisa, escreva para{' '}
             <a href={`mailto:${privacyContactEmail}`} className="font-semibold text-action underline-offset-4 hover:underline">
               {privacyContactEmail}
             </a>{' '}

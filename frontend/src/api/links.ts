@@ -1,5 +1,5 @@
 import { apiRequest } from './client.ts'
-import type { CreatedLink, NewLink, ShortLink, ShortLinkPage } from './types.ts'
+import type { CreatedLink, NewLink, ShortLink, ShortLinkPage, Visibility } from './types.ts'
 
 // In production the API serves this app, so short links share the page's
 // origin unless the build says otherwise.
@@ -24,4 +24,20 @@ export function listLinks(cursor: string | null, signal?: AbortSignal): Promise<
 
 export function getLink(code: string, signal?: AbortSignal): Promise<ShortLink> {
   return apiRequest<ShortLink>(`/urls/${encodeURIComponent(code)}`, { signal })
+}
+
+// Only the fields being changed. On a private link, an empty or absent
+// password keeps the current one; a new one signs out whoever unlocked it.
+export type LinkChanges = {
+  url?: string
+  visibility?: Visibility
+  password?: string
+}
+
+export function updateLink(code: string, changes: LinkChanges): Promise<ShortLink> {
+  return apiRequest<ShortLink>(`/urls/${encodeURIComponent(code)}`, { method: 'PATCH', body: changes })
+}
+
+export function deleteLink(code: string): Promise<void> {
+  return apiRequest<void>(`/urls/${encodeURIComponent(code)}`, { method: 'DELETE' })
 }

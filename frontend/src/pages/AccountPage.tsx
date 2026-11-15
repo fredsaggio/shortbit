@@ -1,12 +1,14 @@
-import { KeyRound, Mail, ShieldCheck, UserRound } from 'lucide-react'
+import { KeyRound, Mail, ShieldCheck, Trash2, UserRound } from 'lucide-react'
 import { useId, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
-import { changePassword, updateFullName } from '../api/auth.ts'
+import { useNavigate } from 'react-router'
+import { changePassword, deleteAccount, updateFullName } from '../api/auth.ts'
 import { messageOf } from '../api/client.ts'
 import type { Account } from '../api/types.ts'
 import { useAuth } from '../auth/AuthContext.ts'
 import { Alert } from '../components/Alert.tsx'
 import { Button } from '../components/Button.tsx'
+import { ConfirmDialog } from '../components/ConfirmDialog.tsx'
 import { PageLoader } from '../components/PageLoader.tsx'
 import { PasswordChecklist } from '../components/PasswordChecklist.tsx'
 import { TextField } from '../components/TextField.tsx'
@@ -203,6 +205,62 @@ function PasswordCard() {
   )
 }
 
+// Deleting the account asks for the password, or for the email when the
+// account only signs in with Google, because an open session is not enough.
+function DeleteAccountCard({ account }: { account: Account }) {
+  const { refresh } = useAuth()
+  const navigate = useNavigate()
+  const [open, setOpen] = useState(false)
+  const [confirmation, setConfirmation] = useState('')
+  const fieldId = useId()
+
+  return (
+    <section aria-labelledby="delete-account-title" className="mt-5 rounded-3xl border border-destructive/25 bg-card p-6 shadow-card sm:p-8">
+      <h2 id="delete-account-title" className="text-xl font-bold text-destructive">
+        Excluir conta
+      </h2>
+      <p className="mt-1 text-muted-foreground">
+        Apaga sua conta e todos os seus links. Os links param de funcionar para quem abrir, e isso não pode ser desfeito.
+      </p>
+      <Button type="button" variant="danger" className="mt-5" onClick={() => setOpen(true)}>
+        <Trash2 className="size-4" aria-hidden="true" />
+        Excluir minha conta
+      </Button>
+
+      <ConfirmDialog
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next)
+          if (!next) {
+            setConfirmation('')
+          }
+        }}
+        title="Excluir sua conta?"
+        description="Sua conta, seus links e a contagem de cliques serão apagados para sempre, e você sai de todos os aparelhos."
+        confirmLabel="Excluir conta"
+        busyLabel="Excluindo…"
+        confirmDisabled={confirmation.trim() === ''}
+        onConfirm={async () => {
+          await deleteAccount(account.has_password ? { password: confirmation } : { email: confirmation })
+          navigate('/', { replace: true })
+          await refresh()
+          toast.success('Sua conta foi excluída')
+        }}
+      >
+        <TextField
+          id={fieldId}
+          label={account.has_password ? 'Digite sua senha para confirmar' : `Digite seu email (${account.email}) para confirmar`}
+          name="deleteConfirmation"
+          type={account.has_password ? 'password' : 'email'}
+          autoComplete={account.has_password ? 'current-password' : 'off'}
+          value={confirmation}
+          onChange={(event) => setConfirmation(event.target.value)}
+        />
+      </ConfirmDialog>
+    </section>
+  )
+}
+
 export function AccountPage() {
   const { state } = useAuth()
 
@@ -291,6 +349,7 @@ export function AccountPage() {
               </p>
             </section>
           )}
+          <DeleteAccountCard account={account} />
         </TabsContent>
       </Tabs>
     </div>

@@ -105,4 +105,47 @@ describe('AccountPage', () => {
     expect(screen.getByText(/Sua conta entra com o Google/)).toBeInTheDocument()
     expect(screen.queryByLabelText('Senha atual')).not.toBeInTheDocument()
   })
+
+  it('deletes an account with a password after confirming it', async () => {
+    let deleted = false
+    const api = fakeApi({
+      'GET /me': () => (deleted ? { status: 401, body: 'autenticação necessária' } : { status: 200, body: user }),
+      'DELETE /me': () => {
+        deleted = true
+        return { status: 204 }
+      },
+    })
+    const { user: actions } = renderApp('/conta')
+
+    await actions.click(await screen.findByRole('tab', { name: 'Segurança' }))
+    await actions.click(screen.getByRole('button', { name: 'Excluir minha conta' }))
+    const dialog = await screen.findByRole('alertdialog')
+    const confirm = within(dialog).getByRole('button', { name: 'Excluir conta' })
+    expect(confirm).toBeDisabled()
+
+    await actions.type(within(dialog).getByLabelText('Digite sua senha para confirmar'), 'Senha12345!')
+    await actions.click(confirm)
+
+    await waitFor(() => expect(screen.getByTestId('current-path')).toHaveTextContent('/'))
+    expect(api.calls('DELETE', '/me')[0].body).toEqual({ password: 'Senha12345!' })
+    expect(await screen.findAllByRole('link', { name: 'Entrar' })).not.toHaveLength(0)
+  })
+
+  it('asks a Google-only account for its email instead of a password', async () => {
+    const api = fakeApi({
+      'GET /me': { status: 200, body: { ...user, has_password: false, has_google: true } },
+      'DELETE /me': { status: 400, body: 'o email não confere com o da conta' },
+    })
+    const { user: actions } = renderApp('/conta')
+
+    await actions.click(await screen.findByRole('tab', { name: 'Segurança' }))
+    await actions.click(screen.getByRole('button', { name: 'Excluir minha conta' }))
+    const dialog = await screen.findByRole('alertdialog')
+    await actions.type(within(dialog).getByLabelText('Digite seu email (ana@example.com) para confirmar'), 'outra@example.com')
+    await actions.click(within(dialog).getByRole('button', { name: 'Excluir conta' }))
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('O email não confere com o da conta')
+    expect(api.calls('DELETE', '/me')[0].body).toEqual({ email: 'outra@example.com' })
+    expect(screen.getByTestId('current-path')).toHaveTextContent('/conta')
+  })
 })
