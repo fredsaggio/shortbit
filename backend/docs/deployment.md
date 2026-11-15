@@ -97,6 +97,11 @@ No Google Cloud Console, no cliente OAuth já usado localmente ou num novo:
 
 Cada push na `main` roda o CI do GitHub Actions (`.github/workflows/ci.yml`): `gofmt`, `go vet`, testes unitários com `-race`, testes de integração, lint, testes e build do frontend, e o build da imagem Docker. O Render só faz o deploy do commit quando todas essas checagens passam (`autoDeployTrigger: checksPass` no `render.yaml`); um commit que quebra os testes nunca chega ao ar.
 
+Duas configurações fora do código precisam estar certas, senão nenhum push gera deploy, sem aviso nenhum:
+
+- **No GitHub**, em Settings → Applications → Installed GitHub Apps → Render → Configure, o repositório precisa estar em **Repository access**. Sendo público, o Render consegue baixar o código mesmo fora da lista e o primeiro deploy funciona, mas não recebe os avisos de push.
+- **No Render**, em Settings → Build & Deploy → **Auto-Deploy**, a opção precisa ser **After CI Checks Pass**. O Blueprint não aplicou o `autoDeployTrigger` sozinho no primeiro deploy.
+
 ### 7. Domínio no Registro.br
 
 1. No Render, em **Settings > Custom Domains**, adicione `shortbit.com.br` e `www.shortbit.com.br`. O Render mostra os registros a criar.
