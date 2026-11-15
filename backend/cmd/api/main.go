@@ -16,7 +16,9 @@ import (
 	"github.com/fredsaggio/url-shortener/internal/db"
 	"github.com/fredsaggio/url-shortener/internal/frontend"
 	"github.com/fredsaggio/url-shortener/internal/googleoidc"
+	"github.com/fredsaggio/url-shortener/internal/jobs"
 	"github.com/fredsaggio/url-shortener/internal/messaging"
+	"github.com/fredsaggio/url-shortener/internal/repositories"
 	"github.com/fredsaggio/url-shortener/internal/server"
 
 	"github.com/redis/go-redis/v9"
@@ -142,9 +144,17 @@ func Run(ctx context.Context, getEnv func(string) string) error {
 		slog.Info("password registration cleanup job stopped")
 	}()
 
+	expiredCleanup := jobs.NewExpiredRecordsCleanup(repositories.NewExpiredRecordsRepository(pool), repositories.ExpiredTables)
+	expiredCleanupDone := make(chan struct{})
+	go func() {
+		defer close(expiredCleanupDone)
+		expiredCleanup.Run(jobCtx)
+	}()
+
 	defer func() {
 		stopJob()
 		<-jobDone
+		<-expiredCleanupDone
 	}()
 
 	if cfg.ClickWorker.RunInAPI {

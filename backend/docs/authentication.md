@@ -164,6 +164,8 @@ Configuração atual do cookie:
 
 `HttpOnly` impede JavaScript da página de ler diretamente o token, mas não substitui proteção contra XSS. Um script malicioso ainda pode realizar requests em nome do usuário enquanto estiver executando na página.
 
+**Limpeza.** Uma sessão vencida já é recusada, mas a linha continuaria no banco. Um job da API (`jobs.ExpiredRecordsCleanup`) roda ao subir e a cada hora e apaga, em lotes de 1000 pelo índice de vencimento, as sessões de login (`user_sessions`), os desbloqueios de link privado (`link_access_sessions`) e as tentativas de recuperação de senha (`password_reset_attempts`) vencidas. Repetir a limpeza não muda nada, então reiniciar a API ou ter duas instâncias rodando ao mesmo tempo é seguro.
+
 ## Autenticação de requests ✅
 
 ```mermaid
