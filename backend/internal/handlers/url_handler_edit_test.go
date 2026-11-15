@@ -69,7 +69,7 @@ func TestURLHandlerUpdateMapsErrors(t *testing.T) {
 		want   string
 	}{
 		{name: "unknown field", body: `{"destino":"x"}`, status: http.StatusBadRequest, want: "corpo da requisição inválido"},
-		{name: "two objects", body: `{} {}`, status: http.StatusBadRequest, want: "apenas um objeto JSON"},
+		{name: "two objects", body: `{} {}`, status: http.StatusBadRequest, want: "exatamente um objeto JSON"},
 		{name: "nothing to change", body: `{}`, err: services.ErrEmptyURLUpdate, status: http.StatusBadRequest, want: "informe o que alterar"},
 		{name: "private without password", body: `{"visibility":"private"}`, err: services.ErrLinkPasswordRequired, status: http.StatusBadRequest, want: "informe a senha do link"},
 		{name: "invalid destination", body: `{"url":"ftp://x"}`, err: services.ErrInvalidOriginalURL, status: http.StatusBadRequest, want: "URL original inválida"},

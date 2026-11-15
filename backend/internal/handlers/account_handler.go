@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/fredsaggio/url-shortener/internal/problem"
-	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -218,17 +217,3 @@ func writeAccount(ctx context.Context, w http.ResponseWriter, account models.Acc
 }
 
 // decodeSingleJSON writes the 400 itself and reports whether decoding worked.
-func decodeSingleJSON(w http.ResponseWriter, r *http.Request, target any) bool {
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-
-	if err := decoder.Decode(target); err != nil {
-		problem.Write(w, r, http.StatusBadRequest, "invalid_body", "corpo da requisição inválido")
-		return false
-	}
-	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		problem.Write(w, r, http.StatusBadRequest, "invalid_body", "corpo da requisição deve conter exatamente um objeto JSON")
-		return false
-	}
-	return true
-}

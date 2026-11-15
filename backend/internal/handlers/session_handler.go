@@ -2,10 +2,8 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"github.com/fredsaggio/url-shortener/internal/problem"
-	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -48,16 +46,7 @@ func (h *SessionHandler) LoginWithPassword(w http.ResponseWriter, r *http.Reques
 
 	var req createSessionRequest
 
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-
-	if err := decoder.Decode(&req); err != nil {
-		problem.Write(w, r, http.StatusBadRequest, "invalid_body", "corpo da requisição inválido")
-		return
-	}
-
-	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		problem.Write(w, r, http.StatusBadRequest, "invalid_body", "corpo da requisição deve conter exatamente um objeto JSON")
+	if !decodeSingleJSON(w, r, &req) {
 		return
 	}
 

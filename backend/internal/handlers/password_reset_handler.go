@@ -2,10 +2,8 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"github.com/fredsaggio/url-shortener/internal/problem"
-	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -33,14 +31,7 @@ func (h *PasswordResetHandler) Start(w http.ResponseWriter, r *http.Request) {
 	var request struct {
 		Email string `json:"email"`
 	}
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&request); err != nil {
-		problem.Write(w, r, http.StatusBadRequest, "invalid_body", "corpo da requisição inválido")
-		return
-	}
-	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		problem.Write(w, r, http.StatusBadRequest, "invalid_body", "corpo da requisição deve conter exatamente um objeto JSON")
+	if !decodeSingleJSON(w, r, &request) {
 		return
 	}
 
@@ -81,14 +72,7 @@ func (h *PasswordResetHandler) Confirm(w http.ResponseWriter, r *http.Request) {
 		Password             string `json:"password"`
 		PasswordConfirmation string `json:"password_confirmation"`
 	}
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&request); err != nil {
-		problem.Write(w, r, http.StatusBadRequest, "invalid_body", "corpo da requisição inválido")
-		return
-	}
-	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		problem.Write(w, r, http.StatusBadRequest, "invalid_body", "corpo da requisição deve conter exatamente um objeto JSON")
+	if !decodeSingleJSON(w, r, &request) {
 		return
 	}
 	if request.Password != request.PasswordConfirmation {

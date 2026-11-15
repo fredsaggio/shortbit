@@ -47,7 +47,7 @@ O formulário de senha de link privado (`GET /{code}` e `POST /{code}/access`) t
 
 | `code` | Status | Quando |
 |---|---|---|
-| `invalid_body` | 400 | Corpo ausente, malformado, com campo desconhecido, com mais de um objeto JSON ou acima do limite de tamanho |
+| `invalid_body` | 400 | Corpo ausente, malformado, com campo desconhecido ou com mais de um objeto JSON |
 | `invalid_email` | 400 | Email inválido |
 | `invalid_cookie` | 400 | Cookie de sessão ou de recuperação malformado |
 | `invalid_limit`, `invalid_cursor`, `invalid_query` | 400 | Parâmetros de listagem inválidos |
@@ -65,6 +65,7 @@ O formulário de senha de link privado (`GET /{code}` e `POST /{code}/access`) t
 | `unexpected_link_password` | 400 | Senha enviada para link público |
 | `link_password_required`, `link_password_too_short`, `link_password_too_long` | 400 | Senha de link privado ausente ou fora do tamanho |
 | `empty_update` | 400 | Edição de link sem nenhum campo |
+| `body_too_large` | 413 | Corpo acima do limite global de 250 KiB |
 | `authentication_required` | 401 | Sessão ausente, inválida ou vencida |
 | `invalid_credentials` | 401 | Email ou senha incorretos no login |
 | `link_not_found` | 404 | Link inexistente ou de outra pessoa |

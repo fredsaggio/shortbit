@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/fredsaggio/url-shortener/internal/problem"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -93,16 +92,7 @@ func (h *URLHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	var req createURLRequest
 
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-
-	if err := decoder.Decode(&req); err != nil {
-		problem.Write(w, r, http.StatusBadRequest, "invalid_body", "corpo da requisição inválido")
-		return
-	}
-
-	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		problem.Write(w, r, http.StatusBadRequest, "invalid_body", "corpo da requisição deve conter apenas um objeto JSON")
+	if !decodeSingleJSON(w, r, &req) {
 		return
 	}
 
@@ -332,14 +322,7 @@ func (h *URLHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req updateURLRequest
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&req); err != nil {
-		problem.Write(w, r, http.StatusBadRequest, "invalid_body", "corpo da requisição inválido")
-		return
-	}
-	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		problem.Write(w, r, http.StatusBadRequest, "invalid_body", "corpo da requisição deve conter apenas um objeto JSON")
+	if !decodeSingleJSON(w, r, &req) {
 		return
 	}
 

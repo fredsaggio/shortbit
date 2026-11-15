@@ -1145,7 +1145,7 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
     BodyTooLarge:
-      description: Corpo da requisição acima do limite global. Hoje a leitura é cortada no limite e a resposta sai como `400 invalid_body`.
+      description: Corpo da requisição acima do limite global de 250 KiB (`body_too_large`).
       content:
         application/problem+json:
           schema:
