@@ -75,8 +75,9 @@ export function PrivacyPage() {
             <li>Google: só quando você escolhe entrar com o Google.</li>
           </ul>
           <p>
-            Esses serviços ficam nos Estados Unidos, então os dados são transferidos para fora do Brasil. Os provedores de
-            hospedagem podem registrar dados técnicos de acesso, como o IP, para a segurança da própria infraestrutura.
+            Render, Neon, Upstash e CloudAMQP ficam nos Estados Unidos, então os dados são transferidos para fora do Brasil. Os
+            provedores de hospedagem podem registrar dados técnicos de acesso, como o IP, para a segurança da própria
+            infraestrutura.
           </p>
         </Section>
 
