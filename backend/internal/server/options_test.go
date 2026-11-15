@@ -93,3 +93,17 @@ func TestWithHSTSSendsTheHeaderOnEveryResponse(t *testing.T) {
 		})
 	}
 }
+
+func TestRouterSendsNoSniffOnEveryResponse(t *testing.T) {
+	router := NewServer(newOptionsTestHandlers(), nil).NewRouterHTTP()
+
+	for _, path := range []string{"/health/live", "/nao-existe/de-jeito-nenhum"} {
+		request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, http.NoBody)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+
+		if got := response.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+			t.Errorf("GET %s X-Content-Type-Options = %q, want nosniff", path, got)
+		}
+	}
+}

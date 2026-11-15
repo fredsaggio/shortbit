@@ -205,6 +205,7 @@ func (srv *Server) NewRouterHTTP() http.Handler {
 	handler = middleware.Recovery(handler)
 	handler = middleware.AccessLog(handler)
 	handler = middleware.RequestID(handler)
+	handler = middleware.NoSniff(handler)
 	if srv.hsts {
 		handler = middleware.StrictTransportSecurity(handler)
 	}
