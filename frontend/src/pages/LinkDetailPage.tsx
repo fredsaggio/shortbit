@@ -94,8 +94,24 @@ export function LinkDetailPage() {
       {state.status === 'ready' && (
         <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
           <section aria-labelledby="detail-title" className="rounded-3xl border bg-card p-6 shadow-card sm:p-8">
-            <VisibilityBadge visibility={state.link.visibility} />
-            <h1 id="detail-title" className="mt-4 text-[clamp(1.5rem,3.5vw,2.25rem)] font-extrabold break-all">
+            {/* Managing the link sits apart from sharing it, so Excluir never
+                lands next to Copiar link. */}
+            <div className="flex items-center justify-between gap-3">
+              <VisibilityBadge visibility={state.link.visibility} />
+              <div className="-mr-2 flex items-center gap-1">
+                {!editing && (
+                  <Button type="button" variant="ghost" onClick={() => setEditing(true)}>
+                    <Pencil className="size-4" aria-hidden="true" />
+                    Editar
+                  </Button>
+                )}
+                <Button type="button" variant="dangerGhost" onClick={() => setConfirmingDelete(true)}>
+                  <Trash2 className="size-4" aria-hidden="true" />
+                  Excluir
+                </Button>
+              </div>
+            </div>
+            <h1 id="detail-title" className="mt-3 text-[clamp(1.5rem,3.5vw,2.25rem)] font-extrabold break-all">
               {shortLinkURL(state.link.short_code).replace(/^https?:\/\//, '')}
             </h1>
             <div className="mt-5 flex flex-wrap gap-3">
@@ -112,16 +128,6 @@ export function LinkDetailPage() {
               <Button type="button" variant="outline" onClick={() => setShowingQrCode(true)}>
                 <QrCode className="size-4" aria-hidden="true" />
                 QR code
-              </Button>
-              {!editing && (
-                <Button type="button" variant="outline" onClick={() => setEditing(true)}>
-                  <Pencil className="size-4" aria-hidden="true" />
-                  Editar
-                </Button>
-              )}
-              <Button type="button" variant="dangerGhost" onClick={() => setConfirmingDelete(true)}>
-                <Trash2 className="size-4" aria-hidden="true" />
-                Excluir
               </Button>
             </div>
 
