@@ -1,4 +1,4 @@
-import { KeyRound, Mail, ShieldCheck, Trash2, UserRound } from 'lucide-react'
+import { KeyRound, Mail, Trash2, UserRound } from 'lucide-react'
 import { useId, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { useNavigate } from 'react-router'
@@ -16,29 +16,10 @@ import { formatLongDate } from '../format.ts'
 import { useFieldErrors } from '../useFieldErrors.ts'
 import { checkConfirmation, checkFullName, checkNewPassword, checkRequired, maxFullNameLength, passwordRules } from '../validation.ts'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 const tabTriggerClass =
   'h-10 flex-1 gap-2 rounded-md sm:flex-none px-4 text-[15px] font-semibold text-muted-foreground transition-colors hover:bg-card/70 hover:text-navy data-[state=active]:bg-card data-[state=active]:text-navy data-[state=active]:shadow-card'
-
-function SignInMethods({ account }: { account: Account }) {
-  return (
-    <span className="flex flex-wrap gap-1.5">
-      {account.has_password && (
-        <Badge variant="outline" className="gap-1 border-action/20 bg-navy-100 text-navy">
-          <KeyRound className="size-3" aria-hidden="true" />
-          Email e senha
-        </Badge>
-      )}
-      {account.has_google && (
-        <Badge variant="outline" className="gap-1 bg-card text-navy">
-          Google
-        </Badge>
-      )}
-    </span>
-  )
-}
 
 function ProfileCard({ account }: { account: Account }) {
   const { replaceAccount } = useAuth()
@@ -297,20 +278,12 @@ export function AccountPage() {
             <p className="truncate text-muted-foreground">{account.email}</p>
           </div>
         </div>
-        <dl className="mt-6 grid gap-5 border-t pt-6 sm:grid-cols-3">
+        <dl className="mt-6 grid gap-5 border-t pt-6 sm:grid-cols-2">
           <div>
             <dt className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
               <UserRound className="size-4" aria-hidden="true" /> Nome
             </dt>
             <dd className="mt-1 font-semibold">{account.full_name ?? <span className="font-normal text-muted-foreground">Não informado</span>}</dd>
-          </div>
-          <div>
-            <dt className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
-              <ShieldCheck className="size-4" aria-hidden="true" /> Formas de entrar
-            </dt>
-            <dd className="mt-1.5">
-              <SignInMethods account={account} />
-            </dd>
           </div>
           <div>
             <dt className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">

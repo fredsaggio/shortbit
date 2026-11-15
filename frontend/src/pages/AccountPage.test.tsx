@@ -18,8 +18,7 @@ describe('AccountPage', () => {
     const info = await screen.findByRole('region', { name: 'Informações' })
     expect(within(info).getByText('ana@example.com')).toBeInTheDocument()
     expect(within(info).getAllByText('Ana Souza')).not.toHaveLength(0)
-    expect(within(info).getByText('Email e senha')).toBeInTheDocument()
-    expect(within(info).getByText('Google')).toBeInTheDocument()
+    expect(within(info).queryByText('Formas de entrar')).not.toBeInTheDocument()
     expect(within(info).getByText('14 de novembro de 2026')).toBeInTheDocument()
   })
 
