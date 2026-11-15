@@ -735,6 +735,65 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+  /urls/{code}/clicks:
+    get:
+      tags: [Links]
+      operationId: getDailyClicks
+      summary: Ver os cliques de um link meu por dia
+      description: |
+        Cliques por dia e por origem no período pedido, sempre terminando
+        hoje. O dia é a data em America/Sao_Paulo e dias sem clique vêm com
+        zero. `link` conta quem abriu o link curto; `qr`, quem leu o QR code
+        (o redirect recebeu `?qr=1`). `totals` soma só o período; o total de
+        sempre continua em `click_count`.
+      security:
+        - userSession: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 6
+            pattern: '^[0-9A-Za-z]+$'
+        - name: days
+          in: query
+          required: false
+          description: Período em dias.
+          schema:
+            type: integer
+            enum: [7, 30, 90]
+            default: 30
+      responses:
+        '200':
+          description: Cliques por dia, do mais antigo para hoje.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyClicksResponse'
+        '400':
+          description: Período diferente de 7, 30 ou 90 dias (`invalid_click_period`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Código inexistente ou link pertencente a outro usuário.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /{code}:
     get:
       tags: [Links]
@@ -763,6 +822,13 @@ paths:
             minLength: 6
             pattern: '^[0-9A-Za-z]+$'
           example: Ab3dX9
+        - name: qr
+          in: query
+          required: false
+          description: Marca que o QR code leva; `1` conta o clique como vindo do QR code. Não muda o destino.
+          schema:
+            type: string
+            enum: ['1']
       responses:
         '200':
           description: Link privado sem sessão válida; formulário HTML de senha, sem contar clique.
@@ -904,6 +970,44 @@ components:
       in: cookie
       name: google_auth_code_verifier
   schemas:
+    DailyClicksResponse:
+      type: object
+      required: [days, totals]
+      properties:
+        days:
+          type: array
+          items:
+            type: object
+            required: [date, link, qr]
+            properties:
+              date:
+                type: string
+                format: date
+                example: '2026-11-14'
+              link:
+                type: integer
+                format: int64
+                minimum: 0
+                example: 1
+              qr:
+                type: integer
+                format: int64
+                minimum: 0
+                example: 4
+        totals:
+          type: object
+          required: [link, qr]
+          properties:
+            link:
+              type: integer
+              format: int64
+              minimum: 0
+              example: 3
+            qr:
+              type: integer
+              format: int64
+              minimum: 0
+              example: 4
     Problem:
       type: object
       description: |

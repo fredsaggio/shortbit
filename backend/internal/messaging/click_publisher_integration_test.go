@@ -6,11 +6,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/fredsaggio/url-shortener/internal/models"
 	"testing"
 	"time"
 
 	"github.com/fredsaggio/url-shortener/internal/messaging"
+	"github.com/fredsaggio/url-shortener/internal/models"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 

@@ -51,6 +51,7 @@ O formulário de senha de link privado (`GET /{code}` e `POST /{code}/access`) t
 | `invalid_email` | 400 | Email inválido |
 | `invalid_cookie` | 400 | Cookie de sessão ou de recuperação malformado |
 | `invalid_limit`, `invalid_cursor`, `invalid_query` | 400 | Parâmetros de listagem inválidos |
+| `invalid_click_period` | 400 | Período do gráfico de cliques diferente de 7, 30 ou 90 dias |
 | `password_too_short`, `password_too_long`, `password_missing_uppercase`, `password_missing_digit`, `password_missing_special` | 400 | Senha da conta fora da política |
 | `password_confirmation_mismatch` | 400 | Senha e confirmação diferentes |
 | `same_password` | 400 | Senha nova igual à atual |
@@ -102,6 +103,7 @@ O formulário de senha de link privado (`GET /{code}` e `POST /{code}/access`) t
 | `GET` | `/urls/{code}` | Sim + ownership | ✅ |
 | `PATCH` | `/urls/{code}` | Sim + ownership | ✅ |
 | `DELETE` | `/urls/{code}` | Sim + ownership | ✅ |
+| `GET` | `/urls/{code}/clicks` | Sim + ownership | ✅ |
 | `GET` | `/{code}` | Não; cookie opcional para link privado | ✅ |
 | `POST` | `/{code}/access` | Não | ✅ |
 
@@ -475,14 +477,36 @@ destino do cache. Retorna `204`. Quem abrir o link depois recebe `404`. O códig
 reaproveitado, porque vem de um ID que não se repete. Link de outro usuário também
 retorna `404`.
 
+### `GET /urls/{code}/clicks` ✅
+
+Cliques de um link do usuário da sessão, por dia e por origem, para o gráfico da página do link. `days` escolhe o período: `7`, `30` (padrão) ou `90`, sempre terminando hoje. O dia é a data em `America/Sao_Paulo`, e dias sem clique vêm com zero.
+
+```json
+{
+  "days": [
+    { "date": "2026-11-13", "link": 2, "qr": 0 },
+    { "date": "2026-11-14", "link": 1, "qr": 4 }
+  ],
+  "totals": { "link": 3, "qr": 4 }
+}
+```
+
+`link` são cliques de quem abriu o link curto; `qr`, de quem leu o QR code (o redirect recebeu `?qr=1`, veja [ADR 0005](decisions/0005-daily-clicks-and-qr-source.md)). `totals` soma só o período pedido; o total de sempre continua em `click_count`. Os cliques anteriores à contagem por dia aparecem só no total. A resposta traz `Cache-Control: no-store`.
+
+| Status | Motivo |
+|---:|---|
+| `400` | `days` diferente de 7, 30 ou 90 (`invalid_click_period`) |
+| `401` | Sem sessão |
+| `404` | Código inexistente ou link de outro usuário |
+
 ### `GET /{code}` ✅
 
-Não exige sessão de conta. Para um link público existente, registra o clique e retorna `302 Found`, com `Location` apontando para a URL original e `Cache-Control: no-store`. Para um link privado sem cookie de acesso válido, retorna `200 OK` com a página HTML de senha, sem contar clique. Com cookie válido para aquele link, registra o clique e retorna `302 Found`.
+Não exige sessão de conta. `?qr=1`, a marca que o QR code leva, faz o clique contar como vindo do QR code; o destino não muda. Para um link público existente, registra o clique e retorna `302 Found`, com `Location` apontando para a URL original e `Cache-Control: no-store`. Para um link privado sem cookie de acesso válido, retorna `200 OK` com a página HTML de senha, sem contar clique. Com cookie válido para aquele link, registra o clique e retorna `302 Found`.
 
 O clique é registrado como um evento no RabbitMQ, confirmado pelo broker antes do redirect, e o worker incrementa `click_count` depois. Se a publicação falhar, a API incrementa o contador no PostgreSQL antes de responder. Se nem o RabbitMQ nem o PostgreSQL registrarem o clique, retorna `503 Service Unavailable`, sem redirect. Código inexistente retorna `404`; outras falhas retornam `500`. O rate limit global pode retornar `429`.
 
 ### `POST /{code}/access` ✅
 
-Recebe `application/x-www-form-urlencoded` com o campo `password`. Senha correta cria sessão específica para o link, define cookie `link_access_session` (`HttpOnly`, `SameSite=Lax`, `Path=/{code}`, `Secure` quando configurado) e retorna `303 See Other` para `/{code}`. Essa sessão dura **30 minutos por padrão** (`LINK_ACCESS_SESSION_TTL`), sem renovação automática.
+Recebe `application/x-www-form-urlencoded` com o campo `password`. Senha correta cria sessão específica para o link, define cookie `link_access_session` (`HttpOnly`, `SameSite=Lax`, `Path=/{code}`, `Secure` quando configurado) e retorna `303 See Other` para `/{code}` (com `?qr=1` se o formulário veio de um QR code). Essa sessão dura **30 minutos por padrão** (`LINK_ACCESS_SESSION_TTL`), sem renovação automática.
 
 Senha incorreta retorna `401` com o formulário HTML e não cria sessão; formulário inválido retorna `400`; código inexistente retorna `404`. Há rate limit por IP + shortcode antes da comparação da senha: burst de 5, reposição de 20 tentativas por minuto; excesso retorna `429` e `Retry-After`. O rate limit global também se aplica.

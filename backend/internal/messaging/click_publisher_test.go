@@ -3,13 +3,13 @@ package messaging_test
 import (
 	"encoding/json"
 	"errors"
-	"github.com/fredsaggio/url-shortener/internal/models"
 	"strings"
 	"testing"
 	"time"
 	"uuid"
 
 	"github.com/fredsaggio/url-shortener/internal/messaging"
+	"github.com/fredsaggio/url-shortener/internal/models"
 )
 
 func TestNewClickEvent(t *testing.T) {

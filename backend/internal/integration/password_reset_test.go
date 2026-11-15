@@ -59,7 +59,7 @@ func TestPasswordResetIntegration(t *testing.T) {
 		UpdateMeHandler:       http.NotFoundHandler(),
 		ChangePasswordHandler: http.NotFoundHandler(),
 		UpdateURLHandler:      http.NotFoundHandler(),
-		DeleteURLHandler:      http.NotFoundHandler(), DeleteMeHandler: http.NotFoundHandler(),
+		DeleteURLHandler:      http.NotFoundHandler(), DeleteMeHandler: http.NotFoundHandler(), ClickStatsHandler: http.NotFoundHandler(),
 	}, pool).NewRouterHTTP()
 
 	login := performJSONRequest(t, router, http.MethodPost, "/sessions", `{"email":"reset-flow@example.com","password":"Senha-antiga123"}`)

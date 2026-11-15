@@ -27,3 +27,10 @@ type Click struct {
 	Source     ClickSource
 	OccurredAt time.Time
 }
+
+// DailyClickCount is the number of clicks of one source on one day.
+type DailyClickCount struct {
+	Day    time.Time
+	Source ClickSource
+	Clicks int64
+}

@@ -62,6 +62,7 @@ type Handlers struct {
 	GetURLHandler            http.Handler
 	UpdateURLHandler         http.Handler
 	DeleteURLHandler         http.Handler
+	ClickStatsHandler        http.Handler
 	MeHandler                http.Handler
 	UpdateMeHandler          http.Handler
 	ChangePasswordHandler    http.Handler
@@ -186,6 +187,7 @@ func (srv *Server) registerRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /urls/{code}", srv.h.GetURLHandler)
 	mux.Handle("PATCH /urls/{code}", srv.h.UpdateURLHandler)
 	mux.Handle("DELETE /urls/{code}", srv.h.DeleteURLHandler)
+	mux.Handle("GET /urls/{code}/clicks", srv.h.ClickStatsHandler)
 	linkAccessHandler := srv.linkAccessLimiter.MiddlewareByIPAndPathValue("code", http.HandlerFunc(srv.h.LinkAccessSessionHandler.RedirectPrivateLink))
 	mux.Handle("POST /{code}/access", linkAccessHandler)
 	mux.HandleFunc("GET /{code}", srv.h.URLHandler.Redirect)

@@ -107,6 +107,11 @@ func CompositionRoot(pool db.DB, cfg config.Config, googleClient services.Google
 	)
 	updateURLHandler := middleware.Authenticator(authService)(http.HandlerFunc(urlHandler.Update))
 	deleteURLHandler := middleware.Authenticator(authService)(http.HandlerFunc(urlHandler.Delete))
+	clickStatsService, err := services.NewClickStatsService(urlRepository)
+	if err != nil {
+		return nil, nil, fmt.Errorf("initialize click stats service: %w", err)
+	}
+	clickStatsHandler := middleware.Authenticator(authService)(http.HandlerFunc(handlers.NewClickStatsHandler(clickStatsService).DailyClicks))
 
 	accountService := services.NewAccountService(userRepository, userSessionRepository, passwordHasher, sessiontoken.Generate, cfg.Session.TTL, destinationCache)
 	passwordChangeRateLimiter := middleware.NewRateLimiter(passwordChangeRateLimitRequestsPerSecond, passwordChangeRateLimitBurst, passwordChangeRateLimitMaxEntries, passwordChangeRateLimitStaleAfter)
@@ -128,6 +133,7 @@ func CompositionRoot(pool db.DB, cfg config.Config, googleClient services.Google
 		GetURLHandler:            getURLHandler,
 		UpdateURLHandler:         updateURLHandler,
 		DeleteURLHandler:         deleteURLHandler,
+		ClickStatsHandler:        clickStatsHandler,
 		MeHandler:                meHandler,
 		UpdateMeHandler:          updateMeHandler,
 		ChangePasswordHandler:    changePasswordHandler,

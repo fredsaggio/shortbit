@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"github.com/fredsaggio/url-shortener/internal/models"
 	"testing"
 	"uuid"
 
 	"github.com/fredsaggio/url-shortener/internal/messaging"
+	"github.com/fredsaggio/url-shortener/internal/models"
 	"github.com/fredsaggio/url-shortener/internal/repositories"
 	"github.com/fredsaggio/url-shortener/internal/services"
 	"github.com/fredsaggio/url-shortener/internal/sessiontoken"
