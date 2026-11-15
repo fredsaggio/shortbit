@@ -17,6 +17,7 @@ import (
 	"github.com/fredsaggio/url-shortener/internal/frontend"
 	"github.com/fredsaggio/url-shortener/internal/googleoidc"
 	"github.com/fredsaggio/url-shortener/internal/jobs"
+	"github.com/fredsaggio/url-shortener/internal/logging"
 	"github.com/fredsaggio/url-shortener/internal/messaging"
 	"github.com/fredsaggio/url-shortener/internal/repositories"
 	"github.com/fredsaggio/url-shortener/internal/server"
@@ -25,7 +26,7 @@ import (
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	logger := logging.NewJSONLogger(os.Stdout)
 	slog.SetDefault(logger)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)

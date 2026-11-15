@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"unicode/utf8"
 
 	"github.com/fredsaggio/url-shortener/internal/googleoidc"
 	"github.com/fredsaggio/url-shortener/internal/services"
@@ -70,7 +71,8 @@ func (h *GoogleAuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 
 	if providerError := query.Get("error"); providerError != "" {
-		slog.WarnContext(ctx, "Google authorization rejected", "provider_error", providerError)
+		// The value comes from the URL, so anyone can set it: keep it short.
+		slog.WarnContext(ctx, "Google authorization rejected", "provider_error", truncate(providerError, maxLoggedProviderErrorLength))
 		h.redirectToFrontend(w, r, googleLoginFailedPath)
 		return
 	}
@@ -117,4 +119,18 @@ func (h *GoogleAuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	// RememberMe como true porque é login utilizando Google OIDC.
 	setUserSessionCookie(w, login.Token, login.ExpiresAt, true, h.cookieSecure)
 	h.redirectToFrontend(w, r, googleLoginSucceededPath)
+}
+
+// Google's error codes are short words such as access_denied.
+const maxLoggedProviderErrorLength = 64
+
+func truncate(text string, maxBytes int) string {
+	if len(text) <= maxBytes {
+		return text
+	}
+	cut := maxBytes
+	for cut > 0 && !utf8.RuneStart(text[cut]) {
+		cut--
+	}
+	return text[:cut] + "…"
 }

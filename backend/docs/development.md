@@ -170,6 +170,15 @@ Depois do consentimento, o callback redireciona para `FRONTEND_URL/painel` (padr
 http://localhost:8080/me
 ```
 
+## Logs
+
+A API e o worker escrevem uma linha JSON por evento (`log/slog`), criadas por `logging.NewJSONLogger`. As regras:
+
+- **Nunca logar dado pessoal nem segredo:** email, nome, senha, hash, token, cookie, código de verificação, URL de destino de link ou IP. Para referenciar algo, use IDs internos (`url_id`, `event_id`) ou o código curto.
+- O log de acesso grava método, caminho (sem query string), status, duração e tamanho da resposta.
+- Texto que vem de fora (o parâmetro `error` do Google, por exemplo) é cortado antes de ir para o log.
+- **Rede de proteção:** o logger apaga emails (`[email]`) e credenciais dentro de URLs (`scheme://[credentials]@host`) de qualquer texto ou erro antes de gravar. Isso cobre mensagens que o código não controla, como erros de bibliotecas e valores de `panic`, mas não é desculpa para logar dado pessoal.
+
 ## Serviços externos
 
 ### Resend
