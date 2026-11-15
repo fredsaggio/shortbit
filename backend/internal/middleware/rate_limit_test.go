@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"github.com/fredsaggio/url-shortener/internal/problem/problemtest"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -69,7 +70,7 @@ func TestRateLimiterMiddlewareByIPReturnsTooManyRequests(t *testing.T) {
 		t.Errorf("Retry-After = %q, want %q", got, "2")
 	}
 
-	if got := secondResponse.Body.String(); got != "muitas requisições, tente novamente mais tarde\n" {
+	if got := problemtest.Text(secondResponse.Body.String()); got != "muitas requisições, tente novamente mais tarde\n" {
 		t.Errorf("response body = %q, want rate limit message", got)
 	}
 

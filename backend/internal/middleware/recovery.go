@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"github.com/fredsaggio/url-shortener/internal/problem"
 	"log/slog"
 	"net/http"
 	"runtime/debug"
@@ -21,11 +22,7 @@ func Recovery(next http.Handler) http.Handler {
 				"stack", string(debug.Stack()),
 			)
 
-			http.Error(
-				w,
-				"erro interno do servidor",
-				http.StatusInternalServerError,
-			)
+			problem.Write(w, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
 		}()
 		next.ServeHTTP(w, r)
 	})

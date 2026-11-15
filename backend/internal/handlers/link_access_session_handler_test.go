@@ -3,6 +3,7 @@ package handlers_test
 import (
 	"context"
 	"errors"
+	"github.com/fredsaggio/url-shortener/internal/problem/problemtest"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -144,8 +145,8 @@ func TestLinkAccessSessionHandlerMapsServiceErrors(t *testing.T) {
 				if !strings.Contains(response.Body.String(), tt.wantBody) || !strings.Contains(response.Body.String(), `<form method="post" action="/Ab3dX9/access">`) {
 					t.Errorf("response body = %q, want password form with %q", response.Body.String(), tt.wantBody)
 				}
-			} else if response.Body.String() != tt.wantBody {
-				t.Errorf("response body = %q, want %q", response.Body.String(), tt.wantBody)
+			} else if problemtest.Text(response.Body.String()) != tt.wantBody {
+				t.Errorf("response body = %q, want %q", problemtest.Text(response.Body.String()), tt.wantBody)
 			}
 			if response.Header().Get("Set-Cookie") != "" || response.Header().Get("Location") != "" {
 				t.Error("failed unlock created a cookie or redirect")

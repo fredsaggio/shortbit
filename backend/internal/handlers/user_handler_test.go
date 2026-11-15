@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/fredsaggio/url-shortener/internal/problem/problemtest"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -161,8 +162,8 @@ func TestUserHandlerStartPasswordRegistrationRateLimitsNormalizedEmail(t *testin
 	if response.Header().Get("Retry-After") != "37" {
 		t.Errorf("Retry-After = %q, want %q", response.Header().Get("Retry-After"), "37")
 	}
-	if response.Body.String() != "muitas solicitações para este email, tente novamente mais tarde\n" {
-		t.Errorf("response body = %q", response.Body.String())
+	if problemtest.Text(response.Body.String()) != "muitas solicitações para este email, tente novamente mais tarde\n" {
+		t.Errorf("response body = %q", problemtest.Text(response.Body.String()))
 	}
 	if len(response.Result().Cookies()) != 0 {
 		t.Error("rate-limited registration created a cookie")
@@ -234,8 +235,8 @@ func TestUserHandlerStartPasswordRegistrationMapsServiceErrors(t *testing.T) {
 			if response.Code != tt.wantStatus {
 				t.Errorf("status code = %d, want %d", response.Code, tt.wantStatus)
 			}
-			if response.Body.String() != tt.wantBody {
-				t.Errorf("response body = %q, want %q", response.Body.String(), tt.wantBody)
+			if problemtest.Text(response.Body.String()) != tt.wantBody {
+				t.Errorf("response body = %q, want %q", problemtest.Text(response.Body.String()), tt.wantBody)
 			}
 			if len(response.Result().Cookies()) != 0 {
 				t.Error("failed registration created a cookie")
@@ -352,8 +353,8 @@ func TestUserHandlerConfirmPasswordRegistrationRejectsMissingCookie(t *testing.T
 	if response.Code != http.StatusGone {
 		t.Errorf("status code = %d, want %d", response.Code, http.StatusGone)
 	}
-	if response.Body.String() != "tentativa de cadastro ausente ou expirada\n" {
-		t.Errorf("response body = %q, want %q", response.Body.String(), "tentativa de cadastro ausente ou expirada\n")
+	if problemtest.Text(response.Body.String()) != "tentativa de cadastro ausente ou expirada\n" {
+		t.Errorf("response body = %q, want %q", problemtest.Text(response.Body.String()), "tentativa de cadastro ausente ou expirada\n")
 	}
 
 	cookies := response.Result().Cookies()
@@ -394,8 +395,8 @@ func TestUserHandlerConfirmPasswordRegistrationMapsServiceErrors(t *testing.T) {
 			if response.Code != tt.wantStatus {
 				t.Errorf("status code = %d, want %d", response.Code, tt.wantStatus)
 			}
-			if response.Body.String() != tt.wantBody {
-				t.Errorf("response body = %q, want %q", response.Body.String(), tt.wantBody)
+			if problemtest.Text(response.Body.String()) != tt.wantBody {
+				t.Errorf("response body = %q, want %q", problemtest.Text(response.Body.String()), tt.wantBody)
 			}
 
 			cookies := response.Result().Cookies()

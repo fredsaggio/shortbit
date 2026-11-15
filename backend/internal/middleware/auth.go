@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"errors"
+	"github.com/fredsaggio/url-shortener/internal/problem"
 	"log/slog"
 	"net/http"
 	"uuid"
@@ -21,19 +22,19 @@ func Authenticator(auth AuthService) func(http.Handler) http.Handler {
 			cookie, err := r.Cookie("user_session")
 			ctx := r.Context()
 			if err != nil {
-				http.Error(w, "não autenticado", http.StatusUnauthorized)
+				problem.Write(w, http.StatusUnauthorized, "authentication_required", "não autenticado")
 				return
 			}
 
 			userID, err := auth.Authenticate(ctx, cookie.Value)
 			if err != nil {
 				if errors.Is(err, services.ErrUnauthenticated) {
-					http.Error(w, "não autenticado", http.StatusUnauthorized)
+					problem.Write(w, http.StatusUnauthorized, "authentication_required", "não autenticado")
 					return
 				}
 
 				slog.ErrorContext(ctx, "authenticate session failed", "error", err)
-				http.Error(w, "erro interno do servidor", http.StatusInternalServerError)
+				problem.Write(w, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
 				return
 			}
 			ctx = ctxval.ContextWithUserID(ctx, userID)

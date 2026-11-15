@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/fredsaggio/url-shortener/internal/problem"
 	"io"
 	"log/slog"
 	"net/http"
@@ -51,12 +52,12 @@ func (h *SessionHandler) LoginWithPassword(w http.ResponseWriter, r *http.Reques
 	decoder.DisallowUnknownFields()
 
 	if err := decoder.Decode(&req); err != nil {
-		http.Error(w, "corpo da requisição inválido", http.StatusBadRequest)
+		problem.Write(w, http.StatusBadRequest, "invalid_body", "corpo da requisição inválido")
 		return
 	}
 
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		http.Error(w, "corpo da requisição deve conter exatamente um objeto JSON", http.StatusBadRequest)
+		problem.Write(w, http.StatusBadRequest, "invalid_body", "corpo da requisição deve conter exatamente um objeto JSON")
 		return
 	}
 
@@ -64,7 +65,7 @@ func (h *SessionHandler) LoginWithPassword(w http.ResponseWriter, r *http.Reques
 	allowed, retryAfter := h.emailRateLimiter.Allow(normalizedEmail)
 	if !allowed {
 		w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
-		http.Error(w, "muitas tentativas de login, tente novamente mais tarde", http.StatusTooManyRequests)
+		problem.Write(w, http.StatusTooManyRequests, "rate_limited", "muitas tentativas de login, tente novamente mais tarde")
 		return
 	}
 
@@ -72,12 +73,12 @@ func (h *SessionHandler) LoginWithPassword(w http.ResponseWriter, r *http.Reques
 
 	if err != nil {
 		if errors.Is(err, services.ErrIncorrectEmailOrPassword) {
-			http.Error(w, "email ou senha incorretos", http.StatusUnauthorized)
+			problem.Write(w, http.StatusUnauthorized, "invalid_credentials", "email ou senha incorretos")
 			return
 		}
 
 		slog.Error("login failed", "error", err)
-		http.Error(w, "erro interno do servidor", http.StatusInternalServerError)
+		problem.Write(w, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
 		return
 	}
 
@@ -95,7 +96,7 @@ func (h *SessionHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		token = cookie.Value
 
 	} else if !errors.Is(err, http.ErrNoCookie) {
-		http.Error(w, "cookie de sessão inválido", http.StatusBadRequest)
+		problem.Write(w, http.StatusBadRequest, "invalid_cookie", "cookie de sessão inválido")
 		return
 	}
 
@@ -103,7 +104,7 @@ func (h *SessionHandler) Logout(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		slog.Error("logout failed", "error", err)
-		http.Error(w, "erro interno do servidor", http.StatusInternalServerError)
+		problem.Write(w, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
 		return
 	}
 

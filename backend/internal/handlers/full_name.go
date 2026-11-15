@@ -2,17 +2,19 @@ package handlers
 
 import (
 	"errors"
+	"net/http"
 
+	"github.com/fredsaggio/url-shortener/internal/problem"
 	"github.com/fredsaggio/url-shortener/internal/services"
 )
 
-func fullNameErrorMessage(err error) string {
+func writeFullNameError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, services.ErrFullNameTooLong):
-		return "nome completo muito longo; use até 100 caracteres"
+		problem.Write(w, http.StatusBadRequest, "full_name_too_long", "nome completo muito longo; use até 100 caracteres")
 	case errors.Is(err, services.ErrInvalidFullName):
-		return "nome completo contém caracteres inválidos"
+		problem.Write(w, http.StatusBadRequest, "invalid_full_name", "nome completo contém caracteres inválidos")
 	default:
-		return "informe o nome completo"
+		problem.Write(w, http.StatusBadRequest, "full_name_required", "informe o nome completo")
 	}
 }

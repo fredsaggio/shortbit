@@ -3,6 +3,7 @@ package handlers_test
 import (
 	"context"
 	"errors"
+	"github.com/fredsaggio/url-shortener/internal/problem/problemtest"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -245,8 +246,8 @@ func TestSessionHandlerLoginMapsServiceErrors(t *testing.T) {
 				t.Errorf("status code = %d, want %d", response.Code, tt.wantStatus)
 			}
 
-			if response.Body.String() != tt.wantBody {
-				t.Errorf("response body = %q, want %q", response.Body.String(), tt.wantBody)
+			if problemtest.Text(response.Body.String()) != tt.wantBody {
+				t.Errorf("response body = %q, want %q", problemtest.Text(response.Body.String()), tt.wantBody)
 			}
 
 			if len(response.Result().Cookies()) != 0 {
@@ -293,7 +294,7 @@ func TestSessionHandlerLoginRateLimitsNormalizedEmail(t *testing.T) {
 		t.Errorf("Retry-After = %q, want %q", got, "30")
 	}
 
-	if got := response.Body.String(); got != "muitas tentativas de login, tente novamente mais tarde\n" {
+	if got := problemtest.Text(response.Body.String()); got != "muitas tentativas de login, tente novamente mais tarde\n" {
 		t.Errorf("response body = %q, want rate limit message", got)
 	}
 }
@@ -381,7 +382,7 @@ func TestSessionHandlerLogoutMapsServiceError(t *testing.T) {
 		t.Errorf("status code = %d, want %d", response.Code, http.StatusInternalServerError)
 	}
 
-	if got := response.Body.String(); got != "erro interno do servidor\n" {
+	if got := problemtest.Text(response.Body.String()); got != "erro interno do servidor\n" {
 		t.Errorf("response body = %q, want generic internal error", got)
 	}
 

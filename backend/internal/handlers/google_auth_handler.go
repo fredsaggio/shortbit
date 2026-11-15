@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"errors"
+	"github.com/fredsaggio/url-shortener/internal/problem"
 	"log/slog"
 	"net/http"
 	"unicode/utf8"
@@ -52,7 +53,7 @@ func (h *GoogleAuthHandler) Start(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		slog.ErrorContext(ctx, "generate Google authorization values failed", "error", err)
-		http.Error(w, "erro interno no servidor", http.StatusInternalServerError)
+		problem.Write(w, http.StatusInternalServerError, "internal_error", "erro interno no servidor")
 		return
 	}
 

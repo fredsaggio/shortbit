@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/fredsaggio/url-shortener/internal/problem/problemtest"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -102,8 +103,8 @@ func TestAccountHandlerUpdateMapsNameErrors(t *testing.T) {
 
 			handler.Update(response, authenticatedRequest(http.MethodPatch, "/me", `{"full_name":"Ana"}`))
 
-			if response.Code != tt.wantStatus || response.Body.String() != tt.wantBody {
-				t.Errorf("response = (%d, %q), want (%d, %q)", response.Code, response.Body.String(), tt.wantStatus, tt.wantBody)
+			if response.Code != tt.wantStatus || problemtest.Text(response.Body.String()) != tt.wantBody {
+				t.Errorf("response = (%d, %q), want (%d, %q)", response.Code, problemtest.Text(response.Body.String()), tt.wantStatus, tt.wantBody)
 			}
 			if service.gotFullName != "Ana" {
 				t.Errorf("service full name = %q, want Ana", service.gotFullName)
@@ -167,8 +168,8 @@ func TestAccountHandlerChangePasswordMapsErrors(t *testing.T) {
 
 			handler.ChangePassword(response, request)
 
-			if response.Code != tt.wantStatus || response.Body.String() != tt.wantBody {
-				t.Errorf("response = (%d, %q), want (%d, %q)", response.Code, response.Body.String(), tt.wantStatus, tt.wantBody)
+			if response.Code != tt.wantStatus || problemtest.Text(response.Body.String()) != tt.wantBody {
+				t.Errorf("response = (%d, %q), want (%d, %q)", response.Code, problemtest.Text(response.Body.String()), tt.wantStatus, tt.wantBody)
 			}
 			if len(response.Result().Cookies()) != 0 {
 				t.Error("failed password change set a cookie")

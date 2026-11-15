@@ -37,13 +37,37 @@ describe('apiRequest', () => {
     await expect(apiRequest('/sessions', { method: 'POST', body: {} })).resolves.toBeUndefined()
   })
 
-  it('turns an error status into an ApiError with the API message', async () => {
+  it('reads the message and the code of a problem document', async () => {
+    const problem = { type: 'about:blank', title: 'Conflict', status: 409, detail: 'email já está em uso', code: 'email_already_registered' }
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(problem), {
+      status: 409,
+      headers: { 'Content-Type': 'application/problem+json' },
+    })))
+
+    const error = await apiRequest('/registrations/password').catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(ApiError)
+    expect(error).toMatchObject({ status: 409, code: 'email_already_registered', message: 'Email já está em uso' })
+  })
+
+  it('hides the detail of a server problem but keeps its code', async () => {
+    const problem = { type: 'about:blank', title: 'Internal Server Error', status: 500, detail: 'erro interno do servidor', code: 'internal_error' }
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(problem), { status: 500 })))
+
+    await expect(apiRequest('/me')).rejects.toMatchObject({
+      status: 500,
+      code: 'internal_error',
+      message: 'Algo deu errado do nosso lado. Tente de novo em instantes.',
+    })
+  })
+
+  it('falls back to plain text for an answer that is not a problem document', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('email já está em uso\n', { status: 409 })))
 
     const error = await apiRequest('/registrations/password').catch((caught: unknown) => caught)
 
     expect(error).toBeInstanceOf(ApiError)
-    expect(error).toMatchObject({ status: 409, message: 'Email já está em uso' })
+    expect(error).toMatchObject({ status: 409, code: '', message: 'Email já está em uso' })
   })
 
   it('reports a network failure without leaking the browser error', async () => {

@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"github.com/fredsaggio/url-shortener/internal/problem"
 	"net/http"
 	"time"
 
@@ -148,11 +149,7 @@ func (srv *Server) registerRoutes(mux *http.ServeMux) {
 		defer cancel()
 
 		if err := srv.database.Ping(ctx); err != nil {
-			http.Error(
-				w,
-				"serviço indisponível",
-				http.StatusServiceUnavailable,
-			)
+			problem.Write(w, http.StatusServiceUnavailable, "service_unavailable", "serviço indisponível")
 			return
 		}
 

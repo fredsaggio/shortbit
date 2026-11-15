@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/fredsaggio/url-shortener/internal/problem/problemtest"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -194,8 +195,8 @@ func TestURLHandlerCreateMapsServiceErrors(t *testing.T) {
 			if response.Code != tt.wantStatus {
 				t.Errorf("status = %d, want %d", response.Code, tt.wantStatus)
 			}
-			if response.Body.String() != tt.wantBody {
-				t.Errorf("body = %q, want %q", response.Body.String(), tt.wantBody)
+			if problemtest.Text(response.Body.String()) != tt.wantBody {
+				t.Errorf("body = %q, want %q", problemtest.Text(response.Body.String()), tt.wantBody)
 			}
 		})
 	}
@@ -345,8 +346,8 @@ func TestURLHandlerListMapsServiceErrors(t *testing.T) {
 			req = req.WithContext(ctxval.ContextWithUserID(req.Context(), uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c410")))
 			response := httptest.NewRecorder()
 			handler.List(response, req)
-			if response.Code != tt.wantStatus || response.Body.String() != tt.wantBody {
-				t.Errorf("response = (%d, %q), want (%d, %q)", response.Code, response.Body.String(), tt.wantStatus, tt.wantBody)
+			if response.Code != tt.wantStatus || problemtest.Text(response.Body.String()) != tt.wantBody {
+				t.Errorf("response = (%d, %q), want (%d, %q)", response.Code, problemtest.Text(response.Body.String()), tt.wantStatus, tt.wantBody)
 			}
 		})
 	}
@@ -431,8 +432,8 @@ func TestURLHandlerGetByShortCodeMapsServiceErrors(t *testing.T) {
 			request = request.WithContext(ctxval.ContextWithUserID(request.Context(), uuid.MustParse("01991f29-7c22-7ab3-a395-4d402f09c412")))
 			response := httptest.NewRecorder()
 			handler.GetByShortCode(response, request)
-			if response.Code != tt.wantStatus || response.Body.String() != tt.wantBody {
-				t.Errorf("response = (%d, %q), want (%d, %q)", response.Code, response.Body.String(), tt.wantStatus, tt.wantBody)
+			if response.Code != tt.wantStatus || problemtest.Text(response.Body.String()) != tt.wantBody {
+				t.Errorf("response = (%d, %q), want (%d, %q)", response.Code, problemtest.Text(response.Body.String()), tt.wantStatus, tt.wantBody)
 			}
 		})
 	}
@@ -566,8 +567,8 @@ func TestURLHandlerRedirectMapsServiceErrors(t *testing.T) {
 			response := httptest.NewRecorder()
 			handler.Redirect(response, request)
 
-			if response.Code != tt.wantStatus || response.Body.String() != tt.wantBody {
-				t.Errorf("response = (%d, %q), want (%d, %q)", response.Code, response.Body.String(), tt.wantStatus, tt.wantBody)
+			if response.Code != tt.wantStatus || problemtest.Text(response.Body.String()) != tt.wantBody {
+				t.Errorf("response = (%d, %q), want (%d, %q)", response.Code, problemtest.Text(response.Body.String()), tt.wantStatus, tt.wantBody)
 			}
 			if got := response.Header().Get("Location"); got != "" {
 				t.Errorf("Location = %q, want no redirect on error", got)

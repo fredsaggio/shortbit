@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"github.com/fredsaggio/url-shortener/internal/problem"
 	"io"
 	"log/slog"
 	"net/http"
@@ -86,7 +87,7 @@ func (h *URLHandler) Create(w http.ResponseWriter, r *http.Request) {
 	userID, ok := ctxval.UserIDFromContext(ctx)
 
 	if !ok {
-		http.Error(w, "autenticação necessária", http.StatusUnauthorized)
+		problem.Write(w, http.StatusUnauthorized, "authentication_required", "autenticação necessária")
 		return
 	}
 
@@ -96,12 +97,12 @@ func (h *URLHandler) Create(w http.ResponseWriter, r *http.Request) {
 	decoder.DisallowUnknownFields()
 
 	if err := decoder.Decode(&req); err != nil {
-		http.Error(w, "corpo da requisição inválido", http.StatusBadRequest)
+		problem.Write(w, http.StatusBadRequest, "invalid_body", "corpo da requisição inválido")
 		return
 	}
 
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		http.Error(w, "corpo da requisição deve conter apenas um objeto JSON", http.StatusBadRequest)
+		problem.Write(w, http.StatusBadRequest, "invalid_body", "corpo da requisição deve conter apenas um objeto JSON")
 		return
 	}
 
@@ -110,15 +111,15 @@ func (h *URLHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, services.ErrUnauthenticated):
-			http.Error(w, "autenticação necessária", http.StatusUnauthorized)
+			problem.Write(w, http.StatusUnauthorized, "authentication_required", "autenticação necessária")
 
 		default:
-			if message, ok := linkInputErrorMessage(err); ok {
-				http.Error(w, message, http.StatusBadRequest)
+			if code, message, ok := linkInputError(err); ok {
+				problem.Write(w, http.StatusBadRequest, code, message)
 				return
 			}
 			slog.ErrorContext(ctx, "create URL failed", "error", err)
-			http.Error(w, "erro interno do servidor", http.StatusInternalServerError)
+			problem.Write(w, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
 		}
 		return
 	}
@@ -137,24 +138,24 @@ func (h *URLHandler) List(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID, ok := ctxval.UserIDFromContext(ctx)
 	if !ok {
-		http.Error(w, "autenticação necessária", http.StatusUnauthorized)
+		problem.Write(w, http.StatusUnauthorized, "authentication_required", "autenticação necessária")
 		return
 	}
 
 	limit := defaultURLListLimit
 	query, err := url.ParseQuery(r.URL.RawQuery)
 	if err != nil {
-		http.Error(w, "parâmetros inválidos", http.StatusBadRequest)
+		problem.Write(w, http.StatusBadRequest, "invalid_query", "parâmetros inválidos")
 		return
 	}
 	if values, present := query["limit"]; present {
 		if len(values) != 1 {
-			http.Error(w, "limite inválido", http.StatusBadRequest)
+			problem.Write(w, http.StatusBadRequest, "invalid_limit", "limite inválido")
 			return
 		}
 		limit, err = strconv.Atoi(values[0])
 		if err != nil {
-			http.Error(w, "limite inválido", http.StatusBadRequest)
+			problem.Write(w, http.StatusBadRequest, "invalid_limit", "limite inválido")
 			return
 		}
 	}
@@ -163,13 +164,13 @@ func (h *URLHandler) List(w http.ResponseWriter, r *http.Request) {
 	if values, present := query["cursor"]; present {
 		// O parâmetro pode vir mais de uma vez, tipo: /urls?cursor=abc&cursor=def
 		if len(values) != 1 {
-			http.Error(w, "cursor inválido", http.StatusBadRequest)
+			problem.Write(w, http.StatusBadRequest, "invalid_cursor", "cursor inválido")
 			return
 		}
 		decoded, err := base64.RawURLEncoding.DecodeString(values[0])
 		var payload urlCursorPayload
 		if err != nil || json.Unmarshal(decoded, &payload) != nil || payload.ID <= 0 || payload.CreatedAt.IsZero() {
-			http.Error(w, "cursor inválido", http.StatusBadRequest)
+			problem.Write(w, http.StatusBadRequest, "invalid_cursor", "cursor inválido")
 			return
 		}
 		cursor = &repositories.URLCursor{CreatedAt: payload.CreatedAt, ID: payload.ID}
@@ -179,12 +180,12 @@ func (h *URLHandler) List(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, services.ErrUnauthenticated):
-			http.Error(w, "autenticação necessária", http.StatusUnauthorized)
+			problem.Write(w, http.StatusUnauthorized, "authentication_required", "autenticação necessária")
 		case errors.Is(err, services.ErrInvalidURLListLimit):
-			http.Error(w, "limite inválido", http.StatusBadRequest)
+			problem.Write(w, http.StatusBadRequest, "invalid_limit", "limite inválido")
 		default:
 			slog.ErrorContext(ctx, "list URLs failed", "error", err)
-			http.Error(w, "erro interno do servidor", http.StatusInternalServerError)
+			problem.Write(w, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
 		}
 		return
 	}
@@ -201,7 +202,7 @@ func (h *URLHandler) List(w http.ResponseWriter, r *http.Request) {
 		encoded, err := json.Marshal(urlCursorPayload{CreatedAt: result.NextCursor.CreatedAt, ID: result.NextCursor.ID})
 		if err != nil {
 			slog.ErrorContext(ctx, "encode URL list cursor failed", "error", err)
-			http.Error(w, "erro interno do servidor", http.StatusInternalServerError)
+			problem.Write(w, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
 			return
 		}
 
@@ -223,7 +224,7 @@ func (h *URLHandler) GetByShortCode(w http.ResponseWriter, r *http.Request) {
 	userID, ok := ctxval.UserIDFromContext(ctx)
 
 	if !ok {
-		http.Error(w, "usuário não autenticado", http.StatusUnauthorized)
+		problem.Write(w, http.StatusUnauthorized, "authentication_required", "usuário não autenticado")
 		return
 	}
 
@@ -231,11 +232,11 @@ func (h *URLHandler) GetByShortCode(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		if errors.Is(err, services.ErrURLNotFound) {
-			http.Error(w, "url não encontrada", http.StatusNotFound)
+			problem.Write(w, http.StatusNotFound, "link_not_found", "url não encontrada")
 			return
 		}
 		slog.ErrorContext(ctx, "get url by shortcode", "error", err)
-		http.Error(w, "erro interno do servidor", http.StatusInternalServerError)
+		problem.Write(w, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
 		return
 	}
 
@@ -265,7 +266,7 @@ func (h *URLHandler) Redirect(w http.ResponseWriter, r *http.Request) {
 		token = cookie.Value
 	} else if !errors.Is(err, http.ErrNoCookie) {
 		slog.ErrorContext(ctx, "read link access cookie failed", "error", err)
-		http.Error(w, "erro interno do servidor", http.StatusInternalServerError)
+		problem.Write(w, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
 		return
 	}
 
@@ -273,16 +274,16 @@ func (h *URLHandler) Redirect(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		if errors.Is(err, services.ErrURLNotFound) {
-			http.Error(w, "url não encontrada", http.StatusNotFound)
+			problem.Write(w, http.StatusNotFound, "link_not_found", "url não encontrada")
 			return
 		}
 		if errors.Is(err, services.ErrClickNotRecorded) {
 			slog.ErrorContext(ctx, "record click failed", "error", err)
-			http.Error(w, "serviço indisponível", http.StatusServiceUnavailable)
+			problem.Write(w, http.StatusServiceUnavailable, "service_unavailable", "serviço indisponível")
 			return
 		}
 		slog.ErrorContext(ctx, "resolve url", "error", err)
-		http.Error(w, "erro interno do servidor", http.StatusInternalServerError)
+		problem.Write(w, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
 		return
 	}
 	if result.PasswordRequired {
@@ -293,30 +294,30 @@ func (h *URLHandler) Redirect(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, result.OriginalURL, http.StatusFound)
 }
 
-// linkInputErrorMessage maps the validation errors shared by creating and
-// editing a link to their 400 messages.
-func linkInputErrorMessage(err error) (string, bool) {
+// linkInputError maps the validation errors shared by creating and editing a
+// link to a problem code and message.
+func linkInputError(err error) (code, message string, ok bool) {
 	switch {
 	case errors.Is(err, services.ErrInvalidOriginalURL):
-		return "URL original inválida", true
+		return "invalid_url", "URL original inválida", true
 	case errors.Is(err, services.ErrURLTooLong):
-		return "URL original muito longa", true
+		return "url_too_long", "URL original muito longa", true
 	case errors.Is(err, services.ErrURLPointsToShortDomain):
-		return "não é permitido encurtar o próprio domínio", true
+		return "url_points_to_short_domain", "não é permitido encurtar o próprio domínio", true
 	case errors.Is(err, services.ErrInvalidURLVisibility):
-		return "visibilidade inválida", true
+		return "invalid_visibility", "visibilidade inválida", true
 	case errors.Is(err, services.ErrUnexpectedLinkPassword):
-		return "link público não deve ter senha", true
+		return "unexpected_link_password", "link público não deve ter senha", true
 	case errors.Is(err, services.ErrLinkPasswordTooShort):
-		return "senha do link muito curta", true
+		return "link_password_too_short", "senha do link muito curta", true
 	case errors.Is(err, services.ErrLinkPasswordTooLong):
-		return "senha do link muito longa", true
+		return "link_password_too_long", "senha do link muito longa", true
 	case errors.Is(err, services.ErrLinkPasswordRequired):
-		return "informe a senha do link", true
+		return "link_password_required", "informe a senha do link", true
 	case errors.Is(err, services.ErrEmptyURLUpdate):
-		return "informe o que alterar", true
+		return "empty_update", "informe o que alterar", true
 	}
-	return "", false
+	return "", "", false
 }
 
 // Update handles PATCH /urls/{code}: the owner changes the destination, the
@@ -326,7 +327,7 @@ func (h *URLHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	userID, ok := ctxval.UserIDFromContext(ctx)
 	if !ok {
-		http.Error(w, "autenticação necessária", http.StatusUnauthorized)
+		problem.Write(w, http.StatusUnauthorized, "authentication_required", "autenticação necessária")
 		return
 	}
 
@@ -334,11 +335,11 @@ func (h *URLHandler) Update(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&req); err != nil {
-		http.Error(w, "corpo da requisição inválido", http.StatusBadRequest)
+		problem.Write(w, http.StatusBadRequest, "invalid_body", "corpo da requisição inválido")
 		return
 	}
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		http.Error(w, "corpo da requisição deve conter apenas um objeto JSON", http.StatusBadRequest)
+		problem.Write(w, http.StatusBadRequest, "invalid_body", "corpo da requisição deve conter apenas um objeto JSON")
 		return
 	}
 
@@ -350,16 +351,16 @@ func (h *URLHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, services.ErrUnauthenticated):
-			http.Error(w, "autenticação necessária", http.StatusUnauthorized)
+			problem.Write(w, http.StatusUnauthorized, "authentication_required", "autenticação necessária")
 		case errors.Is(err, services.ErrURLNotFound):
-			http.Error(w, "url não encontrada", http.StatusNotFound)
+			problem.Write(w, http.StatusNotFound, "link_not_found", "url não encontrada")
 		default:
-			if message, ok := linkInputErrorMessage(err); ok {
-				http.Error(w, message, http.StatusBadRequest)
+			if code, message, ok := linkInputError(err); ok {
+				problem.Write(w, http.StatusBadRequest, code, message)
 				return
 			}
 			slog.ErrorContext(ctx, "update URL failed", "error", err)
-			http.Error(w, "erro interno do servidor", http.StatusInternalServerError)
+			problem.Write(w, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
 		}
 		return
 	}
@@ -386,19 +387,19 @@ func (h *URLHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	userID, ok := ctxval.UserIDFromContext(ctx)
 	if !ok {
-		http.Error(w, "autenticação necessária", http.StatusUnauthorized)
+		problem.Write(w, http.StatusUnauthorized, "authentication_required", "autenticação necessária")
 		return
 	}
 
 	if err := h.serv.Delete(ctx, userID, r.PathValue("code")); err != nil {
 		switch {
 		case errors.Is(err, services.ErrUnauthenticated):
-			http.Error(w, "autenticação necessária", http.StatusUnauthorized)
+			problem.Write(w, http.StatusUnauthorized, "authentication_required", "autenticação necessária")
 		case errors.Is(err, services.ErrURLNotFound):
-			http.Error(w, "url não encontrada", http.StatusNotFound)
+			problem.Write(w, http.StatusNotFound, "link_not_found", "url não encontrada")
 		default:
 			slog.ErrorContext(ctx, "delete URL failed", "error", err)
-			http.Error(w, "erro interno do servidor", http.StatusInternalServerError)
+			problem.Write(w, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
 		}
 		return
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/fredsaggio/url-shortener/internal/problem"
 	"io"
 	"log/slog"
 	"net/http"
@@ -66,14 +67,14 @@ func (h *AccountHandler) Get(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID, ok := ctxval.UserIDFromContext(ctx)
 	if !ok {
-		http.Error(w, "erro interno do servidor", http.StatusInternalServerError)
+		problem.Write(w, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
 		return
 	}
 
 	account, err := h.accounts.GetAccount(ctx, userID)
 	if err != nil {
 		slog.ErrorContext(ctx, "get account failed", "error", err)
-		http.Error(w, "erro interno do servidor", http.StatusInternalServerError)
+		problem.Write(w, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
 		return
 	}
 
@@ -84,7 +85,7 @@ func (h *AccountHandler) Update(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID, ok := ctxval.UserIDFromContext(ctx)
 	if !ok {
-		http.Error(w, "erro interno do servidor", http.StatusInternalServerError)
+		problem.Write(w, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
 		return
 	}
 
@@ -96,11 +97,11 @@ func (h *AccountHandler) Update(w http.ResponseWriter, r *http.Request) {
 	account, err := h.accounts.UpdateFullName(ctx, userID, req.FullName)
 	if err != nil {
 		if errors.Is(err, services.ErrFullNameRequired) || errors.Is(err, services.ErrFullNameTooLong) || errors.Is(err, services.ErrInvalidFullName) {
-			http.Error(w, fullNameErrorMessage(err), http.StatusBadRequest)
+			writeFullNameError(w, err)
 			return
 		}
 		slog.ErrorContext(ctx, "update full name failed", "error", err)
-		http.Error(w, "erro interno do servidor", http.StatusInternalServerError)
+		problem.Write(w, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
 		return
 	}
 
@@ -111,7 +112,7 @@ func (h *AccountHandler) ChangePassword(w http.ResponseWriter, r *http.Request) 
 	ctx := r.Context()
 	userID, ok := ctxval.UserIDFromContext(ctx)
 	if !ok {
-		http.Error(w, "erro interno do servidor", http.StatusInternalServerError)
+		problem.Write(w, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
 		return
 	}
 
@@ -119,7 +120,7 @@ func (h *AccountHandler) ChangePassword(w http.ResponseWriter, r *http.Request) 
 	// comparison of the current password.
 	if allowed, retryAfter := h.rateLimiter.Allow(userID.String()); !allowed {
 		w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
-		http.Error(w, "muitas tentativas de troca de senha, tente novamente mais tarde", http.StatusTooManyRequests)
+		problem.Write(w, http.StatusTooManyRequests, "rate_limited", "muitas tentativas de troca de senha, tente novamente mais tarde")
 		return
 	}
 
@@ -130,7 +131,7 @@ func (h *AccountHandler) ChangePassword(w http.ResponseWriter, r *http.Request) 
 
 	cookie, err := r.Cookie(userSessionCookieName)
 	if err != nil {
-		http.Error(w, "autenticação necessária", http.StatusUnauthorized)
+		problem.Write(w, http.StatusUnauthorized, "authentication_required", "autenticação necessária")
 		return
 	}
 
@@ -138,20 +139,20 @@ func (h *AccountHandler) ChangePassword(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		switch {
 		case errors.Is(err, services.ErrPasswordConfirmationMismatch):
-			http.Error(w, "as senhas não coincidem", http.StatusBadRequest)
+			problem.Write(w, http.StatusBadRequest, "password_confirmation_mismatch", "as senhas não coincidem")
 		case isPasswordPolicyError(err):
-			http.Error(w, passwordPolicyMessage(err), http.StatusBadRequest)
+			writePasswordPolicyError(w, err)
 		case errors.Is(err, services.ErrIncorrectCurrentPassword):
-			http.Error(w, "senha atual incorreta", http.StatusBadRequest)
+			problem.Write(w, http.StatusBadRequest, "incorrect_current_password", "senha atual incorreta")
 		case errors.Is(err, services.ErrSamePassword):
-			http.Error(w, "a nova senha deve ser diferente da atual", http.StatusBadRequest)
+			problem.Write(w, http.StatusBadRequest, "same_password", "a nova senha deve ser diferente da atual")
 		case errors.Is(err, services.ErrAccountHasNoPassword):
-			http.Error(w, "esta conta entra com Google e não tem senha", http.StatusConflict)
+			problem.Write(w, http.StatusConflict, "account_has_no_password", "esta conta entra com Google e não tem senha")
 		case errors.Is(err, services.ErrUnauthenticated):
-			http.Error(w, "autenticação necessária", http.StatusUnauthorized)
+			problem.Write(w, http.StatusUnauthorized, "authentication_required", "autenticação necessária")
 		default:
 			slog.ErrorContext(ctx, "change password failed", "error", err)
-			http.Error(w, "erro interno do servidor", http.StatusInternalServerError)
+			problem.Write(w, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
 		}
 		return
 	}
@@ -167,13 +168,13 @@ func (h *AccountHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID, ok := ctxval.UserIDFromContext(ctx)
 	if !ok {
-		http.Error(w, "erro interno do servidor", http.StatusInternalServerError)
+		problem.Write(w, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
 		return
 	}
 
 	if allowed, retryAfter := h.rateLimiter.Allow(userID.String()); !allowed {
 		w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
-		http.Error(w, "muitas tentativas, tente novamente mais tarde", http.StatusTooManyRequests)
+		problem.Write(w, http.StatusTooManyRequests, "rate_limited", "muitas tentativas, tente novamente mais tarde")
 		return
 	}
 
@@ -185,14 +186,14 @@ func (h *AccountHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if err := h.accounts.DeleteAccount(ctx, userID, req.Password, req.Email); err != nil {
 		switch {
 		case errors.Is(err, services.ErrIncorrectCurrentPassword):
-			http.Error(w, "senha incorreta", http.StatusBadRequest)
+			problem.Write(w, http.StatusBadRequest, "incorrect_password", "senha incorreta")
 		case errors.Is(err, services.ErrAccountEmailMismatch):
-			http.Error(w, "o email não confere com o da conta", http.StatusBadRequest)
+			problem.Write(w, http.StatusBadRequest, "account_email_mismatch", "o email não confere com o da conta")
 		case errors.Is(err, services.ErrUnauthenticated):
-			http.Error(w, "autenticação necessária", http.StatusUnauthorized)
+			problem.Write(w, http.StatusUnauthorized, "authentication_required", "autenticação necessária")
 		default:
 			slog.ErrorContext(ctx, "delete account failed", "error", err)
-			http.Error(w, "erro interno do servidor", http.StatusInternalServerError)
+			problem.Write(w, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
 		}
 		return
 	}
@@ -222,11 +223,11 @@ func decodeSingleJSON(w http.ResponseWriter, r *http.Request, target any) bool {
 	decoder.DisallowUnknownFields()
 
 	if err := decoder.Decode(target); err != nil {
-		http.Error(w, "corpo da requisição inválido", http.StatusBadRequest)
+		problem.Write(w, http.StatusBadRequest, "invalid_body", "corpo da requisição inválido")
 		return false
 	}
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		http.Error(w, "corpo da requisição deve conter exatamente um objeto JSON", http.StatusBadRequest)
+		problem.Write(w, http.StatusBadRequest, "invalid_body", "corpo da requisição deve conter exatamente um objeto JSON")
 		return false
 	}
 	return true

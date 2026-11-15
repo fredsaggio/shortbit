@@ -1,10 +1,14 @@
 export class ApiError extends Error {
   readonly status: number
+  // Stable name of the error from the API's problem document, such as
+  // "password_too_short"; empty when the answer was not one.
+  readonly code: string
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, code = '') {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.code = code
   }
 }
 
@@ -17,14 +21,29 @@ function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1)
 }
 
-// The API answers errors with Portuguese plain text meant for people. Server
-// errors are replaced so internal wording never reaches the screen.
-export function errorMessageFor(status: number, body: string): string {
+// The API answers errors as RFC 9457 problem documents: detail is a
+// Portuguese message meant for people and code a stable name. Anything else,
+// such as a proxy's error page, is read as plain text.
+export function parseProblem(body: string): { detail: string; code: string } {
+  try {
+    const parsed: unknown = JSON.parse(body)
+    if (parsed && typeof parsed === 'object' && 'detail' in parsed && typeof parsed.detail === 'string') {
+      const code = 'code' in parsed && typeof parsed.code === 'string' ? parsed.code : ''
+      return { detail: parsed.detail, code }
+    }
+  } catch {
+    // Not JSON: fall through to plain text.
+  }
+  return { detail: body, code: '' }
+}
+
+// Server errors are replaced so internal wording never reaches the screen.
+export function errorMessageFor(status: number, detail: string): string {
   if (status >= 500) {
     return serverErrorMessage
   }
-  if (body) {
-    return capitalize(body)
+  if (detail) {
+    return capitalize(detail)
   }
   return status === 429 ? rateLimitMessage : fallbackMessage
 }
@@ -61,7 +80,8 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   const text = (await response.text()).trim()
 
   if (!response.ok) {
-    throw new ApiError(response.status, errorMessageFor(response.status, text))
+    const { detail, code } = parseProblem(text)
+    throw new ApiError(response.status, errorMessageFor(response.status, detail), code)
   }
 
   return (text ? JSON.parse(text) : undefined) as T

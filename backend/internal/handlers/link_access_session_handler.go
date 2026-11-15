@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"errors"
+	"github.com/fredsaggio/url-shortener/internal/problem"
 	"log/slog"
 	"net/http"
 
@@ -45,12 +46,12 @@ func (h *LinkAccessSessionHandler) RedirectPrivateLink(w http.ResponseWriter, r 
 	if err != nil {
 		switch {
 		case errors.Is(err, services.ErrURLNotFound):
-			http.Error(w, "url não encontrada", http.StatusNotFound)
+			problem.Write(w, http.StatusNotFound, "link_not_found", "url não encontrada")
 		case errors.Is(err, services.ErrIncorrectLinkPassword):
 			renderPrivateLinkPasswordPage(w, r, shortCode, "Senha incorreta. Tente novamente.", http.StatusUnauthorized)
 		default:
 			slog.ErrorContext(ctx, "create link access session failed", "error", err)
-			http.Error(w, "erro interno do servidor", http.StatusInternalServerError)
+			problem.Write(w, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
 		}
 		return
 	}

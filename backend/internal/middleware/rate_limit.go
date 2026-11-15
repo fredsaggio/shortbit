@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"github.com/fredsaggio/url-shortener/internal/problem"
 	"math"
 	"net/http"
 	"strconv"
@@ -72,7 +73,7 @@ func (l *RateLimiter) middlewareByKey(next http.Handler, key func(*http.Request)
 		allowed, retryAfter := l.Allow(key(r))
 		if !allowed {
 			w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
-			http.Error(w, "muitas requisições, tente novamente mais tarde", http.StatusTooManyRequests)
+			problem.Write(w, http.StatusTooManyRequests, "rate_limited", "muitas requisições, tente novamente mais tarde")
 			return
 		}
 

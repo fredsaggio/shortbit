@@ -3,6 +3,7 @@ package middleware_test
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/fredsaggio/url-shortener/internal/problem/problemtest"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -47,7 +48,7 @@ func TestRecoveryHandlesPanic(t *testing.T) {
 
 	expectedBody := "erro interno do servidor\n"
 
-	if response.Body.String() != expectedBody {
+	if problemtest.Text(response.Body.String()) != expectedBody {
 		t.Errorf(
 			"expected body %q, got %q",
 			expectedBody,

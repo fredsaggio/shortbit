@@ -6,7 +6,7 @@ export type FakeRequest = {
   body: unknown
 }
 
-type FakeResponse = { status: number; body?: unknown }
+type FakeResponse = { status: number; body?: unknown; code?: string }
 type Handler = FakeResponse | ((request: FakeRequest) => FakeResponse)
 
 // Routes are keyed as "METHOD /path?query". A request without a matching
@@ -27,8 +27,13 @@ export function fakeApi(routes: Record<string, Handler>) {
     }
 
     const response = typeof handler === 'function' ? handler(request) : handler
-    const payload =
-      response.body === undefined ? null : typeof response.body === 'string' ? response.body : JSON.stringify(response.body)
+    // A string body on an error is the message; send it the way the API
+    // does, inside a problem document.
+    if (response.status >= 400 && typeof response.body === 'string') {
+      const problem = { type: 'about:blank', title: '', status: response.status, detail: response.body, code: response.code ?? 'test_error' }
+      return new Response(JSON.stringify(problem), { status: response.status, headers: { 'Content-Type': 'application/problem+json' } })
+    }
+    const payload = response.body === undefined ? null : JSON.stringify(response.body)
     return new Response(payload, { status: response.status })
   })
 

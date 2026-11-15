@@ -81,9 +81,9 @@ paths:
         '503':
           description: Banco indisponível.
           content:
-            text/plain:
+            application/problem+json:
               schema:
-                type: string
+                $ref: '#/components/schemas/Problem'
   /registrations/password:
     post:
       tags: [Cadastro]
@@ -252,9 +252,9 @@ paths:
         '401':
           description: E-mail ou senha incorretos.
           content:
-            text/plain:
+            application/problem+json:
               schema:
-                type: string
+                $ref: '#/components/schemas/Problem'
         '413':
           $ref: '#/components/responses/BodyTooLarge'
         '429':
@@ -421,9 +421,9 @@ paths:
         '400':
           description: Senha atual incorreta, confirmação diferente, senha nova igual à atual, curta ou longa.
           content:
-            text/plain:
+            application/problem+json:
               schema:
-                type: string
+                $ref: '#/components/schemas/Problem'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '409':
@@ -634,9 +634,9 @@ paths:
         '404':
           description: Código inexistente ou link pertencente a outro usuário.
           content:
-            text/plain:
+            application/problem+json:
               schema:
-                type: string
+                $ref: '#/components/schemas/Problem'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
@@ -695,9 +695,9 @@ paths:
         '404':
           description: Código inexistente ou link pertencente a outro usuário.
           content:
-            text/plain:
+            application/problem+json:
               schema:
-                type: string
+                $ref: '#/components/schemas/Problem'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
@@ -728,9 +728,9 @@ paths:
         '404':
           description: Código inexistente ou link pertencente a outro usuário.
           content:
-            text/plain:
+            application/problem+json:
               schema:
-                type: string
+                $ref: '#/components/schemas/Problem'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
@@ -786,9 +786,9 @@ paths:
         '404':
           description: Código inexistente.
           content:
-            text/plain:
+            application/problem+json:
               schema:
-                type: string
+                $ref: '#/components/schemas/Problem'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
@@ -796,9 +796,9 @@ paths:
         '503':
           description: O clique não pôde ser registrado no RabbitMQ nem no PostgreSQL; nenhum redirect.
           content:
-            text/plain:
+            application/problem+json:
               schema:
-                type: string
+                $ref: '#/components/schemas/Problem'
   /{code}/access:
     post:
       tags: [Links]
@@ -862,9 +862,9 @@ paths:
         '404':
           description: Código inexistente ou link não privado.
           content:
-            text/plain:
+            application/problem+json:
               schema:
-                type: string
+                $ref: '#/components/schemas/Problem'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
@@ -904,6 +904,33 @@ components:
       in: cookie
       name: google_auth_code_verifier
   schemas:
+    Problem:
+      type: object
+      description: |
+        Erro no formato da RFC 9457 (Problem Details), enviado como
+        `application/problem+json`. `detail` é a mensagem em português para
+        mostrar às pessoas; `code` é um nome estável para o cliente decidir o
+        que fazer sem depender do texto. Os códigos estão em `docs/api.md`.
+      required: [type, title, status, detail, code]
+      properties:
+        type:
+          type: string
+          description: Sempre `about:blank`; o significado vem do status HTTP.
+          example: about:blank
+        title:
+          type: string
+          description: Frase padrão do status HTTP.
+          example: Bad Request
+        status:
+          type: integer
+          example: 400
+        detail:
+          type: string
+          example: senha muito curta
+        code:
+          type: string
+          pattern: '^[a-z_]+$'
+          example: password_too_short
     EmailRequest:
       type: object
       additionalProperties: false
@@ -1094,33 +1121,33 @@ components:
     BadRequest:
       description: Corpo JSON, URL, limite ou cursor inválido.
       content:
-        text/plain:
+        application/problem+json:
           schema:
-            type: string
+            $ref: '#/components/schemas/Problem'
     Unauthorized:
       description: Sessão ausente, inválida ou expirada.
       content:
-        text/plain:
+        application/problem+json:
           schema:
-            type: string
+            $ref: '#/components/schemas/Problem'
     Conflict:
       description: O e-mail já está em uso ou o cadastro não pode ser concluído por conflito.
       content:
-        text/plain:
+        application/problem+json:
           schema:
-            type: string
+            $ref: '#/components/schemas/Problem'
     Gone:
       description: Tentativa temporária ausente ou expirada.
       content:
-        text/plain:
+        application/problem+json:
           schema:
-            type: string
+            $ref: '#/components/schemas/Problem'
     BodyTooLarge:
-      description: Corpo da requisição acima do limite global.
+      description: Corpo da requisição acima do limite global. Hoje a leitura é cortada no limite e a resposta sai como `400 invalid_body`.
       content:
-        text/plain:
+        application/problem+json:
           schema:
-            type: string
+            $ref: '#/components/schemas/Problem'
     TooManyRequests:
       description: Limite global por IP ou limite específico de uma operação excedido.
       headers:
@@ -1130,12 +1157,12 @@ components:
             type: integer
             minimum: 1
       content:
-        text/plain:
+        application/problem+json:
           schema:
-            type: string
+            $ref: '#/components/schemas/Problem'
     InternalError:
       description: Falha interna do servidor.
       content:
-        text/plain:
+        application/problem+json:
           schema:
-            type: string
+            $ref: '#/components/schemas/Problem'

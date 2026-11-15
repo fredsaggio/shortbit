@@ -2,38 +2,44 @@ package handlers
 
 import (
 	"errors"
+	"net/http"
+
+	"github.com/fredsaggio/url-shortener/internal/problem"
 
 	"github.com/fredsaggio/url-shortener/internal/services"
 )
 
-var passwordPolicyMessages = []struct {
+var passwordPolicyErrors = []struct {
 	err     error
+	code    string
 	message string
 }{
-	{services.ErrPasswordTooShort, "senha muito curta"},
-	{services.ErrPasswordTooLong, "senha muito longa"},
-	{services.ErrPasswordMissingUppercase, "a senha precisa ter pelo menos uma letra maiúscula"},
-	{services.ErrPasswordMissingDigit, "a senha precisa ter pelo menos um número"},
-	{services.ErrPasswordMissingSpecial, "a senha precisa ter pelo menos um caractere especial"},
+	{services.ErrPasswordTooShort, "password_too_short", "senha muito curta"},
+	{services.ErrPasswordTooLong, "password_too_long", "senha muito longa"},
+	{services.ErrPasswordMissingUppercase, "password_missing_uppercase", "a senha precisa ter pelo menos uma letra maiúscula"},
+	{services.ErrPasswordMissingDigit, "password_missing_digit", "a senha precisa ter pelo menos um número"},
+	{services.ErrPasswordMissingSpecial, "password_missing_special", "a senha precisa ter pelo menos um caractere especial"},
 }
 
 // isPasswordPolicyError reports whether err is a rule of the account password
 // policy, shared by sign-up, password reset and password change.
 func isPasswordPolicyError(err error) bool {
-	_, ok := passwordPolicyMessageFor(err)
+	_, _, ok := passwordPolicyError(err)
 	return ok
 }
 
-func passwordPolicyMessage(err error) string {
-	message, _ := passwordPolicyMessageFor(err)
-	return message
-}
-
-func passwordPolicyMessageFor(err error) (string, bool) {
-	for _, rule := range passwordPolicyMessages {
+// passwordPolicyError returns the problem code and message of a password
+// policy rule.
+func passwordPolicyError(err error) (code, message string, ok bool) {
+	for _, rule := range passwordPolicyErrors {
 		if errors.Is(err, rule.err) {
-			return rule.message, true
+			return rule.code, rule.message, true
 		}
 	}
-	return "", false
+	return "", "", false
+}
+
+func writePasswordPolicyError(w http.ResponseWriter, err error) {
+	code, message, _ := passwordPolicyError(err)
+	problem.Write(w, http.StatusBadRequest, code, message)
 }

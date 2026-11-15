@@ -4,6 +4,7 @@ package integration_test
 
 import (
 	"encoding/json"
+	"github.com/fredsaggio/url-shortener/internal/problem/problemtest"
 	"net/http"
 	"testing"
 	"time"
@@ -84,8 +85,12 @@ func TestAccountIntegration(t *testing.T) {
 		response := performJSONRequestWithCookie(t, router, http.MethodPost, "/me/password",
 			`{"current_password":"errada-123","new_password":"Nova-senha-1","new_password_confirmation":"Nova-senha-1"}`, laptop)
 		defer response.Body.Close()
-		if response.StatusCode != http.StatusBadRequest || readResponseBody(t, response) != "senha atual incorreta\n" {
-			t.Fatalf("status = %d, want 400 senha atual incorreta", response.StatusCode)
+		details, ok := problemtest.Decode(readResponseBody(t, response))
+		if response.StatusCode != http.StatusBadRequest || !ok || details.Code != "incorrect_current_password" || details.Detail != "senha atual incorreta" {
+			t.Fatalf("response = %d %+v, want 400 incorrect_current_password", response.StatusCode, details)
+		}
+		if got := response.Header.Get("Content-Type"); got != "application/problem+json" {
+			t.Errorf("Content-Type = %q, want application/problem+json", got)
 		}
 		readAccount(phone)
 	})

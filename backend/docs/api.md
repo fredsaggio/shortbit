@@ -17,10 +17,63 @@ e em [`docs/openapi.yaml`](openapi.yaml). Esta página Markdown também registra
 
 - JSON desconhecido é rejeitado nos endpoints que recebem body.
 - O body deve conter exatamente um objeto JSON.
-- Erros atuais são enviados como `text/plain; charset=utf-8` em português.
+- Erros seguem a RFC 9457 (Problem Details): veja [Erros](#erros).
 - Autenticação usa o cookie `user_session`.
 - `204 No Content` não possui body.
 - Todos os requests passam por limite global de body, rate limit, recovery, access log e request ID.
+
+## Erros
+
+Toda resposta de erro da API vem como `application/problem+json`, no formato da [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457):
+
+```json
+{
+  "type": "about:blank",
+  "title": "Bad Request",
+  "status": 400,
+  "detail": "senha muito curta",
+  "code": "password_too_short"
+}
+```
+
+- `detail` é a mensagem em português para mostrar às pessoas. Pode mudar de texto.
+- `code` é estável: o cliente decide o que fazer por ele, nunca pelo texto.
+- `type` é sempre `about:blank`, então `title` é a frase padrão do status HTTP.
+- Em erros `5xx`, o `detail` é genérico; o motivo fica só no log.
+
+As exceções são as páginas para o navegador: o formulário de senha de link privado (`GET /{code}` e `POST /{code}/access`) responde HTML, e o callback do Google redireciona para o frontend.
+
+| `code` | Status | Quando |
+|---|---|---|
+| `invalid_body` | 400 | Corpo ausente, malformado, com campo desconhecido, com mais de um objeto JSON ou acima do limite de tamanho |
+| `invalid_email` | 400 | Email inválido |
+| `invalid_cookie` | 400 | Cookie de sessão ou de recuperação malformado |
+| `invalid_limit`, `invalid_cursor`, `invalid_query` | 400 | Parâmetros de listagem inválidos |
+| `password_too_short`, `password_too_long`, `password_missing_uppercase`, `password_missing_digit`, `password_missing_special` | 400 | Senha da conta fora da política |
+| `password_confirmation_mismatch` | 400 | Senha e confirmação diferentes |
+| `same_password` | 400 | Senha nova igual à atual |
+| `incorrect_current_password` | 400 | Senha atual errada na troca de senha |
+| `incorrect_password` | 400 | Senha errada ao excluir a conta |
+| `account_email_mismatch` | 400 | Email errado ao excluir uma conta só Google |
+| `full_name_required`, `full_name_too_long`, `invalid_full_name` | 400 | Nome completo inválido |
+| `invalid_verification_code` | 400 | Código de cadastro ou recuperação errado |
+| `verification_code_expired` | 400 | Código vencido; peça outro |
+| `invalid_url`, `url_too_long`, `url_points_to_short_domain` | 400 | Destino do link inválido |
+| `invalid_visibility` | 400 | Visibilidade diferente de `public` e `private` |
+| `unexpected_link_password` | 400 | Senha enviada para link público |
+| `link_password_required`, `link_password_too_short`, `link_password_too_long` | 400 | Senha de link privado ausente ou fora do tamanho |
+| `empty_update` | 400 | Edição de link sem nenhum campo |
+| `authentication_required` | 401 | Sessão ausente, inválida ou vencida |
+| `invalid_credentials` | 401 | Email ou senha incorretos no login |
+| `link_not_found` | 404 | Link inexistente ou de outra pessoa |
+| `email_already_registered` | 409 | Email já cadastrado |
+| `account_has_no_password` | 409 | Troca de senha numa conta só Google |
+| `registration_unavailable`, `password_reset_unavailable` | 410 | Tentativa de cadastro ou recuperação ausente ou vencida |
+| `rate_limited` | 429 | Limite de requisições ou de tentativas; veja `Retry-After` quando vier |
+| `attempt_locked` | 429 | Muitos códigos errados; aguarde antes de tentar de novo |
+| `resend_too_soon` | 429 | Novo código pedido cedo demais |
+| `internal_error` | 500 | Falha interna |
+| `service_unavailable` | 503 | Banco ou fila de cliques indisponível |
 
 ## Resumo de rotas
 
