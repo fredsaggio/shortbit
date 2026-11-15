@@ -20,6 +20,7 @@ Esta pasta explica como o sistema funciona. Ela complementa os documentos da rai
 | [Modelo de dados](data-model.md) | Quais tabelas existem e como se relacionam? |
 | [Glossário](glossary.md) | O que significam os códigos, tokens e termos usados no projeto? |
 | [Desenvolvimento](development.md) | Como executar, migrar e testar o projeto localmente? |
+| [Deploy](deployment.md) | Como o shortbit vai ao ar de graça e como configurar cada serviço? |
 | [Decisões](decisions/README.md) | Onde registrar decisões arquiteturais e suas consequências? |
 
 ## Legenda
