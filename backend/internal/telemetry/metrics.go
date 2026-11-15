@@ -64,6 +64,8 @@ func UseMeterProvider(provider metric.MeterProvider) {
 		metric.WithUnit("{event}"),
 		metric.WithDescription("Security events, such as failed logins and rate limiting, by event name."))
 
+	zeroCounters(redirects, cacheLookups, published, processed, security)
+
 	current.Store(&instruments{
 		httpDuration:         httpDuration,
 		redirects:            redirects,
@@ -179,5 +181,31 @@ func knownMethod(method string) string {
 		return method
 	default:
 		return "_OTHER"
+	}
+}
+
+// zeroCounters publishes every fixed combination at 0 as soon as the process
+// starts. Without it, a counter is born at 1 with its first event after each
+// restart, and increase() in Prometheus cannot tell it came from 0: on a site
+// with little traffic, most of the first events would vanish from the
+// dashboard.
+func zeroCounters(redirects, cacheLookups, published, processed, security metric.Int64Counter) {
+	ctx := context.Background()
+	for _, result := range []string{RedirectFound, RedirectPasswordRequired, RedirectNotFound, RedirectFailed} {
+		for _, source := range []string{"link", "qr"} {
+			redirects.Add(ctx, 0, metric.WithAttributes(attribute.String("result", result), attribute.String("source", source)))
+		}
+	}
+	for _, result := range []string{CacheHit, CacheMiss, CacheError} {
+		cacheLookups.Add(ctx, 0, metric.WithAttributes(attribute.String("result", result)))
+	}
+	for _, outcome := range []string{ClickQueued, ClickSynchronous, ClickNotRecorded} {
+		published.Add(ctx, 0, metric.WithAttributes(attribute.String("outcome", outcome)))
+	}
+	for _, outcome := range []string{ClickCounted, ClickDuplicate, ClickDiscarded, ClickFailed, ClickDeadLettered} {
+		processed.Add(ctx, 0, metric.WithAttributes(attribute.String("outcome", outcome)))
+	}
+	for _, event := range securityEventNames {
+		security.Add(ctx, 0, metric.WithAttributes(attribute.String("event", event)))
 	}
 }

@@ -169,3 +169,30 @@ func TestRoutePath(t *testing.T) {
 		}
 	}
 }
+
+func TestCountersStartAtZeroForEveryFixedCombination(t *testing.T) {
+	rm := collect(t)()
+
+	for name, want := range map[string]int{
+		"shortbit.redirects":                 8,
+		"shortbit.destination_cache.lookups": 3,
+		"shortbit.click_events.published":    3,
+		"shortbit.click_events.processed":    5,
+		"shortbit.security_events":           9,
+	} {
+		m, ok := find(rm, name)
+		if !ok {
+			t.Errorf("%s not published before any event", name)
+			continue
+		}
+		points := m.Data.(metricdata.Sum[int64]).DataPoints
+		if len(points) != want {
+			t.Errorf("%s has %d series at start, want %d", name, len(points), want)
+		}
+		for _, point := range points {
+			if point.Value != 0 {
+				t.Errorf("%s %v starts at %d, want 0", name, point.Attributes, point.Value)
+			}
+		}
+	}
+}

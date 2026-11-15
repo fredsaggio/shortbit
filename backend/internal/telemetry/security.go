@@ -21,6 +21,12 @@ const (
 	EventAccountDeleted        = "account_deleted"
 )
 
+// securityEventNames lists every event, so the counters start at 0.
+var securityEventNames = []string{
+	EventLoginFailed, EventGoogleLoginFailed, EventRateLimited, EventLinkPasswordFailed, EventVerificationFailed,
+	EventPasswordChanged, EventPasswordResetComplete, EventAccountCreated, EventAccountDeleted,
+}
+
 // SecurityEvent logs the event and counts it. attrs must follow the log
 // policy (backend/docs/development.md): internal IDs and fixed words only,
 // never an email, IP, password, token or code.
