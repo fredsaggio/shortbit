@@ -262,15 +262,7 @@ export function HomePage() {
   return (
     <>
       <section className="relative overflow-hidden bg-navy text-white">
-        {/* Living background: three soft lights drift without end and lag
-            behind the scroll; the floating links drift the other way. */}
-        <Parallax speed={0.35} aria-hidden="true" className="pointer-events-none absolute inset-0">
-          <div className="absolute -top-40 left-1/2 h-[480px] w-[900px] -translate-x-1/2">
-            <div className="absolute inset-0 rounded-full bg-action/25 blur-3xl motion-safe:animate-aurora-a" />
-          </div>
-          <div className="absolute top-24 -left-32 h-[360px] w-[520px] rounded-full bg-brand/15 blur-3xl motion-safe:animate-aurora-b" />
-          <div className="absolute -right-24 bottom-0 h-[420px] w-[560px] rounded-full bg-action/20 blur-3xl motion-safe:animate-aurora-c" />
-        </Parallax>
+        {/* Solid navy background; the floating links drift against the scroll. */}
         <Parallax speed={-0.12} aria-hidden="true" className="pointer-events-none absolute inset-0">
           <FloatingLinks />
         </Parallax>
