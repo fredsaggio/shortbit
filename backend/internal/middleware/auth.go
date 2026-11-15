@@ -22,19 +22,19 @@ func Authenticator(auth AuthService) func(http.Handler) http.Handler {
 			cookie, err := r.Cookie("user_session")
 			ctx := r.Context()
 			if err != nil {
-				problem.Write(w, http.StatusUnauthorized, "authentication_required", "não autenticado")
+				problem.Write(w, r, http.StatusUnauthorized, "authentication_required", "não autenticado")
 				return
 			}
 
 			userID, err := auth.Authenticate(ctx, cookie.Value)
 			if err != nil {
 				if errors.Is(err, services.ErrUnauthenticated) {
-					problem.Write(w, http.StatusUnauthorized, "authentication_required", "não autenticado")
+					problem.Write(w, r, http.StatusUnauthorized, "authentication_required", "não autenticado")
 					return
 				}
 
 				slog.ErrorContext(ctx, "authenticate session failed", "error", err)
-				problem.Write(w, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
+				problem.Write(w, r, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
 				return
 			}
 			ctx = ctxval.ContextWithUserID(ctx, userID)

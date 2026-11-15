@@ -22,7 +22,7 @@ func Recovery(next http.Handler) http.Handler {
 				"stack", string(debug.Stack()),
 			)
 
-			problem.Write(w, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
+			problem.Write(w, r, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
 		}()
 		next.ServeHTTP(w, r)
 	})

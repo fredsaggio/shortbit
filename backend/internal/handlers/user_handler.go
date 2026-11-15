@@ -62,12 +62,12 @@ func (h *UserHandler) StartPasswordRegistration(w http.ResponseWriter, r *http.R
 	decoder.DisallowUnknownFields()
 
 	if err := decoder.Decode(&req); err != nil {
-		problem.Write(w, http.StatusBadRequest, "invalid_body", "corpo da requisição inválido")
+		problem.Write(w, r, http.StatusBadRequest, "invalid_body", "corpo da requisição inválido")
 		return
 	}
 
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		problem.Write(w, http.StatusBadRequest, "invalid_body", "corpo da requisição deve conter exatamente um objeto JSON")
+		problem.Write(w, r, http.StatusBadRequest, "invalid_body", "corpo da requisição deve conter exatamente um objeto JSON")
 		return
 	}
 
@@ -75,7 +75,7 @@ func (h *UserHandler) StartPasswordRegistration(w http.ResponseWriter, r *http.R
 	allowed, retryAfter := h.emailRateLimiter.Allow(normalizedEmail)
 	if !allowed {
 		w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
-		problem.Write(w, http.StatusTooManyRequests, "rate_limited", "muitas solicitações para este email, tente novamente mais tarde")
+		problem.Write(w, r, http.StatusTooManyRequests, "rate_limited", "muitas solicitações para este email, tente novamente mais tarde")
 		return
 	}
 
@@ -84,20 +84,20 @@ func (h *UserHandler) StartPasswordRegistration(w http.ResponseWriter, r *http.R
 	if err != nil {
 		switch {
 		case errors.Is(err, services.ErrInvalidEmail):
-			problem.Write(w, http.StatusBadRequest, "invalid_email", "email inválido")
+			problem.Write(w, r, http.StatusBadRequest, "invalid_email", "email inválido")
 
 		case isPasswordPolicyError(err):
-			writePasswordPolicyError(w, err)
+			writePasswordPolicyError(w, r, err)
 
 		case errors.Is(err, services.ErrFullNameRequired), errors.Is(err, services.ErrFullNameTooLong), errors.Is(err, services.ErrInvalidFullName):
-			writeFullNameError(w, err)
+			writeFullNameError(w, r, err)
 
 		case errors.Is(err, services.ErrEmailAlreadyExists):
-			problem.Write(w, http.StatusConflict, "email_already_registered", "email já está em uso")
+			problem.Write(w, r, http.StatusConflict, "email_already_registered", "email já está em uso")
 
 		default:
 			slog.ErrorContext(ctx, "start password registration failed", "error", err)
-			problem.Write(w, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
+			problem.Write(w, r, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
 		}
 		return
 	}
@@ -114,12 +114,12 @@ func (h *UserHandler) ConfirmPasswordRegistration(w http.ResponseWriter, r *http
 	decoder.DisallowUnknownFields()
 
 	if err := decoder.Decode(&req); err != nil {
-		problem.Write(w, http.StatusBadRequest, "invalid_body", "corpo da requisição inválido")
+		problem.Write(w, r, http.StatusBadRequest, "invalid_body", "corpo da requisição inválido")
 		return
 	}
 
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		problem.Write(w, http.StatusBadRequest, "invalid_body", "corpo da requisição deve conter exatamente um objeto JSON")
+		problem.Write(w, r, http.StatusBadRequest, "invalid_body", "corpo da requisição deve conter exatamente um objeto JSON")
 		return
 	}
 
@@ -127,7 +127,7 @@ func (h *UserHandler) ConfirmPasswordRegistration(w http.ResponseWriter, r *http
 
 	if err != nil {
 		clearPasswordRegistrationCookie(w, h.cookieSecure)
-		problem.Write(w, http.StatusGone, "registration_unavailable", "tentativa de cadastro ausente ou expirada")
+		problem.Write(w, r, http.StatusGone, "registration_unavailable", "tentativa de cadastro ausente ou expirada")
 		return
 	}
 
@@ -137,20 +137,20 @@ func (h *UserHandler) ConfirmPasswordRegistration(w http.ResponseWriter, r *http
 		switch {
 		case errors.Is(err, services.ErrRegistrationAttemptUnavailable):
 			clearPasswordRegistrationCookie(w, h.cookieSecure)
-			problem.Write(w, http.StatusGone, "registration_unavailable", "tentativa de cadastro ausente ou expirada")
+			problem.Write(w, r, http.StatusGone, "registration_unavailable", "tentativa de cadastro ausente ou expirada")
 
 		case errors.Is(err, services.ErrRegistrationAttemptLocked):
-			problem.Write(w, http.StatusTooManyRequests, "attempt_locked", "aguarde antes de tentar novamente")
+			problem.Write(w, r, http.StatusTooManyRequests, "attempt_locked", "aguarde antes de tentar novamente")
 
 		case errors.Is(err, services.ErrVerificationCodeExpired):
-			problem.Write(w, http.StatusBadRequest, "verification_code_expired", "código expirado; solicite um novo código")
+			problem.Write(w, r, http.StatusBadRequest, "verification_code_expired", "código expirado; solicite um novo código")
 
 		case errors.Is(err, services.ErrVerificationCodeInvalid):
-			problem.Write(w, http.StatusBadRequest, "invalid_verification_code", "código de confirmação inválido")
+			problem.Write(w, r, http.StatusBadRequest, "invalid_verification_code", "código de confirmação inválido")
 
 		case errors.Is(err, services.ErrEmailAlreadyExists):
 			clearPasswordRegistrationCookie(w, h.cookieSecure)
-			problem.Write(w, http.StatusConflict, "email_already_registered", "email já está em uso; faça login")
+			problem.Write(w, r, http.StatusConflict, "email_already_registered", "email já está em uso; faça login")
 
 		default:
 			slog.ErrorContext(
@@ -159,7 +159,7 @@ func (h *UserHandler) ConfirmPasswordRegistration(w http.ResponseWriter, r *http
 				"error",
 				err,
 			)
-			problem.Write(w, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
+			problem.Write(w, r, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
 		}
 
 		return
@@ -187,7 +187,7 @@ func (h *UserHandler) ResendPasswordRegistrationCode(w http.ResponseWriter, r *h
 
 	if err != nil {
 		clearPasswordRegistrationCookie(w, h.cookieSecure)
-		problem.Write(w, http.StatusGone, "registration_unavailable", "tentativa de cadastro ausente ou expirada")
+		problem.Write(w, r, http.StatusGone, "registration_unavailable", "tentativa de cadastro ausente ou expirada")
 		return
 	}
 
@@ -197,13 +197,13 @@ func (h *UserHandler) ResendPasswordRegistrationCode(w http.ResponseWriter, r *h
 		switch {
 		case errors.Is(err, services.ErrRegistrationAttemptUnavailable):
 			clearPasswordRegistrationCookie(w, h.cookieSecure)
-			problem.Write(w, http.StatusGone, "registration_unavailable", "tentativa de cadastro ausente ou expirada")
+			problem.Write(w, r, http.StatusGone, "registration_unavailable", "tentativa de cadastro ausente ou expirada")
 
 		case errors.Is(err, services.ErrRegistrationAttemptLocked):
-			problem.Write(w, http.StatusTooManyRequests, "resend_too_soon", "aguarde antes de solicitar outro código")
+			problem.Write(w, r, http.StatusTooManyRequests, "resend_too_soon", "aguarde antes de solicitar outro código")
 
 		case errors.Is(err, services.ErrRegistrationCodeResendTooSoon):
-			problem.Write(w, http.StatusTooManyRequests, "resend_too_soon", "aguarde 30 segundos antes de solicitar outro código")
+			problem.Write(w, r, http.StatusTooManyRequests, "resend_too_soon", "aguarde 30 segundos antes de solicitar outro código")
 
 		default:
 			slog.ErrorContext(
@@ -212,7 +212,7 @@ func (h *UserHandler) ResendPasswordRegistrationCode(w http.ResponseWriter, r *h
 				"error",
 				err,
 			)
-			problem.Write(w, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
+			problem.Write(w, r, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
 		}
 		return
 	}

@@ -53,7 +53,7 @@ func (h *GoogleAuthHandler) Start(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		slog.ErrorContext(ctx, "generate Google authorization values failed", "error", err)
-		problem.Write(w, http.StatusInternalServerError, "internal_error", "erro interno no servidor")
+		problem.Write(w, r, http.StatusInternalServerError, "internal_error", "erro interno no servidor")
 		return
 	}
 

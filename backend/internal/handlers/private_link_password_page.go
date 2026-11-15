@@ -23,7 +23,7 @@ func renderPrivateLinkPasswordPage(w http.ResponseWriter, r *http.Request, short
 	var body bytes.Buffer
 	if err := privateLinkPasswordTemplate.Execute(&body, privateLinkPasswordPageData{ShortCode: shortCode, Error: message}); err != nil {
 		slog.ErrorContext(r.Context(), "render private link password page failed", "error", err)
-		problem.Write(w, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
+		problem.Write(w, r, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
 		return
 	}
 

@@ -149,7 +149,7 @@ func (srv *Server) registerRoutes(mux *http.ServeMux) {
 		defer cancel()
 
 		if err := srv.database.Ping(ctx); err != nil {
-			problem.Write(w, http.StatusServiceUnavailable, "service_unavailable", "serviço indisponível")
+			problem.Write(w, r, http.StatusServiceUnavailable, "service_unavailable", "serviço indisponível")
 			return
 		}
 

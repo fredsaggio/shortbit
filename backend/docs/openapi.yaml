@@ -911,6 +911,8 @@ components:
         `application/problem+json`. `detail` é a mensagem em português para
         mostrar às pessoas; `code` é um nome estável para o cliente decidir o
         que fazer sem depender do texto. Os códigos estão em `docs/api.md`.
+        Uma navegação do navegador (`Accept` com `text/html`) recebe, no
+        lugar, uma página HTML com a mensagem para pessoas.
       required: [type, title, status, detail, code]
       properties:
         type:

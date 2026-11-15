@@ -50,7 +50,7 @@ func TestValidationErrorsCarryStableCodes(t *testing.T) {
 	}
 	for err, want := range names {
 		recorder := httptest.NewRecorder()
-		writeFullNameError(recorder, err)
+		writeFullNameError(recorder, httptest.NewRequest("PATCH", "/me", nil), err)
 		details, ok := problemtest.Decode(recorder.Body.String())
 		if !ok || details.Code != want || details.Status != 400 {
 			t.Errorf("writeFullNameError(%v) = %+v, want code %q", err, details, want)

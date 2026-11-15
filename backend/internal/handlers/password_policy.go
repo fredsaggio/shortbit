@@ -39,7 +39,7 @@ func passwordPolicyError(err error) (code, message string, ok bool) {
 	return "", "", false
 }
 
-func writePasswordPolicyError(w http.ResponseWriter, err error) {
+func writePasswordPolicyError(w http.ResponseWriter, r *http.Request, err error) {
 	code, message, _ := passwordPolicyError(err)
-	problem.Write(w, http.StatusBadRequest, code, message)
+	problem.Write(w, r, http.StatusBadRequest, code, message)
 }

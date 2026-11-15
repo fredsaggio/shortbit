@@ -73,7 +73,7 @@ func (l *RateLimiter) middlewareByKey(next http.Handler, key func(*http.Request)
 		allowed, retryAfter := l.Allow(key(r))
 		if !allowed {
 			w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
-			problem.Write(w, http.StatusTooManyRequests, "rate_limited", "muitas requisições, tente novamente mais tarde")
+			problem.Write(w, r, http.StatusTooManyRequests, "rate_limited", "muitas requisições, tente novamente mais tarde")
 			return
 		}
 

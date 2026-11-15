@@ -41,7 +41,9 @@ Toda resposta de erro da API vem como `application/problem+json`, no formato da 
 - `type` é sempre `about:blank`, então `title` é a frase padrão do status HTTP.
 - Em erros `5xx`, o `detail` é genérico; o motivo fica só no log.
 
-As exceções são as páginas para o navegador: o formulário de senha de link privado (`GET /{code}` e `POST /{code}/access`) responde HTML, e o callback do Google redireciona para o frontend.
+**Pessoas nunca veem esse JSON.** Quando a requisição vem de uma navegação do navegador (o `Accept` contém `text/html`, como ao abrir um link curto apagado), o mesmo erro sai como uma página HTML com a mensagem escrita para pessoas: "Link não encontrado", "Muitas tentativas seguidas", "Algo deu errado"... Erros `5xx` nunca mostram o motivo. A resposta traz `Vary: Accept`. O app web pede `application/json` e recebe o documento; ele mesmo escreve as mensagens na tela.
+
+O formulário de senha de link privado (`GET /{code}` e `POST /{code}/access`) também é uma página HTML, e o callback do Google redireciona para o frontend.
 
 | `code` | Status | Quando |
 |---|---|---|

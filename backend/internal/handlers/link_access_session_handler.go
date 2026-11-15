@@ -46,12 +46,12 @@ func (h *LinkAccessSessionHandler) RedirectPrivateLink(w http.ResponseWriter, r 
 	if err != nil {
 		switch {
 		case errors.Is(err, services.ErrURLNotFound):
-			problem.Write(w, http.StatusNotFound, "link_not_found", "url não encontrada")
+			problem.Write(w, r, http.StatusNotFound, "link_not_found", "url não encontrada")
 		case errors.Is(err, services.ErrIncorrectLinkPassword):
 			renderPrivateLinkPasswordPage(w, r, shortCode, "Senha incorreta. Tente novamente.", http.StatusUnauthorized)
 		default:
 			slog.ErrorContext(ctx, "create link access session failed", "error", err)
-			problem.Write(w, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
+			problem.Write(w, r, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
 		}
 		return
 	}

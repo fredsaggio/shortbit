@@ -36,11 +36,11 @@ func (h *PasswordResetHandler) Start(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&request); err != nil {
-		problem.Write(w, http.StatusBadRequest, "invalid_body", "corpo da requisição inválido")
+		problem.Write(w, r, http.StatusBadRequest, "invalid_body", "corpo da requisição inválido")
 		return
 	}
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		problem.Write(w, http.StatusBadRequest, "invalid_body", "corpo da requisição deve conter exatamente um objeto JSON")
+		problem.Write(w, r, http.StatusBadRequest, "invalid_body", "corpo da requisição deve conter exatamente um objeto JSON")
 		return
 	}
 
@@ -48,7 +48,7 @@ func (h *PasswordResetHandler) Start(w http.ResponseWriter, r *http.Request) {
 	allowed, retryAfter := h.emailRateLimiter.Allow(normalizedEmail)
 	if !allowed {
 		w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
-		problem.Write(w, http.StatusTooManyRequests, "rate_limited", "muitas solicitações para este email, tente novamente mais tarde")
+		problem.Write(w, r, http.StatusTooManyRequests, "rate_limited", "muitas solicitações para este email, tente novamente mais tarde")
 		return
 	}
 
@@ -56,18 +56,18 @@ func (h *PasswordResetHandler) Start(w http.ResponseWriter, r *http.Request) {
 	if cookie, err := r.Cookie(passwordResetCookieName); err == nil {
 		currentToken = cookie.Value
 	} else if !errors.Is(err, http.ErrNoCookie) {
-		problem.Write(w, http.StatusBadRequest, "invalid_cookie", "cookie de recuperação inválido")
+		problem.Write(w, r, http.StatusBadRequest, "invalid_cookie", "cookie de recuperação inválido")
 		return
 	}
 
 	result, err := h.service.Start(r.Context(), normalizedEmail, currentToken)
 	if err != nil {
 		if errors.Is(err, services.ErrInvalidEmail) {
-			problem.Write(w, http.StatusBadRequest, "invalid_email", "email inválido")
+			problem.Write(w, r, http.StatusBadRequest, "invalid_email", "email inválido")
 			return
 		}
 		slog.ErrorContext(r.Context(), "start password reset failed", "error", err)
-		problem.Write(w, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
+		problem.Write(w, r, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
 		return
 	}
 
@@ -84,22 +84,22 @@ func (h *PasswordResetHandler) Confirm(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&request); err != nil {
-		problem.Write(w, http.StatusBadRequest, "invalid_body", "corpo da requisição inválido")
+		problem.Write(w, r, http.StatusBadRequest, "invalid_body", "corpo da requisição inválido")
 		return
 	}
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		problem.Write(w, http.StatusBadRequest, "invalid_body", "corpo da requisição deve conter exatamente um objeto JSON")
+		problem.Write(w, r, http.StatusBadRequest, "invalid_body", "corpo da requisição deve conter exatamente um objeto JSON")
 		return
 	}
 	if request.Password != request.PasswordConfirmation {
-		problem.Write(w, http.StatusBadRequest, "password_confirmation_mismatch", "as senhas não coincidem")
+		problem.Write(w, r, http.StatusBadRequest, "password_confirmation_mismatch", "as senhas não coincidem")
 		return
 	}
 
 	token, err := requiredCookieValue(r, passwordResetCookieName)
 	if err != nil {
 		clearPasswordResetCookie(w, h.cookieSecure)
-		problem.Write(w, http.StatusGone, "password_reset_unavailable", "tentativa de recuperação ausente ou expirada")
+		problem.Write(w, r, http.StatusGone, "password_reset_unavailable", "tentativa de recuperação ausente ou expirada")
 		return
 	}
 
@@ -107,18 +107,18 @@ func (h *PasswordResetHandler) Confirm(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, services.ErrPasswordResetAttemptUnavailable):
 			clearPasswordResetCookie(w, h.cookieSecure)
-			problem.Write(w, http.StatusGone, "password_reset_unavailable", "tentativa de recuperação ausente ou expirada")
+			problem.Write(w, r, http.StatusGone, "password_reset_unavailable", "tentativa de recuperação ausente ou expirada")
 		case errors.Is(err, services.ErrPasswordResetAttemptLocked):
-			problem.Write(w, http.StatusTooManyRequests, "attempt_locked", "aguarde antes de tentar novamente")
+			problem.Write(w, r, http.StatusTooManyRequests, "attempt_locked", "aguarde antes de tentar novamente")
 		case errors.Is(err, services.ErrPasswordResetCodeExpired):
-			problem.Write(w, http.StatusBadRequest, "verification_code_expired", "código expirado; solicite um novo código")
+			problem.Write(w, r, http.StatusBadRequest, "verification_code_expired", "código expirado; solicite um novo código")
 		case errors.Is(err, services.ErrPasswordResetCodeInvalid):
-			problem.Write(w, http.StatusBadRequest, "invalid_verification_code", "código de recuperação inválido")
+			problem.Write(w, r, http.StatusBadRequest, "invalid_verification_code", "código de recuperação inválido")
 		case isPasswordPolicyError(err):
-			writePasswordPolicyError(w, err)
+			writePasswordPolicyError(w, r, err)
 		default:
 			slog.ErrorContext(r.Context(), "confirm password reset failed", "error", err)
-			problem.Write(w, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
+			problem.Write(w, r, http.StatusInternalServerError, "internal_error", "erro interno do servidor")
 		}
 		return
 	}
