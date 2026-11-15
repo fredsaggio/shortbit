@@ -15,6 +15,8 @@ Element.prototype.hasPointerCapture ??= () => false
 Element.prototype.setPointerCapture ??= () => {}
 Element.prototype.releasePointerCapture ??= () => {}
 Element.prototype.scrollIntoView ??= () => {}
+// jsdom logs "not implemented" for scrolling; the app scrolls to the top on navigation.
+window.scrollTo = (() => {}) as typeof window.scrollTo
 
 window.matchMedia ??= (query: string) =>
   ({

@@ -5,9 +5,9 @@ import { useCountUp, useInView } from '../../motion.ts'
 const bars = [28, 46, 38, 60, 52, 76, 100]
 const exampleClicks = 1284
 
-// A week of clicks that grows bar by bar when it scrolls into view.
+// A week of clicks that grows bar by bar each time it scrolls into view.
 export function ClickBars() {
-  const [ref, inView] = useInView<HTMLDivElement>({ threshold: 0.5 })
+  const [ref, inView] = useInView<HTMLDivElement>({ once: false, threshold: 0.5 })
   const clicks = useCountUp(exampleClicks, inView, 1400)
 
   return (

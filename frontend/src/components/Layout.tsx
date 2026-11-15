@@ -1,6 +1,6 @@
 import { ChevronDown, LayoutDashboard, LogOut, Menu, UserRound } from 'lucide-react'
-import { useState } from 'react'
-import { Link, NavLink, Outlet, useNavigate } from 'react-router'
+import { useEffect, useState } from 'react'
+import { Link, NavLink, Outlet, useLocation, useNavigate, useNavigationType } from 'react-router'
 import type { Account } from '../api/types.ts'
 import { useAuth } from '../auth/AuthContext.ts'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -16,6 +16,8 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 import { cn } from '@/lib/utils'
 import { buttonSizes, buttonTones } from './buttonStyles.ts'
 import { Logo } from './Logo.tsx'
+import { Magnetic } from './motion/Magnetic.tsx'
+import { ScrollProgress } from './motion/ScrollProgress.tsx'
 
 const currentYear = new Date().getFullYear()
 
@@ -137,6 +139,15 @@ function MobileMenu({ signedIn, onSignOut }: { signedIn: boolean; onSignOut: () 
 export function Layout() {
   const { state, signOut } = useAuth()
   const navigate = useNavigate()
+  const { pathname } = useLocation()
+  const navigationType = useNavigationType()
+
+  // A new page starts at the top; going back keeps where the browser left it.
+  useEffect(() => {
+    if (navigationType !== 'POP') {
+      window.scrollTo({ top: 0 })
+    }
+  }, [pathname, navigationType])
 
   async function handleSignOut() {
     try {
@@ -157,6 +168,7 @@ export function Layout() {
       </a>
 
       <header className="sticky top-0 z-40 border-b border-white/10 bg-navy">
+        <ScrollProgress />
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
           <Link to="/" aria-label="shortbit, página inicial" className="rounded-md">
             <Logo tone="light" />
@@ -178,9 +190,11 @@ export function Layout() {
                 <NavLink to="/entrar" className={navLinkClass}>
                   Entrar
                 </NavLink>
-                <Link to="/cadastro" className={cn('inline-flex items-center rounded-md font-semibold transition-colors', buttonSizes.sm, 'h-10 px-4', buttonTones.onDark)}>
-                  Criar conta grátis
-                </Link>
+                <Magnetic strength={4}>
+                  <Link to="/cadastro" className={cn('inline-flex items-center rounded-md font-semibold transition-colors', buttonSizes.sm, 'h-10 px-4', buttonTones.onDark)}>
+                    Criar conta grátis
+                  </Link>
+                </Magnetic>
               </div>
             ) : null}
             {state.status !== 'loading' && <MobileMenu signedIn={state.status === 'authenticated'} onSignOut={handleSignOut} />}
@@ -189,7 +203,10 @@ export function Layout() {
       </header>
 
       <main id="conteudo" className="flex-1">
-        <Outlet />
+        {/* Keyed by path, so each page enters with a short fade and rise. */}
+        <div key={pathname} className="motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300">
+          <Outlet />
+        </div>
       </main>
 
       <footer className="bg-navy text-navy-300">

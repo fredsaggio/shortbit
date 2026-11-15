@@ -90,3 +90,66 @@ export function useCountUp(target: number, active: boolean, durationMs = 1200): 
 
   return reduced ? target : value
 }
+
+// One scroll listener for the whole app, read once per frame. Effects get the
+// scroll position and write styles straight to the DOM, so scrolling never
+// re-renders React.
+type ScrollListener = (scrollY: number) => void
+const scrollListeners = new Set<ScrollListener>()
+let scrollFrame = 0
+
+function emitScroll() {
+  scrollFrame = 0
+  const y = window.scrollY
+  for (const listener of scrollListeners) {
+    listener(y)
+  }
+}
+
+function onScroll() {
+  scrollFrame ||= requestAnimationFrame(emitScroll)
+}
+
+/** Calls `listener` with window.scrollY on every frame the page scrolls. */
+export function useScrollEffect(listener: ScrollListener, enabled = true) {
+  useEffect(() => {
+    if (!enabled) {
+      return
+    }
+    if (scrollListeners.size === 0) {
+      window.addEventListener('scroll', onScroll, { passive: true })
+      window.addEventListener('resize', onScroll, { passive: true })
+    }
+    scrollListeners.add(listener)
+    listener(window.scrollY)
+    return () => {
+      scrollListeners.delete(listener)
+      if (scrollListeners.size === 0) {
+        window.removeEventListener('scroll', onScroll)
+        window.removeEventListener('resize', onScroll)
+      }
+    }
+  }, [listener, enabled])
+}
+
+const finePointerQuery = '(hover: hover) and (pointer: fine)'
+
+function subscribeFinePointer(onChange: () => void): () => void {
+  if (typeof window.matchMedia !== 'function') {
+    return () => {}
+  }
+  const query = window.matchMedia(finePointerQuery)
+  query.addEventListener('change', onChange)
+  return () => query.removeEventListener('change', onChange)
+}
+
+function readFinePointer(): boolean {
+  return typeof window.matchMedia === 'function' && window.matchMedia(finePointerQuery).matches
+}
+
+/** True on devices with a mouse or trackpad and motion allowed; false on touch. */
+export function usePointerEffects(): boolean {
+  const finePointer = useSyncExternalStore(subscribeFinePointer, readFinePointer, () => false)
+  const reduced = usePrefersReducedMotion()
+  return finePointer && !reduced
+}

@@ -6,10 +6,10 @@ import { cn } from '@/lib/utils'
 const chips = [
   { text: 'shortbit.com.br/Ab3dX9', position: 'left-[2%] top-[14%]', delay: '0s' },
   { text: 'shortbit.com.br/Qz7Rt2', position: 'left-[3.5%] top-[46%]', delay: '-2.5s', locked: true },
-  { text: 'shortbit.com.br/Lm4Kp8', position: 'left-[1.5%] top-[80%]', delay: '-5s' },
+  { text: 'shortbit.com.br/Lm4Kp8', position: 'left-[1.5%] top-[68%]', delay: '-5s' },
   { text: 'shortbit.com.br/Tn42Az', position: 'right-[2%] top-[20%]', delay: '-1.5s' },
   { text: 'shortbit.com.br/Gq3Lm8', position: 'right-[3.5%] top-[54%]', delay: '-4s', locked: true },
-  { text: 'shortbit.com.br/Bf26Xq', position: 'right-[1.5%] top-[86%]', delay: '-6s' },
+  { text: 'shortbit.com.br/Bf26Xq', position: 'right-[1.5%] top-[74%]', delay: '-6s' },
 ]
 
 export function FloatingLinks() {

@@ -9,11 +9,11 @@ type RevealProps = {
   className?: string
 }
 
-// Fades and lifts its content into place the first time it scrolls into view.
-// The hidden start state applies only with motion allowed, so with reduced
-// motion the content is simply there.
+// Fades and lifts its content into place every time it scrolls into view, up
+// or down, and steps back out when it leaves. The hidden state applies only
+// with motion allowed, so with reduced motion the content is simply there.
 export function Reveal({ children, delay = 0, className }: RevealProps) {
-  const [ref, inView] = useInView<HTMLDivElement>()
+  const [ref, inView] = useInView<HTMLDivElement>({ once: false, threshold: 0.15 })
 
   return (
     <div

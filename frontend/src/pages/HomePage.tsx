@@ -11,7 +11,11 @@ import { buttonSizes, buttonTones } from '../components/buttonStyles.ts'
 import { CopyButton } from '../components/CopyButton.tsx'
 import { ClickBars } from '../components/home/ClickBars.tsx'
 import { FloatingLinks } from '../components/home/FloatingLinks.tsx'
+import { LinkMarquee } from '../components/home/LinkMarquee.tsx'
 import { LinkShrinkDemo } from '../components/home/LinkShrinkDemo.tsx'
+import { Magnetic } from '../components/motion/Magnetic.tsx'
+import { Parallax } from '../components/motion/Parallax.tsx'
+import { TiltCard } from '../components/motion/TiltCard.tsx'
 import { Reveal } from '../components/Reveal.tsx'
 import { PasswordStrength } from '../components/PasswordStrength.tsx'
 import { TextField } from '../components/TextField.tsx'
@@ -183,7 +187,7 @@ function HeroTitle() {
 // Three steps joined by an orange line that draws itself across, each number
 // popping in as the line reaches it.
 function HowItWorks() {
-  const [ref, inView] = useInView<HTMLOListElement>({ threshold: 0.35 })
+  const [ref, inView] = useInView<HTMLOListElement>({ once: false, threshold: 0.35 })
 
   return (
     <ol ref={ref} className="relative mt-14 grid gap-10 md:grid-cols-3 md:gap-8">
@@ -224,7 +228,7 @@ function HowItWorks() {
 }
 
 function VisibilityPills() {
-  const [ref, inView] = useInView<HTMLDivElement>({ threshold: 0.6 })
+  const [ref, inView] = useInView<HTMLDivElement>({ once: false, threshold: 0.6 })
   const pills = [
     { label: 'shortbit/Ab3dX9 · público', className: 'bg-navy-100 text-navy' },
     { label: 'shortbit/Qz7Rt2 · privado', className: 'bg-brand-100 text-brand-700' },
@@ -258,11 +262,18 @@ export function HomePage() {
   return (
     <>
       <section className="relative overflow-hidden bg-navy text-white">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -top-40 left-1/2 h-[480px] w-[900px] -translate-x-1/2 rounded-full bg-action/25 blur-3xl"
-        />
-        <FloatingLinks />
+        {/* Living background: three soft lights drift without end and lag
+            behind the scroll; the floating links drift the other way. */}
+        <Parallax speed={0.35} aria-hidden="true" className="pointer-events-none absolute inset-0">
+          <div className="absolute -top-40 left-1/2 h-[480px] w-[900px] -translate-x-1/2">
+            <div className="absolute inset-0 rounded-full bg-action/25 blur-3xl motion-safe:animate-aurora-a" />
+          </div>
+          <div className="absolute top-24 -left-32 h-[360px] w-[520px] rounded-full bg-brand/15 blur-3xl motion-safe:animate-aurora-b" />
+          <div className="absolute -right-24 bottom-0 h-[420px] w-[560px] rounded-full bg-action/20 blur-3xl motion-safe:animate-aurora-c" />
+        </Parallax>
+        <Parallax speed={-0.12} aria-hidden="true" className="pointer-events-none absolute inset-0">
+          <FloatingLinks />
+        </Parallax>
         <div className="relative mx-auto max-w-7xl px-4 pt-14 pb-16 text-center sm:px-6 sm:pt-20 sm:pb-20">
           <HeroTitle />
           <p className="mx-auto mt-6 max-w-2xl text-lg text-navy-300 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-700 motion-safe:[animation-delay:300ms] motion-safe:[animation-fill-mode:both] sm:text-xl">
@@ -271,6 +282,7 @@ export function HomePage() {
 
           <ShortenCard />
           <LinkShrinkDemo />
+          <LinkMarquee />
         </div>
       </section>
 
@@ -282,49 +294,57 @@ export function HomePage() {
 
         <div className="mt-12 grid gap-4 md:grid-cols-3">
           <Reveal className="md:col-span-2">
-            <article className={cn(cardClass, 'bg-card')}>
-              <span className="inline-flex items-center gap-2 text-sm font-bold tracking-wide text-brand-700 uppercase">
-                <Lock className="size-5 text-brand transition-transform duration-300 group-hover:-rotate-12" aria-hidden="true" /> Privacidade
-              </span>
-              <h3 className="mt-3 text-2xl font-bold">Público ou privado</h3>
-              <p className="mt-2 max-w-lg text-muted-foreground">
-                Compartilhe um link aberto para todo mundo ou proteja o destino com uma senha. Quem não souber a senha não vê para
-                onde o link leva.
-              </p>
-              <VisibilityPills />
-            </article>
+            <TiltCard className="rounded-3xl">
+              <article className={cn(cardClass, 'bg-card')}>
+                <span className="inline-flex items-center gap-2 text-sm font-bold tracking-wide text-brand-700 uppercase">
+                  <Lock className="size-5 text-brand transition-transform duration-300 group-hover:-rotate-12" aria-hidden="true" /> Privacidade
+                </span>
+                <h3 className="mt-3 text-2xl font-bold">Público ou privado</h3>
+                <p className="mt-2 max-w-lg text-muted-foreground">
+                  Compartilhe um link aberto para todo mundo ou proteja o destino com uma senha. Quem não souber a senha não vê para
+                  onde o link leva.
+                </p>
+                <VisibilityPills />
+              </article>
+            </TiltCard>
           </Reveal>
 
           <Reveal delay={120}>
-            <article className={cn(cardClass, 'bg-card')}>
-              <span className="inline-flex items-center gap-2 text-sm font-bold tracking-wide text-brand-700 uppercase">
-                <BarChart3 className="size-5 text-brand" aria-hidden="true" /> Cliques
-              </span>
-              <h3 className="mt-3 text-2xl font-bold">Cada acesso contado</h3>
-              <p className="mt-2 text-muted-foreground">Veja no painel quantas vezes cada link foi aberto.</p>
-              <ClickBars />
-            </article>
+            <TiltCard className="rounded-3xl">
+              <article className={cn(cardClass, 'bg-card')}>
+                <span className="inline-flex items-center gap-2 text-sm font-bold tracking-wide text-brand-700 uppercase">
+                  <BarChart3 className="size-5 text-brand" aria-hidden="true" /> Cliques
+                </span>
+                <h3 className="mt-3 text-2xl font-bold">Cada acesso contado</h3>
+                <p className="mt-2 text-muted-foreground">Veja no painel quantas vezes cada link foi aberto.</p>
+                <ClickBars />
+              </article>
+            </TiltCard>
           </Reveal>
 
           <Reveal delay={60} className="md:col-span-3">
-            <article className={cn(cardClass, 'bg-navy text-white md:flex md:items-center md:justify-between md:gap-10')}>
-              <div>
-                <span className="inline-flex items-center gap-2 text-sm font-bold tracking-wide text-brand uppercase">
-                  <Zap className="size-5 transition-transform duration-300 group-hover:scale-125 group-hover:-rotate-6" aria-hidden="true" /> Desempenho
-                </span>
-                <h3 className="mt-3 text-2xl font-bold">Rápido para quem clica</h3>
-                <p className="mt-2 max-w-2xl text-navy-300">
-                  Quem abre o seu link vai direto para o destino, sem tela intermediária e sem espera.
-                </p>
-              </div>
-              <Link
-                to={state.status === 'authenticated' ? '/painel' : '/cadastro'}
-                className={cn('group/cta mt-6 inline-flex shrink-0 items-center gap-2 rounded-md font-semibold transition-colors md:mt-0', buttonSizes.md, buttonTones.onDark)}
-              >
-                {state.status === 'authenticated' ? 'Ir para o painel' : 'Começar grátis'}
-                <ArrowRight className="size-4 transition-transform duration-200 group-hover/cta:translate-x-1" aria-hidden="true" />
-              </Link>
-            </article>
+            <TiltCard className="rounded-3xl" maxTilt={2.5} glow="dark">
+              <article className={cn(cardClass, 'bg-navy text-white md:flex md:items-center md:justify-between md:gap-10')}>
+                <div>
+                  <span className="inline-flex items-center gap-2 text-sm font-bold tracking-wide text-brand uppercase">
+                    <Zap className="size-5 transition-transform duration-300 group-hover:scale-125 group-hover:-rotate-6" aria-hidden="true" /> Desempenho
+                  </span>
+                  <h3 className="mt-3 text-2xl font-bold">Rápido para quem clica</h3>
+                  <p className="mt-2 max-w-2xl text-navy-300">
+                    Quem abre o seu link vai direto para o destino, sem tela intermediária e sem espera.
+                  </p>
+                </div>
+                <Magnetic className="mt-6 shrink-0 md:mt-0">
+                  <Link
+                    to={state.status === 'authenticated' ? '/painel' : '/cadastro'}
+                    className={cn('group/cta inline-flex items-center gap-2 rounded-md font-semibold transition-colors', buttonSizes.md, buttonTones.onDark)}
+                  >
+                    {state.status === 'authenticated' ? 'Ir para o painel' : 'Começar grátis'}
+                    <ArrowRight className="size-4 transition-transform duration-200 group-hover/cta:translate-x-1" aria-hidden="true" />
+                  </Link>
+                </Magnetic>
+              </article>
+            </TiltCard>
           </Reveal>
         </div>
       </section>
@@ -342,13 +362,15 @@ export function HomePage() {
         <section className="bg-surface">
           <Reveal className="mx-auto flex max-w-7xl flex-col items-center gap-6 px-4 py-16 text-center sm:px-6">
             <h2 className="text-[clamp(1.75rem,4vw,2.5rem)] font-extrabold">Pronto para encurtar o primeiro link?</h2>
-            <Link
-              to="/cadastro"
-              className={cn('group/cta inline-flex items-center gap-2 rounded-md font-semibold transition-colors', buttonSizes.lg, buttonTones.primary)}
-            >
-              Criar conta grátis
-              <ArrowRight className="size-4 transition-transform duration-200 group-hover/cta:translate-x-1" aria-hidden="true" />
-            </Link>
+            <Magnetic strength={8}>
+              <Link
+                to="/cadastro"
+                className={cn('group/cta inline-flex items-center gap-2 rounded-md font-semibold transition-colors', buttonSizes.lg, buttonTones.primary)}
+              >
+                Criar conta grátis
+                <ArrowRight className="size-4 transition-transform duration-200 group-hover/cta:translate-x-1" aria-hidden="true" />
+              </Link>
+            </Magnetic>
           </Reveal>
         </section>
       )}
