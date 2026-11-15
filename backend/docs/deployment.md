@@ -117,15 +117,17 @@ Use `/health/live`, nunca `/health/ready`: o `ready` consulta o banco e impediri
 - `https://shortbit.com.br` abre a home e o cadastro envia o código por email.
 - Um link criado no painel redireciona e o clique aparece em alguns segundos.
 - O cabeçalho `Content-Security-Policy` vem nas páginas do app (`curl -I https://shortbit.com.br/painel`).
-- O `True-Client-IP` não pode ser forjado. Mande 30 requisições seguidas, cada uma fingindo um IP diferente:
+- O `True-Client-IP` não pode ser forjado. As requisições precisam sair em rajada paralela: em sequência, a latência deixa o ritmo abaixo do limite (10 por segundo) e nada prova. Primeiro o controle, com o mesmo IP falso em todas; depois o teste, com um IP falso diferente em cada:
 
   ```bash
-  for i in $(seq 1 30); do
-    curl -s -o /dev/null -w "%{http_code} " -H "True-Client-IP: 203.0.113.$i" https://shortbit.com.br/health/live
-  done
+  seq 1 60 | xargs -P 60 -I{} curl -s -o /dev/null -w "%{http_code}\n" -H "True-Client-IP: 203.0.113.77" https://shortbit.com.br/health/live | sort | uniq -c
+  sleep 5
+  seq 1 60 | xargs -P 60 -I{} curl -s -o /dev/null -w "%{http_code}\n" -H "True-Client-IP: 198.51.100.{}" https://shortbit.com.br/health/live | sort | uniq -c
   ```
 
-  O certo é as últimas virem `429`: o Cloudflare trocou o cabeçalho pelo seu IP real, e todas contaram no mesmo limite (20 seguidas). Se nenhuma vier `429`, o cabeçalho está sendo aceito do cliente. Nesse caso, remova `CLIENT_IP_HEADER` e veja o [ADR 0003](decisions/0003-free-single-service-deploy.md).
+  O controle precisa ter `429`, provando que o limite funciona. No teste, o certo é aparecer `429` também: os IPs inventados foram trocados pelo seu IP real e todas contaram no mesmo limite. Se o teste vier todo `200`, o cabeçalho está sendo aceito do cliente; remova `CLIENT_IP_HEADER` e veja o [ADR 0003](decisions/0003-free-single-service-deploy.md).
+
+  Isso não distingue "sobrescrito pelo IP real" de "removido no caminho" (aí todos os visitantes cairiam no IP do proxy e dividiriam um limite). Para isso, mantenha o seu limite estourado com uma rajada contínua e, ao mesmo tempo, abra `/health/live` de outra rede (por exemplo, o celular nos dados móveis): ele tem que responder `ok`.
 
 ## Limites dos planos grátis
 
