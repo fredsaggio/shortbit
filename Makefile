@@ -58,8 +58,10 @@ migration/fix:
 
 # Exemplo: make migration/validate
 .PHONY: migration/validate
+# O goose validate lê todo arquivo da pasta e trata o embed.go como uma
+# migration em Go sem versão. Valida uma cópia só com os .sql.
 migration/validate:
-	@goose -dir $(MIGRATIONS_DIR) validate
+	@tmp=$$(mktemp -d) && cp $(MIGRATIONS_DIR)/*.sql "$$tmp" && goose -dir "$$tmp" validate; status=$$?; rm -rf "$$tmp"; exit $$status
 
 # Exemplo: make migration/up
 .PHONY: migration/up
