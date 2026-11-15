@@ -125,6 +125,35 @@ describe('DashboardPage', () => {
     expect(screen.getByLabelText('URL de destino')).toHaveValue('')
   })
 
+  it('opens the QR code asked for on the home page once the link exists', async () => {
+    savePendingLink({ url: 'https://example.com/cardapio', visibility: 'public', qr: true })
+    fakeApi({
+      ...signedIn,
+      'GET /urls': { status: 200, body: { urls: [], next_cursor: null } },
+      'POST /urls': { status: 201, body: { short_code: 'Ab3dX9', short_url: 'http://localhost:8080/Ab3dX9' } },
+    })
+    renderApp('/painel')
+
+    const dialog = await screen.findByRole('dialog', { name: 'QR code do link' })
+    expect(await within(dialog).findByRole('img', { name: 'QR code de localhost:8080/Ab3dX9' })).toBeInTheDocument()
+  })
+
+  it('opens the QR code of a private link once its password is typed again', async () => {
+    sessionStorage.setItem('shortbit:pending-link', JSON.stringify({ url: 'https://example.com/segredo', visibility: 'private', qr: true }))
+    fakeApi({
+      ...signedIn,
+      'GET /urls': { status: 200, body: { urls: [], next_cursor: null } },
+      'POST /urls': { status: 201, body: { short_code: 'Qz7Rt2', short_url: 'http://localhost:8080/Qz7Rt2' } },
+    })
+    const { user: actions } = renderApp('/painel')
+
+    await actions.type(await screen.findByLabelText('Senha do link'), 'senha-do-link-forte-9')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    await actions.click(screen.getByRole('button', { name: 'Criar link curto' }))
+
+    expect(await screen.findByRole('dialog', { name: 'QR code do link' })).toBeInTheDocument()
+  })
+
   it('keeps the home page URL in the form when creating it fails', async () => {
     savePendingLink({ url: 'https://example.com/da-home', visibility: 'public' })
     fakeApi({

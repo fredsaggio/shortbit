@@ -41,6 +41,9 @@ function CreateLinkCard({ onCreated }: { onCreated: () => void }) {
     needsPassword ? 'Digite de novo a senha do link. Por segurança, ela não fica salva no navegador.' : '',
   )
   const [created, setCreated] = useState<CreatedLink | null>(null)
+  // Asked for on the home page with Gerar QR code: the first link created
+  // here opens its QR code, even when the password had to be typed again.
+  const [qrRequested, setQrRequested] = useState(pending?.qr === true)
   const fields = useFieldErrors<'url' | 'linkPassword'>()
   const strengthId = useId()
 
@@ -63,7 +66,7 @@ function CreateLinkCard({ onCreated }: { onCreated: () => void }) {
       .then(
         (link) => {
           setCreated(link)
-          toast.success('Seu link curto está pronto', { description: link.short_url })
+          toast.success(pending.qr ? 'Seu QR code está pronto' : 'Seu link curto está pronto', { description: link.short_url })
           onCreated()
         },
         (createError: unknown) => {
@@ -80,6 +83,10 @@ function CreateLinkCard({ onCreated }: { onCreated: () => void }) {
     event.preventDefault()
     setError('')
     setCreated(null)
+    // A QR code asked for on the home page opens once, with the first link.
+    if (created) {
+      setQrRequested(false)
+    }
     const valid = fields.check(event.currentTarget, {
       url: checkURL(url),
       linkPassword: visibility === 'private' ? checkLinkPassword(password) : undefined,
@@ -168,7 +175,7 @@ function CreateLinkCard({ onCreated }: { onCreated: () => void }) {
         </div>
       </form>
 
-      {created && <CreatedLinkBanner link={created} className="mt-5" />}
+      {created && <CreatedLinkBanner key={created.short_code} link={created} openQrCode={qrRequested} className="mt-5" />}
     </section>
   )
 }

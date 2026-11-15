@@ -23,6 +23,7 @@ describe('HomePage', () => {
     expect(JSON.parse(sessionStorage.getItem('shortbit:pending-link') ?? '')).toEqual({
       url: 'https://example.com/um-link-bem-longo',
       visibility: 'public',
+      qr: false,
     })
     expect(api.calls('POST', '/urls')).toHaveLength(0)
   })
@@ -38,7 +39,7 @@ describe('HomePage', () => {
 
     await waitFor(() => expect(screen.getByTestId('current-path')).toHaveTextContent('/cadastro'))
     const stored = sessionStorage.getItem('shortbit:pending-link') ?? ''
-    expect(JSON.parse(stored)).toEqual({ url: 'https://example.com/segredo', visibility: 'private' })
+    expect(JSON.parse(stored)).toEqual({ url: 'https://example.com/segredo', visibility: 'private', qr: false })
     expect(stored).not.toContain('senha-do-link')
     expect(api.calls('POST', '/urls')).toHaveLength(0)
   })
@@ -75,5 +76,50 @@ describe('HomePage', () => {
     await actions.click(within(result).getByRole('button', { name: 'QR code' }))
     const dialog = await screen.findByRole('dialog', { name: 'QR code do link' })
     expect(await within(dialog).findByRole('img', { name: 'QR code de localhost:8080/Ab3dX9' })).toBeInTheDocument()
+  })
+
+  it('lets a visitor ask for the QR code, finished after signing up', async () => {
+    const api = fakeApi(signedOut)
+    const { user: actions } = renderApp('/')
+
+    await actions.type(await screen.findByLabelText('URL para encurtar'), 'https://example.com/cardapio')
+    await actions.click(screen.getByRole('button', { name: 'Gerar QR code' }))
+
+    await waitFor(() => expect(screen.getByTestId('current-path')).toHaveTextContent('/cadastro'))
+    expect(await screen.findByText(/o seu QR code fica pronto assim que você entrar/)).toBeInTheDocument()
+    expect(JSON.parse(sessionStorage.getItem('shortbit:pending-link') ?? '')).toEqual({
+      url: 'https://example.com/cardapio',
+      visibility: 'public',
+      qr: true,
+    })
+    expect(api.calls('POST', '/urls')).toHaveLength(0)
+  })
+
+  it('creates the link and opens its QR code when signed in', async () => {
+    const api = fakeApi({
+      'GET /me': { status: 200, body: user },
+      'POST /urls': { status: 201, body: { short_code: 'Ab3dX9', short_url: 'http://localhost:8080/Ab3dX9' } },
+    })
+    const { user: actions } = renderApp('/')
+
+    await actions.type(await screen.findByLabelText('URL para encurtar'), 'https://example.com/cardapio')
+    await actions.click(screen.getByRole('button', { name: 'Gerar QR code' }))
+
+    const dialog = await screen.findByRole('dialog', { name: 'QR code do link' })
+    expect(await within(dialog).findByRole('img', { name: 'QR code de localhost:8080/Ab3dX9' })).toBeInTheDocument()
+    expect(api.calls('POST', '/urls')[0].body).toEqual({ url: 'https://example.com/cardapio', visibility: 'public' })
+  })
+
+  it('keeps Encurtar as the action of the Enter key', async () => {
+    fakeApi({
+      'GET /me': { status: 200, body: user },
+      'POST /urls': { status: 201, body: { short_code: 'Ab3dX9', short_url: 'http://localhost:8080/Ab3dX9' } },
+    })
+    const { user: actions } = renderApp('/')
+
+    await actions.type(await screen.findByLabelText('URL para encurtar'), 'https://example.com/cardapio{Enter}')
+
+    expect(await screen.findByRole('link', { name: 'http://localhost:8080/Ab3dX9' })).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })

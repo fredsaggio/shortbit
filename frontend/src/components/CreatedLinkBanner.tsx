@@ -6,9 +6,16 @@ import { CopyButton } from './CopyButton.tsx'
 import { QrCodeDialog } from './QrCodeDialog.tsx'
 import { cn } from '@/lib/utils'
 
+type CreatedLinkBannerProps = {
+  link: CreatedLink
+  className?: string
+  /** Opens the QR code right away, for someone who asked for it. */
+  openQrCode?: boolean
+}
+
 // The link just created, ready to copy or to turn into a QR code.
-export function CreatedLinkBanner({ link, className }: { link: CreatedLink; className?: string }) {
-  const [showingQrCode, setShowingQrCode] = useState(false)
+export function CreatedLinkBanner({ link, className, openQrCode = false }: CreatedLinkBannerProps) {
+  const [showingQrCode, setShowingQrCode] = useState(openQrCode)
 
   return (
     <div

@@ -1,4 +1,4 @@
-import { ArrowRight, BarChart3, Lock, Zap } from 'lucide-react'
+import { ArrowRight, BarChart3, Lock, QrCode, Zap } from 'lucide-react'
 import { useId, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { messageOf } from '../api/client.ts'
@@ -40,12 +40,17 @@ function ShortenCard() {
   const [password, setPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
-  const [created, setCreated] = useState<CreatedLink | null>(null)
+  const [created, setCreated] = useState<{ link: CreatedLink; qr: boolean } | null>(null)
+  // Which button is busy: the one that sent the form.
+  const [busyIntent, setBusyIntent] = useState<'link' | 'qr'>('link')
   const fields = useFieldErrors<'url' | 'linkPassword'>()
   const strengthId = useId()
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    // Encurtar or Gerar QR code. Enter in the URL field counts as Encurtar,
+    // the form's first button.
+    const qr = (event.nativeEvent as SubmitEvent).submitter?.dataset.intent === 'qr'
     setError('')
     setCreated(null)
     const valid = fields.check(event.currentTarget, {
@@ -57,18 +62,20 @@ function ShortenCard() {
     }
 
     if (state.status !== 'authenticated') {
-      savePendingLink({ url: url.trim(), visibility, password: visibility === 'private' ? password : undefined })
-      navigate('/cadastro', { state: { message: 'Crie sua conta grátis ou entre: o seu link curto fica pronto assim que você entrar.' } })
+      savePendingLink({ url: url.trim(), visibility, password: visibility === 'private' ? password : undefined, qr })
+      const ready = qr ? 'o seu QR code fica pronto' : 'o seu link curto fica pronto'
+      navigate('/cadastro', { state: { message: `Crie sua conta grátis ou entre: ${ready} assim que você entrar.` } })
       return
     }
 
+    setBusyIntent(qr ? 'qr' : 'link')
     setSubmitting(true)
     try {
       const link =
         visibility === 'private'
           ? await createLink({ url: url.trim(), visibility, password })
           : await createLink({ url: url.trim(), visibility })
-      setCreated(link)
+      setCreated({ link, qr })
       setUrl('')
       setPassword('')
     } catch (submitError) {
@@ -125,14 +132,20 @@ function ShortenCard() {
                 <PasswordStrength id={strengthId} password={password} />
               </div>
             )}
-            {/* sm:mt-7 lines the button up with the inputs below their labels. */}
-            <Button type="submit" size="lg" loading={submitting} className="sm:mt-7 sm:ml-auto sm:min-w-44">
-              Encurtar
-            </Button>
+            {/* sm:mt-7 lines the buttons up with the inputs below their labels. */}
+            <div className="grid gap-3 sm:mt-7 sm:ml-auto sm:flex sm:flex-row-reverse">
+              <Button type="submit" size="lg" data-intent="link" loading={submitting && busyIntent === 'link'} disabled={submitting} className="sm:min-w-36">
+                Encurtar
+              </Button>
+              <Button type="submit" size="lg" variant="outline" data-intent="qr" loading={submitting && busyIntent === 'qr'} disabled={submitting}>
+                <QrCode className="size-4" aria-hidden="true" />
+                Gerar QR code
+              </Button>
+            </div>
           </div>
         </form>
         {error && <Alert tone="error" className="mt-4">{error}</Alert>}
-        {created && <CreatedLinkBanner link={created} className="mt-4" />}
+        {created && <CreatedLinkBanner key={created.link.short_code} link={created.link} openQrCode={created.qr} className="mt-4" />}
       </div>
     </div>
   )

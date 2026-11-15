@@ -15,6 +15,8 @@ export type PendingLink = {
   visibility: Visibility
   /** Only for private links, and only while the page has not reloaded. */
   password?: string
+  /** The visitor asked for the QR code: the dashboard opens it once the link exists. */
+  qr?: boolean
 }
 
 let pendingPassword: string | undefined
@@ -22,18 +24,23 @@ let pendingPassword: string | undefined
 export function savePendingLink(link: PendingLink): void {
   pendingPassword = link.visibility === 'private' ? link.password : undefined
   try {
-    sessionStorage.setItem(key, JSON.stringify({ url: link.url, visibility: link.visibility }))
+    sessionStorage.setItem(key, JSON.stringify({ url: link.url, visibility: link.visibility, qr: link.qr === true }))
   } catch {
     // Without storage the visitor just types the URL again.
   }
 }
 
-function isStoredLink(value: unknown): value is { url: string; visibility: Visibility } {
+function isStoredLink(value: unknown): value is { url: string; visibility: Visibility; qr?: boolean } {
   if (typeof value !== 'object' || value === null) {
     return false
   }
-  const { url, visibility } = value as Record<string, unknown>
-  return typeof url === 'string' && url !== '' && (visibility === 'public' || visibility === 'private')
+  const { url, visibility, qr } = value as Record<string, unknown>
+  return (
+    typeof url === 'string' &&
+    url !== '' &&
+    (visibility === 'public' || visibility === 'private') &&
+    (qr === undefined || typeof qr === 'boolean')
+  )
 }
 
 // Reading and clearing are separate because React may call a state
@@ -54,9 +61,10 @@ export function readPendingLink(): PendingLink | null {
     return null
   }
 
+  const qr = stored.qr === true
   return stored.visibility === 'private'
-    ? { url: stored.url, visibility: 'private', password: pendingPassword }
-    : { url: stored.url, visibility: 'public' }
+    ? { url: stored.url, visibility: 'private', password: pendingPassword, qr }
+    : { url: stored.url, visibility: 'public', qr }
 }
 
 export function clearPendingLink(): void {
