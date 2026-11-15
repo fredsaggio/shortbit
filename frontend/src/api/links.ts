@@ -1,5 +1,5 @@
 import { apiRequest } from './client.ts'
-import type { CreatedLink, NewLink, ShortLink, ShortLinkPage, Visibility } from './types.ts'
+import type { ClickPeriod, CreatedLink, DailyClicks, NewLink, ShortLink, ShortLinkPage, Visibility } from './types.ts'
 
 // In production the API serves this app, so short links share the page's
 // origin unless the build says otherwise.
@@ -24,6 +24,11 @@ export function listLinks(cursor: string | null, signal?: AbortSignal): Promise<
 
 export function getLink(code: string, signal?: AbortSignal): Promise<ShortLink> {
   return apiRequest<ShortLink>(`/urls/${encodeURIComponent(code)}`, { signal })
+}
+
+// Clicks per day of the last days days, today included, oldest first.
+export function getDailyClicks(code: string, days: ClickPeriod, signal?: AbortSignal): Promise<DailyClicks> {
+  return apiRequest<DailyClicks>(`/urls/${encodeURIComponent(code)}/clicks?days=${days}`, { signal })
 }
 
 // Only the fields being changed. On a private link, an empty or absent

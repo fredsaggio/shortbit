@@ -10,6 +10,12 @@ const options = {
   color: { dark: '#031f39', light: '#ffffff' },
 } as const
 
+// What the QR code holds: the short link plus ?qr=1, which tells the API the
+// click came from a scan (ADR 0005). The destination does not change.
+export function qrCodeTarget(shortURL: string): string {
+  return `${shortURL}?qr=1`
+}
+
 export function qrCodeSVG(text: string): Promise<string> {
   return QRCode.toString(text, { ...options, type: 'svg' })
 }

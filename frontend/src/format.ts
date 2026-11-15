@@ -25,3 +25,16 @@ export function formatLongDate(iso: string): string {
 export function displayName(fullName: string | null, email: string): string {
   return fullName?.split(' ')[0] || email
 }
+
+// Dates of the click chart are calendar days ("2026-11-14"), not instants:
+// they are read and shown in UTC so no time zone moves them a day.
+const shortDayFormat = new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'short', timeZone: 'UTC' })
+const longDayFormat = new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long', timeZone: 'UTC' })
+
+export function formatShortDay(day: string): string {
+  return shortDayFormat.format(new Date(`${day}T00:00:00Z`)).replace('.', '')
+}
+
+export function formatLongDay(day: string): string {
+  return longDayFormat.format(new Date(`${day}T00:00:00Z`))
+}

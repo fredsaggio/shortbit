@@ -1,7 +1,7 @@
 import { Download } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { shortLinkURL } from '../api/links.ts'
-import { downloadFile, qrCodePNG, qrCodeSVG, svgDataURL } from '../qrCode.ts'
+import { downloadFile, qrCodePNG, qrCodeSVG, qrCodeTarget, svgDataURL } from '../qrCode.ts'
 import { Alert } from './Alert.tsx'
 import { Button } from './Button.tsx'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -20,6 +20,7 @@ const failureMessage = 'Não foi possível gerar o QR code. Tente de novo.'
 export function QrCodeDialog({ open, onOpenChange, shortCode }: QrCodeDialogProps) {
   const url = shortLinkURL(shortCode)
   const displayURL = url.replace(/^https?:\/\//, '')
+  const target = qrCodeTarget(url)
   const [state, setState] = useState<QrState>({ status: 'loading' })
   const [downloadError, setDownloadError] = useState(false)
 
@@ -28,19 +29,19 @@ export function QrCodeDialog({ open, onOpenChange, shortCode }: QrCodeDialogProp
       return
     }
     let current = true
-    qrCodeSVG(url).then(
+    qrCodeSVG(target).then(
       (svg) => current && setState({ status: 'ready', svg }),
       () => current && setState({ status: 'error' }),
     )
     return () => {
       current = false
     }
-  }, [open, url])
+  }, [open, target])
 
   async function downloadPNG() {
     setDownloadError(false)
     try {
-      downloadFile(await qrCodePNG(url), `qrcode-${shortCode}.png`)
+      downloadFile(await qrCodePNG(target), `qrcode-${shortCode}.png`)
     } catch {
       setDownloadError(true)
     }

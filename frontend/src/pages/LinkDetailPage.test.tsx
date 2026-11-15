@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ShortLink } from '../api/types.ts'
-import { fakeApi, user } from '../test/fakeApi.ts'
+import { dailyClicks, fakeApi, user } from '../test/fakeApi.ts'
 import { renderApp } from '../test/renderApp.tsx'
 
 const publicLink: ShortLink = {
@@ -13,7 +13,10 @@ const publicLink: ShortLink = {
   updated_at: '2026-11-14T12:00:00Z',
 }
 
-const signedIn = { 'GET /me': { status: 200, body: user } }
+const signedIn = {
+  'GET /me': { status: 200, body: user },
+  'GET /urls/Ab3dX9/clicks?days=30': { status: 200, body: dailyClicks(30) },
+}
 
 describe('LinkDetailPage', () => {
   it('edits the destination, sending only what changed', async () => {

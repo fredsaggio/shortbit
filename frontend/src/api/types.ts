@@ -34,3 +34,18 @@ export type CreatedLink = {
 export type NewLink =
   | { url: string; visibility: 'public' }
   | { url: string; visibility: 'private'; password: string }
+
+// Clicks of one day: by people opening the short link and by people
+// scanning its QR code.
+export type DayClicks = {
+  date: string
+  link: number
+  qr: number
+}
+
+export type DailyClicks = {
+  days: DayClicks[]
+  totals: { link: number; qr: number }
+}
+
+export type ClickPeriod = 7 | 30 | 90

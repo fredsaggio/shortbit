@@ -54,3 +54,20 @@ export const user = {
   has_google: false,
   created_at: '2026-11-14T12:00:00Z',
 }
+
+// Daily clicks as the API answers them: one entry per day ending on
+// 2026-11-14, zero unless given.
+export function dailyClicks(days: number, counts: Record<string, { link?: number; qr?: number }> = {}) {
+  const end = Date.UTC(2026, 10, 14)
+  const entries = Array.from({ length: days }, (_, i) => {
+    const date = new Date(end - (days - 1 - i) * 86_400_000).toISOString().slice(0, 10)
+    return { date, link: counts[date]?.link ?? 0, qr: counts[date]?.qr ?? 0 }
+  })
+  return {
+    days: entries,
+    totals: {
+      link: entries.reduce((sum, day) => sum + day.link, 0),
+      qr: entries.reduce((sum, day) => sum + day.qr, 0),
+    },
+  }
+}
