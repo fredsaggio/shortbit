@@ -9,6 +9,8 @@ import (
 	"uuid"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+
+	"github.com/fredsaggio/url-shortener/internal/telemetry"
 )
 
 const (
@@ -115,6 +117,7 @@ func (c *ClickConsumer) handle(ctx context.Context, delivery amqp.Delivery) {
 	var event ClickEvent
 	if err := json.Unmarshal(delivery.Body, &event); err != nil || event.EventID == uuid.Nil() || event.URLID <= 0 || !event.Click().Source.Valid() {
 		slog.Error("invalid click event dead-lettered", "message_id", delivery.MessageId, "error", err)
+		telemetry.RecordClickProcessed(ctx, telemetry.ClickDeadLettered, time.Time{})
 		if err := delivery.Reject(false); err != nil {
 			slog.Warn("dead-letter invalid click event failed", "message_id", delivery.MessageId, "error", err)
 		}

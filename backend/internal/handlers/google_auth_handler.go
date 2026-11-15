@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"errors"
 	"github.com/fredsaggio/url-shortener/internal/problem"
+	"github.com/fredsaggio/url-shortener/internal/telemetry"
 	"log/slog"
 	"net/http"
 	"unicode/utf8"
@@ -74,7 +75,7 @@ func (h *GoogleAuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	if providerError := query.Get("error"); providerError != "" {
 		// The value comes from the URL, so anyone can set it: keep it short.
 		slog.WarnContext(ctx, "Google authorization rejected", "provider_error", truncate(providerError, maxLoggedProviderErrorLength))
-		h.redirectToFrontend(w, r, googleLoginFailedPath)
+		h.failLogin(w, r, "provider_rejected")
 		return
 	}
 
@@ -83,14 +84,14 @@ func (h *GoogleAuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 
 	if code == "" || receivedState == "" {
 		slog.WarnContext(ctx, "Google callback without code or state")
-		h.redirectToFrontend(w, r, googleLoginFailedPath)
+		h.failLogin(w, r, "missing_code_or_state")
 		return
 	}
 
 	authorizationCookies, err := readGoogleAuthorizationCookies(r)
 	if err != nil {
 		slog.WarnContext(ctx, "Google callback without authorization cookies")
-		h.redirectToFrontend(w, r, googleLoginFailedPath)
+		h.failLogin(w, r, "missing_cookies")
 		return
 	}
 
@@ -99,27 +100,36 @@ func (h *GoogleAuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		[]byte(authorizationCookies.State),
 	) != 1 {
 		slog.WarnContext(ctx, "Google callback state mismatch")
-		h.redirectToFrontend(w, r, googleLoginFailedPath)
+		h.failLogin(w, r, "state_mismatch")
 		return
 	}
 
 	login, err := h.googleAuth.CompleteLogin(ctx, code, authorizationCookies.Nonce, authorizationCookies.CodeVerifier)
 
 	if err != nil {
+		reason := "internal_error"
 		switch {
 		case errors.Is(err, services.ErrGoogleAuthenticationFailed):
 			slog.WarnContext(ctx, "Google authentication failed", "error", err)
+			reason = "authentication_failed"
 
 		default:
 			slog.ErrorContext(ctx, "Complete Google login failed", "error", err)
 		}
-		h.redirectToFrontend(w, r, googleLoginFailedPath)
+		h.failLogin(w, r, reason)
 		return
 	}
 
 	// RememberMe como true porque é login utilizando Google OIDC.
 	setUserSessionCookie(w, login.Token, login.ExpiresAt, true, h.cookieSecure)
 	h.redirectToFrontend(w, r, googleLoginSucceededPath)
+}
+
+// failLogin sends the browser to the login page with an error and records
+// why, as a fixed word, in a security event.
+func (h *GoogleAuthHandler) failLogin(w http.ResponseWriter, r *http.Request, reason string) {
+	telemetry.SecurityEvent(r.Context(), telemetry.EventGoogleLoginFailed, slog.String("reason", reason))
+	h.redirectToFrontend(w, r, googleLoginFailedPath)
 }
 
 // Google's error codes are short words such as access_denied.

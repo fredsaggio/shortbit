@@ -4,6 +4,8 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/fredsaggio/url-shortener/internal/telemetry"
 )
 
 func AccessLog(next http.Handler) http.Handler {
@@ -15,15 +17,20 @@ func AccessLog(next http.Handler) http.Handler {
 			statusCode:     http.StatusOK,
 		}
 
-		next.ServeHTTP(recorder, r)
+		ctx, route := telemetry.WithRouteHolder(r.Context())
+		next.ServeHTTP(recorder, r.WithContext(ctx))
+		elapsed := time.Since(startedAt)
 
-		slog.Info(
+		telemetry.RecordHTTPRequest(ctx, r.Method, route(), recorder.statusCode, elapsed)
+		slog.InfoContext(
+			ctx,
 			"http request",
-			"request_id", RequestIDFromContext(r.Context()),
+			"request_id", RequestIDFromContext(ctx),
 			"method", r.Method,
+			"route", route(),
 			"path", r.URL.Path,
 			"status", recorder.statusCode,
-			"duration_ms", time.Since(startedAt).Milliseconds(),
+			"duration_ms", elapsed.Milliseconds(),
 			"response_bytes", recorder.bytes,
 		)
 	})

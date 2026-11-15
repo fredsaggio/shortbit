@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/fredsaggio/url-shortener/internal/problem"
+	"github.com/fredsaggio/url-shortener/internal/telemetry"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -118,6 +119,7 @@ func (h *AccountHandler) ChangePassword(w http.ResponseWriter, r *http.Request) 
 	// Counted per account, not per IP, and checked before the Argon2id
 	// comparison of the current password.
 	if allowed, retryAfter := h.rateLimiter.Allow(userID.String()); !allowed {
+		telemetry.SecurityEvent(ctx, telemetry.EventRateLimited, slog.String("limiter", "account_password"), slog.String("user_id", userID.String()))
 		w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
 		problem.Write(w, r, http.StatusTooManyRequests, "rate_limited", "muitas tentativas de troca de senha, tente novamente mais tarde")
 		return
@@ -142,6 +144,7 @@ func (h *AccountHandler) ChangePassword(w http.ResponseWriter, r *http.Request) 
 		case isPasswordPolicyError(err):
 			writePasswordPolicyError(w, r, err)
 		case errors.Is(err, services.ErrIncorrectCurrentPassword):
+			telemetry.SecurityEvent(ctx, telemetry.EventLoginFailed, slog.String("reason", "incorrect_current_password"), slog.String("user_id", userID.String()))
 			problem.Write(w, r, http.StatusBadRequest, "incorrect_current_password", "senha atual incorreta")
 		case errors.Is(err, services.ErrSamePassword):
 			problem.Write(w, r, http.StatusBadRequest, "same_password", "a nova senha deve ser diferente da atual")
@@ -156,6 +159,7 @@ func (h *AccountHandler) ChangePassword(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	telemetry.SecurityEvent(ctx, telemetry.EventPasswordChanged, slog.String("user_id", userID.String()))
 	setUserSessionCookie(w, result.Session.Token, result.Session.ExpiresAt, result.RememberMe, h.cookieSecure)
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -172,6 +176,7 @@ func (h *AccountHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if allowed, retryAfter := h.rateLimiter.Allow(userID.String()); !allowed {
+		telemetry.SecurityEvent(ctx, telemetry.EventRateLimited, slog.String("limiter", "account_password"), slog.String("user_id", userID.String()))
 		w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
 		problem.Write(w, r, http.StatusTooManyRequests, "rate_limited", "muitas tentativas, tente novamente mais tarde")
 		return
@@ -185,8 +190,10 @@ func (h *AccountHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if err := h.accounts.DeleteAccount(ctx, userID, req.Password, req.Email); err != nil {
 		switch {
 		case errors.Is(err, services.ErrIncorrectCurrentPassword):
+			telemetry.SecurityEvent(ctx, telemetry.EventLoginFailed, slog.String("reason", "incorrect_password_on_delete"), slog.String("user_id", userID.String()))
 			problem.Write(w, r, http.StatusBadRequest, "incorrect_password", "senha incorreta")
 		case errors.Is(err, services.ErrAccountEmailMismatch):
+			telemetry.SecurityEvent(ctx, telemetry.EventLoginFailed, slog.String("reason", "email_mismatch_on_delete"), slog.String("user_id", userID.String()))
 			problem.Write(w, r, http.StatusBadRequest, "account_email_mismatch", "o email não confere com o da conta")
 		case errors.Is(err, services.ErrUnauthenticated):
 			problem.Write(w, r, http.StatusUnauthorized, "authentication_required", "autenticação necessária")
@@ -197,6 +204,7 @@ func (h *AccountHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	telemetry.SecurityEvent(ctx, telemetry.EventAccountDeleted, slog.String("user_id", userID.String()))
 	clearUserSessionCookie(w, h.cookieSecure)
 	w.WriteHeader(http.StatusNoContent)
 }

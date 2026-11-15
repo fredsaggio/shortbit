@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/fredsaggio/url-shortener/internal/problem"
+	"github.com/fredsaggio/url-shortener/internal/telemetry"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -38,6 +39,7 @@ func (h *PasswordResetHandler) Start(w http.ResponseWriter, r *http.Request) {
 	normalizedEmail := strings.ToLower(strings.TrimSpace(request.Email))
 	allowed, retryAfter := h.emailRateLimiter.Allow(normalizedEmail)
 	if !allowed {
+		telemetry.SecurityEvent(r.Context(), telemetry.EventRateLimited, slog.String("limiter", "password_reset_email"))
 		w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
 		problem.Write(w, r, http.StatusTooManyRequests, "rate_limited", "muitas solicitações para este email, tente novamente mais tarde")
 		return
@@ -93,10 +95,12 @@ func (h *PasswordResetHandler) Confirm(w http.ResponseWriter, r *http.Request) {
 			clearPasswordResetCookie(w, h.cookieSecure)
 			problem.Write(w, r, http.StatusGone, "password_reset_unavailable", "tentativa de recuperação ausente ou expirada")
 		case errors.Is(err, services.ErrPasswordResetAttemptLocked):
+			telemetry.SecurityEvent(r.Context(), telemetry.EventVerificationFailed, slog.String("flow", "password_reset"), slog.String("reason", "locked"))
 			problem.Write(w, r, http.StatusTooManyRequests, "attempt_locked", "aguarde antes de tentar novamente")
 		case errors.Is(err, services.ErrPasswordResetCodeExpired):
 			problem.Write(w, r, http.StatusBadRequest, "verification_code_expired", "código expirado; solicite um novo código")
 		case errors.Is(err, services.ErrPasswordResetCodeInvalid):
+			telemetry.SecurityEvent(r.Context(), telemetry.EventVerificationFailed, slog.String("flow", "password_reset"), slog.String("reason", "invalid_code"))
 			problem.Write(w, r, http.StatusBadRequest, "invalid_verification_code", "código de recuperação inválido")
 		case isPasswordPolicyError(err):
 			writePasswordPolicyError(w, r, err)
@@ -108,5 +112,6 @@ func (h *PasswordResetHandler) Confirm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	clearPasswordResetCookie(w, h.cookieSecure)
+	telemetry.SecurityEvent(r.Context(), telemetry.EventPasswordResetComplete)
 	w.WriteHeader(http.StatusNoContent)
 }

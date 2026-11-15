@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/fredsaggio/url-shortener/internal/problem"
+	"github.com/fredsaggio/url-shortener/internal/telemetry"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -260,13 +261,16 @@ func (h *URLHandler) Redirect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.redirect.Resolve(ctx, shortCode, token, clickSourceOf(r))
+	source := clickSourceOf(r)
+	result, err := h.redirect.Resolve(ctx, shortCode, token, source)
 
 	if err != nil {
 		if errors.Is(err, services.ErrURLNotFound) {
+			telemetry.RecordRedirect(ctx, telemetry.RedirectNotFound, string(source))
 			problem.Write(w, r, http.StatusNotFound, "link_not_found", "url não encontrada")
 			return
 		}
+		telemetry.RecordRedirect(ctx, telemetry.RedirectFailed, string(source))
 		if errors.Is(err, services.ErrClickNotRecorded) {
 			slog.ErrorContext(ctx, "record click failed", "error", err)
 			problem.Write(w, r, http.StatusServiceUnavailable, "service_unavailable", "serviço indisponível")
@@ -277,10 +281,12 @@ func (h *URLHandler) Redirect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if result.PasswordRequired {
+		telemetry.RecordRedirect(ctx, telemetry.RedirectPasswordRequired, string(source))
 		renderPrivateLinkPasswordPage(w, r, shortCode, "", http.StatusOK)
 		return
 	}
 
+	telemetry.RecordRedirect(ctx, telemetry.RedirectFound, string(source))
 	http.Redirect(w, r, result.OriginalURL, http.StatusFound)
 }
 

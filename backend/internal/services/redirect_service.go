@@ -11,6 +11,7 @@ import (
 	"github.com/fredsaggio/url-shortener/internal/models"
 	"github.com/fredsaggio/url-shortener/internal/repositories"
 	"github.com/fredsaggio/url-shortener/internal/sessiontoken"
+	"github.com/fredsaggio/url-shortener/internal/telemetry"
 )
 
 var ErrClickNotRecorded = errors.New("click could not be recorded")
@@ -106,9 +107,15 @@ func (s *RedirectService) Resolve(ctx context.Context, shortCode, token string, 
 
 func (s *RedirectService) ResolvePublic(ctx context.Context, shortCode string, source models.ClickSource) (string, error) {
 	urlID, originalURL, cached, err := s.cache.Get(ctx, shortCode)
-	if err != nil {
+	switch {
+	case err != nil:
 		slog.Warn("read cached URL destination failed", "short_code", shortCode, "error", err)
 		cached = false
+		telemetry.RecordCacheLookup(ctx, telemetry.CacheError)
+	case cached:
+		telemetry.RecordCacheLookup(ctx, telemetry.CacheHit)
+	default:
+		telemetry.RecordCacheLookup(ctx, telemetry.CacheMiss)
 	}
 
 	if !cached {
@@ -149,6 +156,7 @@ func (s *RedirectService) countClick(ctx context.Context, urlID int64, source mo
 
 	publishErr := s.publisher.Publish(ctx, event)
 	if publishErr == nil {
+		telemetry.RecordClickPublished(ctx, telemetry.ClickQueued)
 		return nil
 	}
 
@@ -158,8 +166,10 @@ func (s *RedirectService) countClick(ctx context.Context, urlID int64, source mo
 		if errors.Is(err, repositories.ErrURLNotFound) {
 			return ErrURLNotFound
 		}
+		telemetry.RecordClickPublished(ctx, telemetry.ClickNotRecorded)
 		return fmt.Errorf("%w: publish: %w; count synchronously: %w", ErrClickNotRecorded, publishErr, err)
 	}
 
+	telemetry.RecordClickPublished(ctx, telemetry.ClickSynchronous)
 	return nil
 }

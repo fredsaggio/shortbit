@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/fredsaggio/url-shortener/internal/problem"
+	"github.com/fredsaggio/url-shortener/internal/telemetry"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -53,6 +54,7 @@ func (h *SessionHandler) LoginWithPassword(w http.ResponseWriter, r *http.Reques
 	normalizedEmail := strings.ToLower(strings.TrimSpace(req.Email))
 	allowed, retryAfter := h.emailRateLimiter.Allow(normalizedEmail)
 	if !allowed {
+		telemetry.SecurityEvent(ctx, telemetry.EventRateLimited, slog.String("limiter", "login_email"))
 		w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
 		problem.Write(w, r, http.StatusTooManyRequests, "rate_limited", "muitas tentativas de login, tente novamente mais tarde")
 		return
@@ -62,6 +64,7 @@ func (h *SessionHandler) LoginWithPassword(w http.ResponseWriter, r *http.Reques
 
 	if err != nil {
 		if errors.Is(err, services.ErrIncorrectEmailOrPassword) {
+			telemetry.SecurityEvent(ctx, telemetry.EventLoginFailed, slog.String("reason", "invalid_credentials"))
 			problem.Write(w, r, http.StatusUnauthorized, "invalid_credentials", "email ou senha incorretos")
 			return
 		}

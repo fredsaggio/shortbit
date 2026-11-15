@@ -58,11 +58,11 @@ func CompositionRoot(pool db.DB, cfg config.Config, googleClient services.Google
 		codeSender,
 		services.PasswordRegistrationConfig{CodeTTL: cfg.PasswordRegistration.CodeTTL, AttemptTTL: cfg.PasswordRegistration.AttemptTTL},
 	)
-	registrationEmailRateLimiter := middleware.NewRateLimiter(registrationEmailRateLimitRequestsPerSecond, registrationEmailRateLimitBurst, registrationEmailRateLimitMaxEntries, registrationEmailRateLimitStaleAfter)
+	registrationEmailRateLimiter := middleware.NewRateLimiter(registrationEmailRateLimitRequestsPerSecond, registrationEmailRateLimitBurst, registrationEmailRateLimitMaxEntries, registrationEmailRateLimitStaleAfter).Named("registration_email")
 	userHandler := handlers.NewUserHandler(userService, registrationEmailRateLimiter, cfg.Session.CookieSecure)
 	passwordResetService := services.NewPasswordResetService(userRepository, passwordHasher, codeSender, sessiontoken.Generate, verificationcode.GeneratePasswordReset,
 		services.PasswordResetConfig{CodeTTL: cfg.PasswordReset.CodeTTL, AttemptTTL: cfg.PasswordReset.AttemptTTL})
-	passwordResetEmailRateLimiter := middleware.NewRateLimiter(passwordResetEmailRateLimitRequestsPerSecond, passwordResetEmailRateLimitBurst, passwordResetEmailRateLimitMaxEntries, passwordResetEmailRateLimitStaleAfter)
+	passwordResetEmailRateLimiter := middleware.NewRateLimiter(passwordResetEmailRateLimitRequestsPerSecond, passwordResetEmailRateLimitBurst, passwordResetEmailRateLimitMaxEntries, passwordResetEmailRateLimitStaleAfter).Named("password_reset_email")
 	passwordResetHandler := handlers.NewPasswordResetHandler(passwordResetService, passwordResetEmailRateLimiter, cfg.Session.CookieSecure)
 
 	userSessionRepository := repositories.NewUserSessionRepository(pool)
@@ -72,7 +72,7 @@ func CompositionRoot(pool db.DB, cfg config.Config, googleClient services.Google
 	googleAuthService := services.NewGoogleAuthService(userRepository, authService, googleClient)
 	googleAuthHandler := handlers.NewGoogleAuthHandler(googleAuthService, googleoidc.GenerateAuthorizationValues, cfg.Session.CookieSecure, cfg.URL.FrontendURL)
 
-	loginEmailRateLimiter := middleware.NewRateLimiter(loginEmailRateLimitRequestsPerSecond, loginEmailRateLimitBurst, loginEmailRateLimitMaxEntries, loginEmailRateLimitStaleAfter)
+	loginEmailRateLimiter := middleware.NewRateLimiter(loginEmailRateLimitRequestsPerSecond, loginEmailRateLimitBurst, loginEmailRateLimitMaxEntries, loginEmailRateLimitStaleAfter).Named("login_email")
 	sessionHandler := handlers.NewSessionHandler(authService, loginEmailRateLimiter, cfg.Session.CookieSecure)
 
 	shortCodeGenerator, err := shortcodes.NewGenerator()
@@ -114,7 +114,7 @@ func CompositionRoot(pool db.DB, cfg config.Config, googleClient services.Google
 	clickStatsHandler := middleware.Authenticator(authService)(http.HandlerFunc(handlers.NewClickStatsHandler(clickStatsService).DailyClicks))
 
 	accountService := services.NewAccountService(userRepository, userSessionRepository, passwordHasher, sessiontoken.Generate, cfg.Session.TTL, destinationCache)
-	passwordChangeRateLimiter := middleware.NewRateLimiter(passwordChangeRateLimitRequestsPerSecond, passwordChangeRateLimitBurst, passwordChangeRateLimitMaxEntries, passwordChangeRateLimitStaleAfter)
+	passwordChangeRateLimiter := middleware.NewRateLimiter(passwordChangeRateLimitRequestsPerSecond, passwordChangeRateLimitBurst, passwordChangeRateLimitMaxEntries, passwordChangeRateLimitStaleAfter).Named("account_password")
 	accountHandler := handlers.NewAccountHandler(accountService, passwordChangeRateLimiter, cfg.Session.CookieSecure)
 	meHandler := middleware.Authenticator(authService)(http.HandlerFunc(accountHandler.Get))
 	updateMeHandler := middleware.Authenticator(authService)(http.HandlerFunc(accountHandler.Update))

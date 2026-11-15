@@ -21,6 +21,7 @@ import (
 	"github.com/fredsaggio/url-shortener/internal/messaging"
 	"github.com/fredsaggio/url-shortener/internal/repositories"
 	"github.com/fredsaggio/url-shortener/internal/server"
+	"github.com/fredsaggio/url-shortener/internal/telemetry"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -43,6 +44,12 @@ func Run(ctx context.Context, getEnv func(string) string) error {
 		return err
 	}
 
+	stopTelemetry, err := app.StartTelemetry(ctx, getEnv, "shortbit-api")
+	if err != nil {
+		return err
+	}
+	defer stopTelemetry()
+
 	if cfg.RunMigrations {
 		if err := db.Migrate(ctx, cfg.DatabaseURL); err != nil {
 			return err
@@ -55,6 +62,9 @@ func Run(ctx context.Context, getEnv func(string) string) error {
 		return err
 	}
 	defer pool.Close()
+	if err := telemetry.ObserveDBPool(pool); err != nil {
+		slog.Warn("database pool metrics unavailable", "error", err)
+	}
 
 	redisOptions, err := newRedisOptions(cfg.Redis)
 	if err != nil {

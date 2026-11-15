@@ -9,6 +9,7 @@ import (
 	"github.com/fredsaggio/url-shortener/docs"
 	"github.com/fredsaggio/url-shortener/internal/handlers"
 	"github.com/fredsaggio/url-shortener/internal/middleware"
+	"github.com/fredsaggio/url-shortener/internal/telemetry"
 )
 
 const (
@@ -113,14 +114,14 @@ func NewServer(h *Handlers, database DatabasePinger, options ...Option) *Server 
 	srv := &Server{
 		h:                           h,
 		database:                    database,
-		rateLimiter:                 middleware.NewRateLimiter(globalRateLimitRequestsPerSecond, globalRateLimitBurst, globalRateLimitMaxClients, globalRateLimitStaleAfter),
-		loginRateLimiter:            middleware.NewRateLimiter(loginRateLimitRequestsPerSecond, loginRateLimitBurst, loginRateLimitMaxClients, loginRateLimitStaleAfter),
-		registrationStartLimiter:    middleware.NewRateLimiter(registrationStartRateLimitRequestsPerSecond, registrationStartRateLimitBurst, registrationRateLimitMaxClients, registrationRateLimitStaleAfter),
-		registrationConfirmLimiter:  middleware.NewRateLimiter(registrationConfirmRateLimitRequestsPerSecond, registrationConfirmRateLimitBurst, registrationRateLimitMaxClients, registrationRateLimitStaleAfter),
-		registrationResendLimiter:   middleware.NewRateLimiter(registrationResendRateLimitRequestsPerSecond, registrationResendRateLimitBurst, registrationRateLimitMaxClients, registrationRateLimitStaleAfter),
-		passwordResetStartLimiter:   middleware.NewRateLimiter(passwordResetStartRateLimitRequestsPerSecond, passwordResetStartRateLimitBurst, registrationRateLimitMaxClients, registrationRateLimitStaleAfter),
-		passwordResetConfirmLimiter: middleware.NewRateLimiter(passwordResetConfirmRateLimitRequestsPerSecond, passwordResetConfirmRateLimitBurst, registrationRateLimitMaxClients, registrationRateLimitStaleAfter),
-		linkAccessLimiter:           middleware.NewRateLimiter(linkAccessRateLimitRequestsPerSecond, linkAccessRateLimitBurst, linkAccessRateLimitMaxEntries, linkAccessRateLimitStaleAfter),
+		rateLimiter:                 middleware.NewRateLimiter(globalRateLimitRequestsPerSecond, globalRateLimitBurst, globalRateLimitMaxClients, globalRateLimitStaleAfter).Named("global"),
+		loginRateLimiter:            middleware.NewRateLimiter(loginRateLimitRequestsPerSecond, loginRateLimitBurst, loginRateLimitMaxClients, loginRateLimitStaleAfter).Named("login"),
+		registrationStartLimiter:    middleware.NewRateLimiter(registrationStartRateLimitRequestsPerSecond, registrationStartRateLimitBurst, registrationRateLimitMaxClients, registrationRateLimitStaleAfter).Named("registration_start"),
+		registrationConfirmLimiter:  middleware.NewRateLimiter(registrationConfirmRateLimitRequestsPerSecond, registrationConfirmRateLimitBurst, registrationRateLimitMaxClients, registrationRateLimitStaleAfter).Named("registration_confirm"),
+		registrationResendLimiter:   middleware.NewRateLimiter(registrationResendRateLimitRequestsPerSecond, registrationResendRateLimitBurst, registrationRateLimitMaxClients, registrationRateLimitStaleAfter).Named("registration_resend"),
+		passwordResetStartLimiter:   middleware.NewRateLimiter(passwordResetStartRateLimitRequestsPerSecond, passwordResetStartRateLimitBurst, registrationRateLimitMaxClients, registrationRateLimitStaleAfter).Named("password_reset_start"),
+		passwordResetConfirmLimiter: middleware.NewRateLimiter(passwordResetConfirmRateLimitRequestsPerSecond, passwordResetConfirmRateLimitBurst, registrationRateLimitMaxClients, registrationRateLimitStaleAfter).Named("password_reset_confirm"),
+		linkAccessLimiter:           middleware.NewRateLimiter(linkAccessRateLimitRequestsPerSecond, linkAccessRateLimitBurst, linkAccessRateLimitMaxEntries, linkAccessRateLimitStaleAfter).Named("link_access"),
 	}
 
 	for _, option := range options {
@@ -202,7 +203,8 @@ func (srv *Server) NewRouterHTTP() http.Handler {
 
 	srv.registerRoutes(mux)
 
-	handler := http.Handler(mux)
+	// Saves the matched pattern for the access log and the metrics.
+	handler := telemetry.RecordRoute(mux)
 
 	handler = middleware.LimitRequestBody(handler)
 	handler = srv.rateLimiter.MiddlewareByIP(handler)

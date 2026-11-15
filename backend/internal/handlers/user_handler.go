@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/fredsaggio/url-shortener/internal/problem"
+	"github.com/fredsaggio/url-shortener/internal/telemetry"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -64,6 +65,7 @@ func (h *UserHandler) StartPasswordRegistration(w http.ResponseWriter, r *http.R
 	normalizedEmail := strings.ToLower(strings.TrimSpace(req.Email))
 	allowed, retryAfter := h.emailRateLimiter.Allow(normalizedEmail)
 	if !allowed {
+		telemetry.SecurityEvent(r.Context(), telemetry.EventRateLimited, slog.String("limiter", "registration_email"))
 		w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
 		problem.Write(w, r, http.StatusTooManyRequests, "rate_limited", "muitas solicitações para este email, tente novamente mais tarde")
 		return
@@ -121,12 +123,14 @@ func (h *UserHandler) ConfirmPasswordRegistration(w http.ResponseWriter, r *http
 			problem.Write(w, r, http.StatusGone, "registration_unavailable", "tentativa de cadastro ausente ou expirada")
 
 		case errors.Is(err, services.ErrRegistrationAttemptLocked):
+			telemetry.SecurityEvent(ctx, telemetry.EventVerificationFailed, slog.String("flow", "registration"), slog.String("reason", "locked"))
 			problem.Write(w, r, http.StatusTooManyRequests, "attempt_locked", "aguarde antes de tentar novamente")
 
 		case errors.Is(err, services.ErrVerificationCodeExpired):
 			problem.Write(w, r, http.StatusBadRequest, "verification_code_expired", "código expirado; solicite um novo código")
 
 		case errors.Is(err, services.ErrVerificationCodeInvalid):
+			telemetry.SecurityEvent(ctx, telemetry.EventVerificationFailed, slog.String("flow", "registration"), slog.String("reason", "invalid_code"))
 			problem.Write(w, r, http.StatusBadRequest, "invalid_verification_code", "código de confirmação inválido")
 
 		case errors.Is(err, services.ErrEmailAlreadyExists):
@@ -147,6 +151,7 @@ func (h *UserHandler) ConfirmPasswordRegistration(w http.ResponseWriter, r *http
 	}
 
 	clearPasswordRegistrationCookie(w, h.cookieSecure)
+	telemetry.SecurityEvent(ctx, telemetry.EventAccountCreated, slog.String("user_id", user.ID.String()), slog.String("method", "password"))
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)

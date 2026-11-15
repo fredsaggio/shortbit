@@ -5,9 +5,13 @@
 package logging
 
 import (
+	"context"
 	"io"
 	"log/slog"
 	"regexp"
+
+	"go.opentelemetry.io/contrib/bridges/otelslog"
+	otellog "go.opentelemetry.io/otel/log"
 )
 
 var (
@@ -32,7 +36,65 @@ func Redact(text string) string {
 // NewJSONLogger writes JSON lines to w with every string and error value
 // passed through Redact.
 func NewJSONLogger(w io.Writer) *slog.Logger {
-	return slog.New(slog.NewJSONHandler(w, &slog.HandlerOptions{ReplaceAttr: redactAttr}))
+	return NewLogger(w, nil)
+}
+
+// NewLogger writes JSON lines to w and, when provider is not nil, also sends
+// every record to it (OpenTelemetry logs, see the telemetry package). Both
+// outputs go through Redact.
+func NewLogger(w io.Writer, provider otellog.LoggerProvider) *slog.Logger {
+	stdout := slog.NewJSONHandler(w, &slog.HandlerOptions{ReplaceAttr: redactAttr})
+	if provider == nil {
+		return slog.New(stdout)
+	}
+	exported := &redactingHandler{next: otelslog.NewHandler(loggerName, otelslog.WithLoggerProvider(provider))}
+	return slog.New(slog.NewMultiHandler(stdout, exported))
+}
+
+const loggerName = "github.com/fredsaggio/url-shortener"
+
+// redactingHandler applies Redact to a handler that has no ReplaceAttr hook.
+type redactingHandler struct {
+	next slog.Handler
+}
+
+func (h *redactingHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return h.next.Enabled(ctx, level)
+}
+
+func (h *redactingHandler) Handle(ctx context.Context, record slog.Record) error {
+	redacted := slog.NewRecord(record.Time, record.Level, Redact(record.Message), record.PC)
+	record.Attrs(func(attr slog.Attr) bool {
+		redacted.AddAttrs(redactNested(attr))
+		return true
+	})
+	return h.next.Handle(ctx, redacted)
+}
+
+func (h *redactingHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	redacted := make([]slog.Attr, len(attrs))
+	for i, attr := range attrs {
+		redacted[i] = redactNested(attr)
+	}
+	return &redactingHandler{next: h.next.WithAttrs(redacted)}
+}
+
+func (h *redactingHandler) WithGroup(name string) slog.Handler {
+	return &redactingHandler{next: h.next.WithGroup(name)}
+}
+
+// redactNested redacts an attribute and, for a group, every attribute in it.
+func redactNested(attr slog.Attr) slog.Attr {
+	value := attr.Value.Resolve()
+	if value.Kind() != slog.KindGroup {
+		return redactAttr(nil, slog.Attr{Key: attr.Key, Value: value})
+	}
+	group := value.Group()
+	redacted := make([]any, len(group))
+	for i, member := range group {
+		redacted[i] = redactNested(member)
+	}
+	return slog.Group(attr.Key, redacted...)
 }
 
 func redactAttr(_ []string, attr slog.Attr) slog.Attr {

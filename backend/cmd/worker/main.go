@@ -11,6 +11,7 @@ import (
 	"github.com/fredsaggio/url-shortener/internal/config"
 	"github.com/fredsaggio/url-shortener/internal/db"
 	"github.com/fredsaggio/url-shortener/internal/logging"
+	"github.com/fredsaggio/url-shortener/internal/telemetry"
 )
 
 func main() {
@@ -31,11 +32,20 @@ func Run(ctx context.Context, getEnv func(string) string) error {
 		return err
 	}
 
+	stopTelemetry, err := app.StartTelemetry(ctx, getEnv, "shortbit-worker")
+	if err != nil {
+		return err
+	}
+	defer stopTelemetry()
+
 	pool, err := db.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return err
 	}
 	defer pool.Close()
+	if err := telemetry.ObserveDBPool(pool); err != nil {
+		slog.Warn("database pool metrics unavailable", "error", err)
+	}
 
 	app.RunClickWorker(ctx, pool, cfg.RabbitMQURL, cfg.RabbitMQPrefetch, cfg.ProcessedClickEventRetention)
 

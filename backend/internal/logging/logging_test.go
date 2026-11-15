@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"testing"
 )
@@ -50,6 +51,30 @@ func TestLoggerRedactsStringsErrorsAndPanicValues(t *testing.T) {
 	for _, kept := range []string{`"count":3`, "send password reset code", `[email]`, `[credentials]@host`} {
 		if !strings.Contains(line, kept) {
 			t.Errorf("log line lost %q: %s", kept, line)
+		}
+	}
+}
+
+func TestRedactingHandlerCoversAttrsGroupsAndMessages(t *testing.T) {
+	var out bytes.Buffer
+	logger := slog.New(&redactingHandler{next: slog.NewJSONHandler(&out, nil)}).
+		With("owner", "ana@example.com")
+
+	logger.Info("sent to bia@example.com",
+		slog.Group("request", slog.String("dsn", "amqps://user:pass@host/vh")),
+		"error", errors.New("bounce for caio@example.com"),
+		"count", 2,
+	)
+
+	line := out.String()
+	for _, leaked := range []string{"ana@example.com", "bia@example.com", "caio@example.com", "user:pass"} {
+		if strings.Contains(line, leaked) {
+			t.Errorf("exported log leaked %q: %s", leaked, line)
+		}
+	}
+	for _, kept := range []string{`"msg":"sent to [email]"`, `"owner":"[email]"`, `"request":{"dsn":"amqps://[credentials]@host/vh"}`, `"count":2`} {
+		if !strings.Contains(line, kept) {
+			t.Errorf("exported log lost %s: %s", kept, line)
 		}
 	}
 }

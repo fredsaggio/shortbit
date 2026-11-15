@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/fredsaggio/url-shortener/internal/problem"
+	"github.com/fredsaggio/url-shortener/internal/telemetry"
 	"log/slog"
 	"net/http"
 
@@ -48,6 +49,7 @@ func (h *LinkAccessSessionHandler) RedirectPrivateLink(w http.ResponseWriter, r 
 		case errors.Is(err, services.ErrURLNotFound):
 			problem.Write(w, r, http.StatusNotFound, "link_not_found", "url não encontrada")
 		case errors.Is(err, services.ErrIncorrectLinkPassword):
+			telemetry.SecurityEvent(ctx, telemetry.EventLinkPasswordFailed)
 			renderPrivateLinkPasswordPage(w, r, shortCode, "Senha incorreta. Tente novamente.", http.StatusUnauthorized)
 		default:
 			slog.ErrorContext(ctx, "create link access session failed", "error", err)

@@ -2,11 +2,14 @@ package middleware
 
 import (
 	"github.com/fredsaggio/url-shortener/internal/problem"
+	"github.com/fredsaggio/url-shortener/internal/telemetry"
 	"math"
 	"net/http"
 	"strconv"
 	"sync"
 	"time"
+
+	"log/slog"
 )
 
 type rateLimitBucket struct {
@@ -25,6 +28,23 @@ type RateLimiter struct {
 	lastCleanup     time.Time
 	cleanupInterval time.Duration
 	now             func() time.Time
+	// name labels the security event of a refused request: never the key,
+	// which is an IP or an email.
+	name string
+}
+
+// Named sets the name used in the rate_limited security event.
+func (l *RateLimiter) Named(name string) *RateLimiter {
+	l.name = name
+	return l
+}
+
+// Name is the limiter's name, or "unnamed".
+func (l *RateLimiter) Name() string {
+	if l.name == "" {
+		return "unnamed"
+	}
+	return l.name
 }
 
 func NewRateLimiter(requestsPerSecond float64, burst, maxEntries int, staleAfter time.Duration) *RateLimiter {
@@ -72,6 +92,7 @@ func (l *RateLimiter) middlewareByKey(next http.Handler, key func(*http.Request)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		allowed, retryAfter := l.Allow(key(r))
 		if !allowed {
+			telemetry.SecurityEvent(r.Context(), telemetry.EventRateLimited, slog.String("limiter", l.Name()))
 			w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
 			problem.Write(w, r, http.StatusTooManyRequests, "rate_limited", "muitas requisições, tente novamente mais tarde")
 			return

@@ -60,6 +60,11 @@ RUN_CLICK_WORKER=false
 FRONTEND_DIST_DIR=
 REDIS_URL=
 CLIENT_IP_HEADER=
+
+# Opcionais: métricas e logs por OTLP (veja observability.md). Sem o endpoint,
+# nada sai do processo.
+OTEL_EXPORTER_OTLP_ENDPOINT=
+OTEL_EXPORTER_OTLP_HEADERS=
 ```
 
 As variáveis do último bloco são opcionais e ficam desligadas no desenvolvimento ([deploy](deployment.md), [ADR 0003](decisions/0003-free-single-service-deploy.md)):
@@ -68,6 +73,7 @@ As variáveis do último bloco são opcionais e ficam desligadas no desenvolvime
 - `RUN_CLICK_WORKER=true` roda o worker de cliques dentro da API, para hospedagens sem serviço de worker. Usa `RABBITMQ_PREFETCH` e `PROCESSED_CLICK_EVENT_RETENTION`. Não rode junto com o `make worker` sem necessidade: os dois consumiriam a mesma fila, o que funciona, mas não ajuda.
 - `FRONTEND_DIST_DIR` aponta para o build do frontend (`frontend/dist`). A API passa a servir o app nas rotas dele, com CSP. Localmente, o Vite continua sendo o caminho.
 - `REDIS_URL` (`redis://` ou `rediss://`, com senha) substitui `REDIS_ADDR` em Redis hospedado.
+- `OTEL_EXPORTER_OTLP_ENDPOINT` liga o envio de métricas e logs por OpenTelemetry (OTLP/HTTP), para o Grafana local do Compose (`http://localhost:4318`) ou para o Grafana Cloud. `OTEL_EXPORTER_OTLP_HEADERS` leva o token (`Authorization=Basic ...`) e é segredo. Vazio, a API e o worker funcionam igual e não mandam nada. Os exportadores também entendem as outras variáveis `OTEL_*` padrão, como `OTEL_METRIC_EXPORT_INTERVAL`. Detalhes em [observability.md](observability.md).
 - `CLIENT_IP_HEADER` faz o rate limit ler o IP do cliente de um cabeçalho que o proxy sobrescreve (`True-Client-IP` no Render). Sem proxy, deixe vazio: o cliente poderia mandar o cabeçalho e escolher o próprio limite. `X-Forwarded-For` é recusado.
 
 `FRONTEND_URL` é opcional e assume `http://localhost:5173`, onde o Vite roda o frontend. É o destino do redirect do login com Google e precisa ser só a origem (esquema, host e porta), sem caminho nem query. Em produção, use a origem pública do frontend.
@@ -189,7 +195,8 @@ http://localhost:8080/me
 A API e o worker escrevem uma linha JSON por evento (`log/slog`), criadas por `logging.NewJSONLogger`. As regras:
 
 - **Nunca logar dado pessoal nem segredo:** email, nome, senha, hash, token, cookie, código de verificação, URL de destino de link ou IP. Para referenciar algo, use IDs internos (`url_id`, `event_id`) ou o código curto.
-- O log de acesso grava método, caminho (sem query string), status, duração e tamanho da resposta.
+- O log de acesso grava método, rota (`/urls/{code}`), caminho (sem query string), status, duração e tamanho da resposta.
+- Eventos de segurança usam `telemetry.SecurityEvent`: uma linha `security event` com um campo `event` fixo (`login_failed`, `rate_limited`, `password_changed`, `account_deleted`...) e um contador de mesmo nome. Os atributos são palavras fixas e IDs internos, como `user_id` ou o nome do limitador; nunca o email ou o IP que foi limitado.
 - Texto que vem de fora (o parâmetro `error` do Google, por exemplo) é cortado antes de ir para o log.
 - **Rede de proteção:** o logger apaga emails (`[email]`) e credenciais dentro de URLs (`scheme://[credentials]@host`) de qualquer texto ou erro antes de gravar. Isso cobre mensagens que o código não controla, como erros de bibliotecas e valores de `panic`, mas não é desculpa para logar dado pessoal.
 
