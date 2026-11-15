@@ -11,10 +11,11 @@ import (
 // short links (GET /{code}). Only those of at least six Base62 characters could
 // ever be generated. Matching is exact, since paths are case-sensitive.
 var reservedCodes = map[string]struct{}{
-	"entrar":   {},
-	"cadastro": {},
-	"painel":   {},
-	"assets":   {},
+	"entrar":      {},
+	"cadastro":    {},
+	"painel":      {},
+	"assets":      {},
+	"privacidade": {},
 }
 
 type Generator struct {

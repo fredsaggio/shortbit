@@ -126,7 +126,7 @@ func TestGeneratorGenerateRejectsUninitializedGenerator(t *testing.T) {
 }
 
 func TestIsReserved(t *testing.T) {
-	for _, code := range []string{"entrar", "cadastro", "painel", "assets"} {
+	for _, code := range []string{"entrar", "cadastro", "painel", "assets", "privacidade"} {
 		if !shortcodes.IsReserved(code) {
 			t.Errorf("IsReserved(%q) = false, want true", code)
 		}

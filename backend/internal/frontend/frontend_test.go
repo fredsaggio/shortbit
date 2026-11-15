@@ -61,7 +61,7 @@ func get(mux *http.ServeMux, path string) *httptest.ResponseRecorder {
 func TestServesTheAppOnItsRoutes(t *testing.T) {
 	mux := newMux(t, newBuild(t))
 
-	for _, path := range []string{"/", "/entrar", "/cadastro", "/recuperar-senha", "/painel", "/painel/links/Ab3dX9", "/conta"} {
+	for _, path := range []string{"/", "/entrar", "/cadastro", "/recuperar-senha", "/painel", "/painel/links/Ab3dX9", "/conta", "/privacidade"} {
 		t.Run(path, func(t *testing.T) {
 			response := get(mux, path)
 

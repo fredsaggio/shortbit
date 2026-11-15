@@ -9,6 +9,7 @@ import { HomePage } from './pages/HomePage.tsx'
 import { LinkDetailPage } from './pages/LinkDetailPage.tsx'
 import { LoginPage } from './pages/LoginPage.tsx'
 import { NotFoundPage } from './pages/NotFoundPage.tsx'
+import { PrivacyPage } from './pages/PrivacyPage.tsx'
 import { RegisterPage } from './pages/RegisterPage.tsx'
 import { Toaster } from '@/components/ui/sonner'
 
@@ -35,6 +36,7 @@ export function App() {
             }
           />
           <Route path="recuperar-senha" element={<ForgotPasswordPage />} />
+          <Route path="privacidade" element={<PrivacyPage />} />
           <Route
             path="painel"
             element={

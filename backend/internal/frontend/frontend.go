@@ -26,6 +26,7 @@ var AppRoutes = []string{
 	"GET /painel",
 	"GET /painel/",
 	"GET /conta",
+	"GET /privacidade",
 }
 
 // The app loads only its own bundle, styles and fonts and calls only its own

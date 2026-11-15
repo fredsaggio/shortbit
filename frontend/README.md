@@ -15,6 +15,7 @@ Os formulários usam `noValidate` e mensagens próprias (`src/validation.ts` e `
 | `/painel` | Criar links (públicos ou privados, com senha) e listar os seus | Com sessão |
 | `/painel/links/:code` | Detalhe de um link e total de cliques | Com sessão |
 | `/conta` | Minha conta: dados, nome completo e troca de senha (contas com senha) | Com sessão |
+| `/privacidade` | Política de privacidade (LGPD); o Google pede o link dela no login | Livre |
 
 A página de senha do link privado e o redirect (`/{code}`) continuam na API, porque são abertos por quem recebe o link curto.
 

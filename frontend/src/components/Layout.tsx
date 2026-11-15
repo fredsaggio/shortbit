@@ -214,7 +214,7 @@ export function Layout() {
           <div>
             <Logo tone="light" />
             <p className="mt-4 max-w-sm text-sm leading-relaxed">
-              Encurte links públicos ou protegidos por senha e veja quantas pessoas clicaram.
+              Encurte links públicos ou privados e veja quantas vezes cada um foi aberto.
             </p>
           </div>
           <div>
@@ -249,6 +249,9 @@ export function Layout() {
               Usamos apenas cookies essenciais, para manter você conectado e proteger o login. Nada de rastreamento de
               terceiros.
             </p>
+            <Link to="/privacidade" className="mt-3 inline-block rounded-sm text-sm font-semibold text-white underline-offset-4 transition-colors hover:underline">
+              Política de privacidade
+            </Link>
           </div>
         </div>
         <div className="border-t border-white/10">
