@@ -76,6 +76,12 @@ func WithFrontend(frontend Frontend) Option {
 	return func(srv *Server) { srv.frontend = frontend }
 }
 
+// WithHSTS sends Strict-Transport-Security on every response. Use it only
+// where the API is served over HTTPS.
+func WithHSTS() Option {
+	return func(srv *Server) { srv.hsts = true }
+}
+
 // WithClientIPHeader makes the rate limiters read the client address from a
 // header that the proxy in front of the API overwrites (see middleware.ClientIP).
 func WithClientIPHeader(header string) Option {
@@ -87,6 +93,7 @@ type Server struct {
 	database                    DatabasePinger
 	frontend                    Frontend
 	clientIPHeader              string
+	hsts                        bool
 	rateLimiter                 *middleware.RateLimiter
 	loginRateLimiter            *middleware.RateLimiter
 	registrationStartLimiter    *middleware.RateLimiter
@@ -198,6 +205,9 @@ func (srv *Server) NewRouterHTTP() http.Handler {
 	handler = middleware.Recovery(handler)
 	handler = middleware.AccessLog(handler)
 	handler = middleware.RequestID(handler)
+	if srv.hsts {
+		handler = middleware.StrictTransportSecurity(handler)
+	}
 
 	return handler
 }

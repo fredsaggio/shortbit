@@ -38,7 +38,7 @@ Depois abra `http://localhost:8092`.
 | `RUN_CLICK_WORKER` | `true` | O plano grátis do Render não tem worker separado |
 | `FRONTEND_DIST_DIR` | `/app/web` (já na imagem) | A API serve o frontend |
 | `CLIENT_IP_HEADER` | `True-Client-IP` | IP real do cliente para o rate limit, atrás do proxy |
-| `COOKIE_SECURE` | `true` | Cookies só em HTTPS |
+| `COOKIE_SECURE` | `true` | Cookies só em HTTPS; também liga o HSTS (o navegador passa a usar só HTTPS no domínio e nos subdomínios por 1 ano) |
 | `PUBLIC_BASE_URL` | `https://shortbit.com.br` | Base dos links curtos |
 | `FRONTEND_URL` | `https://shortbit.com.br` | Destino do login com Google |
 | `GOOGLE_REDIRECT_URL` | `https://shortbit.com.br/auth/google/callback` | Callback do Google |

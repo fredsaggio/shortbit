@@ -99,6 +99,11 @@ func Run(ctx context.Context, getEnv func(string) string) error {
 		return fmt.Errorf("initialize application handlers: %w", err)
 	}
 	serverOptions := []server.Option{server.WithClientIPHeader(cfg.HTTP.ClientIPHeader)}
+	// Secure cookies mean the API runs behind HTTPS, so browsers can be told
+	// to never use plain HTTP for it again.
+	if cfg.Session.CookieSecure {
+		serverOptions = append(serverOptions, server.WithHSTS())
+	}
 	if cfg.HTTP.FrontendDir != "" {
 		web, err := frontend.NewHandler(cfg.HTTP.FrontendDir)
 		if err != nil {

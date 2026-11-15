@@ -72,7 +72,7 @@ As variáveis do último bloco são opcionais e ficam desligadas no desenvolvime
 
 `FRONTEND_URL` é opcional e assume `http://localhost:5173`, onde o Vite roda o frontend. É o destino do redirect do login com Google e precisa ser só a origem (esquema, host e porta), sem caminho nem query. Em produção, use a origem pública do frontend.
 
-`PUBLIC_BASE_URL` é opcional e assume `http://localhost:8080` no desenvolvimento; é usado para compor o `short_url` devolvido por `POST /urls`. Em produção, configure o domínio público, `COOKIE_SECURE=true` e callback Google com HTTPS.
+`PUBLIC_BASE_URL` é opcional e assume `http://localhost:8080` no desenvolvimento; é usado para compor o `short_url` devolvido por `POST /urls`. Em produção, configure o domínio público, `COOKIE_SECURE=true` e callback Google com HTTPS. Com `COOKIE_SECURE=true`, a API também envia `Strict-Transport-Security: max-age=31536000; includeSubDomains` em todas as respostas, porque cookies seguros indicam que ela está atrás de HTTPS; no desenvolvimento, com `COOKIE_SECURE=false`, o cabeçalho não é enviado.
 
 `HOT_URL_THRESHOLD`, `HOT_URL_WINDOW` e `URL_CACHE_TTL` são opcionais: um link público com 20 redirects em 60 segundos tem o destino guardado no Redis por 5 minutos. Sem Redis, a API lê o PostgreSQL normalmente.
 

@@ -68,3 +68,28 @@ func TestWithClientIPHeaderSeparatesClientsBehindAProxy(t *testing.T) {
 		t.Fatalf("first client again status = %d, want %d", code, http.StatusTooManyRequests)
 	}
 }
+
+func TestWithHSTSSendsTheHeaderOnEveryResponse(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		options []Option
+		want    string
+	}{
+		{name: "behind HTTPS", options: []Option{WithHSTS()}, want: "max-age=31536000; includeSubDomains"},
+		{name: "local HTTP", options: nil, want: ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			router := NewServer(newOptionsTestHandlers(), nil, tt.options...).NewRouterHTTP()
+
+			for _, path := range []string{"/health/live", "/nao-existe/de-jeito-nenhum"} {
+				request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, http.NoBody)
+				response := httptest.NewRecorder()
+				router.ServeHTTP(response, request)
+
+				if got := response.Header().Get("Strict-Transport-Security"); got != tt.want {
+					t.Errorf("GET %s Strict-Transport-Security = %q, want %q", path, got, tt.want)
+				}
+			}
+		})
+	}
+}
