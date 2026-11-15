@@ -1,5 +1,5 @@
 import { ArrowRight } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { formatCount } from '../../format.ts'
 import { useCountUp, useInView, usePrefersReducedMotion } from '../../motion.ts'
@@ -52,8 +52,17 @@ function Clicks({ target, active }: { target: number; active: boolean }) {
  * in while the click counter runs up; then the next example. It only plays
  * while on screen, and with reduced motion it shows the first example at rest.
  */
-export function LinkShrinkDemo() {
+type LinkShrinkDemoProps = {
+  /**
+   * Called when a short link appears, with its code and element, so the page
+   * can fly it to its floating twin. The returned function stops the flight.
+   */
+  onShortLink?: (code: string, element: HTMLElement) => (() => void) | void
+}
+
+export function LinkShrinkDemo({ onShortLink }: LinkShrinkDemoProps) {
   const reduced = usePrefersReducedMotion()
+  const shortLinkRef = useRef<HTMLDivElement>(null)
   const [ref, inView] = useInView<HTMLDivElement>({ once: false, threshold: 0.4 })
   const [index, setIndex] = useState(0)
   const [typed, setTyped] = useState(0)
@@ -90,6 +99,17 @@ export function LinkShrinkDemo() {
   const revealed = ['revealed', 'counting', 'holding'].includes(shown.phase)
   const counting = shown.phase === 'counting' || shown.phase === 'holding'
   const savedPercent = Math.round((1 - example.short.length / example.long.length) * 100)
+  // From the pop-in until the card leaves: long enough for the dots to land.
+  const launch = running && revealed
+
+  useEffect(() => {
+    const element = shortLinkRef.current
+    if (!launch || !element || !onShortLink) {
+      return
+    }
+    const code = example.short.slice(example.short.lastIndexOf('/') + 1)
+    return onShortLink(code, element) ?? undefined
+  }, [launch, example, onShortLink])
 
   return (
     <div
@@ -152,6 +172,7 @@ export function LinkShrinkDemo() {
         </span>
 
         <div
+          ref={shortLinkRef}
           className={cn(
             'flex items-center justify-between gap-3 rounded-xl bg-white px-4 py-3 shadow-raised transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]',
             revealed ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-2 scale-90 opacity-0',

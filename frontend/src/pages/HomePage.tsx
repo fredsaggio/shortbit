@@ -1,5 +1,5 @@
 import { ArrowRight, BarChart3, Lock, QrCode, Zap } from 'lucide-react'
-import { useId, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { messageOf } from '../api/client.ts'
 import { createLink } from '../api/links.ts'
@@ -13,6 +13,7 @@ import { ClickBars } from '../components/home/ClickBars.tsx'
 import { FloatingLinks } from '../components/home/FloatingLinks.tsx'
 import { LinkMarquee } from '../components/home/LinkMarquee.tsx'
 import { LinkShrinkDemo } from '../components/home/LinkShrinkDemo.tsx'
+import { flyLink, isShown } from '../components/home/linkFlight.ts'
 import { Magnetic } from '../components/motion/Magnetic.tsx'
 import { Parallax } from '../components/motion/Parallax.tsx'
 import { TiltCard } from '../components/motion/TiltCard.tsx'
@@ -261,16 +262,58 @@ function VisibilityPills() {
 
 const cardClass = 'group h-full rounded-3xl border p-7 shadow-card transition-[transform,box-shadow] duration-300 hover:-translate-y-1 hover:shadow-raised'
 
+const arrivalGlowMs = 1600
+
+// Wires the demo to the floating links: when the demo shows a short link,
+// dots fly from it to the floating link with the same code, which then glows.
+function useLinkFlight() {
+  const layerRef = useRef<HTMLDivElement>(null)
+  const chips = useRef(new Map<string, HTMLElement>())
+  const [arrival, setArrival] = useState<{ code: string; key: number } | null>(null)
+
+  const registerChip = useCallback((code: string, element: HTMLElement | null) => {
+    if (element) {
+      chips.current.set(code, element)
+    } else {
+      chips.current.delete(code)
+    }
+  }, [])
+
+  const launch = useCallback((code: string, from: HTMLElement) => {
+    const layer = layerRef.current
+    const to = chips.current.get(code)
+    // The floating links only show on wide screens.
+    if (!layer || !to || !isShown(to)) {
+      return
+    }
+    return flyLink(layer, from, to, () => setArrival((current) => ({ code, key: (current?.key ?? 0) + 1 })))
+  }, [])
+
+  // The glow fades on its own; a new arrival restarts the wait.
+  useEffect(() => {
+    if (!arrival) {
+      return
+    }
+    const timer = window.setTimeout(() => setArrival(null), arrivalGlowMs)
+    return () => window.clearTimeout(timer)
+  }, [arrival])
+
+  return { layerRef, registerChip, arrival, launch }
+}
+
 export function HomePage() {
   const { state } = useAuth()
+  const { layerRef, registerChip, arrival, launch } = useLinkFlight()
 
   return (
     <>
       <section className="relative overflow-hidden bg-navy text-white">
         {/* Solid navy background; the floating links drift against the scroll. */}
         <Parallax speed={-0.12} aria-hidden="true" className="pointer-events-none absolute inset-0">
-          <FloatingLinks />
+          <FloatingLinks registerChip={registerChip} arrival={arrival} />
         </Parallax>
+        {/* The dots that carry a demo link to its floating twin fly here. */}
+        <div ref={layerRef} aria-hidden="true" className="pointer-events-none absolute inset-0 z-10" />
         <div className="relative mx-auto max-w-7xl px-4 pt-14 pb-16 text-center sm:px-6 sm:pt-20 sm:pb-20">
           <HeroTitle />
           <p className="mx-auto mt-6 max-w-2xl text-lg text-navy-300 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-700 motion-safe:[animation-delay:300ms] motion-safe:[animation-fill-mode:both] sm:text-xl">
@@ -278,7 +321,7 @@ export function HomePage() {
           </p>
 
           <ShortenCard />
-          <LinkShrinkDemo />
+          <LinkShrinkDemo onShortLink={launch} />
           <LinkMarquee />
         </div>
       </section>
