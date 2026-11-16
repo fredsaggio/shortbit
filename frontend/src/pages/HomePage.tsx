@@ -13,6 +13,7 @@ import { ClickBars } from '../components/home/ClickBars.tsx'
 import { FloatingLinks } from '../components/home/FloatingLinks.tsx'
 import { LinkMarquee } from '../components/home/LinkMarquee.tsx'
 import { LinkShrinkDemo } from '../components/home/LinkShrinkDemo.tsx'
+import { PrivateLinkShowcase } from '../components/home/PrivateLinkShowcase.tsx'
 import { flyLink, isShown } from '../components/home/linkFlight.ts'
 import { Magnetic } from '../components/motion/Magnetic.tsx'
 import { Parallax } from '../components/motion/Parallax.tsx'
@@ -391,6 +392,24 @@ export function HomePage() {
 
       <section className="border-t bg-card">
         <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6">
+          <Reveal className="mx-auto max-w-3xl text-center">
+            <p className="text-sm font-bold tracking-widest text-brand-700 uppercase">Link privado</p>
+            <h2 className="mt-3 text-[clamp(1.875rem,4vw,3rem)] leading-tight font-extrabold">
+              Quem recebe vê só o pedido de senha
+            </h2>
+            <p className="mx-auto mt-3 max-w-2xl text-muted-foreground">
+              O destino real fica guardado no servidor até a senha ser confirmada. Teste a tela de acesso abaixo.
+            </p>
+          </Reveal>
+
+          <Reveal delay={80}>
+            <PrivateLinkShowcase />
+          </Reveal>
+        </div>
+      </section>
+
+      <section className="border-t bg-surface">
+        <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6">
           <Reveal>
             <h2 className="text-center text-[clamp(1.875rem,4vw,2.5rem)] font-extrabold">Como funciona</h2>
           </Reveal>
@@ -399,7 +418,7 @@ export function HomePage() {
       </section>
 
       {state.status !== 'authenticated' && (
-        <section className="bg-surface">
+        <section className="border-t bg-card">
           <Reveal className="mx-auto flex max-w-7xl flex-col items-center gap-6 px-4 py-16 text-center sm:px-6">
             <h2 className="text-[clamp(1.75rem,4vw,2.5rem)] font-extrabold">Pronto para encurtar o primeiro link?</h2>
             <Magnetic strength={8}>

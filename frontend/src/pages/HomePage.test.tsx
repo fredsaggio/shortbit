@@ -122,4 +122,21 @@ describe('HomePage', () => {
     expect(await screen.findByRole('link', { name: 'http://localhost:8080/Ab3dX9' })).toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
+
+  it('shows an interactive preview of the private link unlock screen', async () => {
+    fakeApi(signedOut)
+    const { user: actions } = renderApp('/')
+
+    expect(await screen.findByRole('heading', { name: 'Quem recebe vê só o pedido de senha' })).toBeInTheDocument()
+
+    await actions.click(screen.getByRole('button', { name: 'Acessar link' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Digite uma senha para testar a prévia.')
+
+    await actions.type(screen.getByLabelText('Senha da prévia do link privado'), '12345678')
+    await actions.click(screen.getByRole('button', { name: 'Acessar link' }))
+
+    expect(await screen.findByRole('heading', { name: 'Redirecionando ao destino' })).toBeInTheDocument()
+    await actions.click(screen.getByRole('button', { name: 'Ver tela de senha novamente' }))
+    expect(await screen.findByRole('heading', { name: 'Vamos abrir?' })).toBeInTheDocument()
+  })
 })
