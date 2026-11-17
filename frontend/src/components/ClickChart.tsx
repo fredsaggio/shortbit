@@ -134,29 +134,23 @@ export function ClickChart({ code, reloadKey }: ClickChartProps) {
 
 function ChartLegend({ data }: { data: DailyClicks }) {
   return (
-    <>
-      <ul className="mt-5 flex flex-wrap gap-x-6 gap-y-2" aria-label="Total no período">
-        {sources.map((source) => (
-          <li key={source.key} className="flex items-center gap-2">
-            <span className={cn('size-3 rounded-[3px]', source.fill)} aria-hidden="true" />
-            <span className="text-sm text-muted-foreground">{source.label}</span>
-            <span className="font-bold text-navy">{formatCount(data.totals[source.key])}</span>
-          </li>
-        ))}
-        <li className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Visitantes únicos</span>
-          <span className="font-bold text-navy">{formatCount(data.totals.visitors)}</span>
+    <ul className="mt-5 flex flex-wrap gap-x-6 gap-y-2" aria-label="Total no período">
+      {sources.map((source) => (
+        <li key={source.key} className="flex items-center gap-2">
+          <span className={cn('size-3 rounded-[3px]', source.fill)} aria-hidden="true" />
+          <span className="text-sm text-muted-foreground">{source.label}</span>
+          <span className="font-bold text-navy">{formatCount(data.totals[source.key])}</span>
         </li>
-        <li className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Prévias de robôs</span>
-          <span className="font-bold text-navy">{formatCount(data.totals.robots)}</span>
-        </li>
-      </ul>
-      <p className="mt-2 text-xs text-muted-foreground">
-        Os visitantes únicos somam os de cada dia: quem volta em outro dia conta de novo. Prévias de robôs, como a que o
-        WhatsApp monta ao receber o link, não contam como clique.
-      </p>
-    </>
+      ))}
+      <li className="flex items-center gap-2">
+        <span className="text-sm text-muted-foreground">Visitantes únicos</span>
+        <span className="font-bold text-navy">{formatCount(data.totals.visitors)}</span>
+      </li>
+      <li className="flex items-center gap-2">
+        <span className="text-sm text-muted-foreground">Prévias de robôs</span>
+        <span className="font-bold text-navy">{formatCount(data.totals.robots)}</span>
+      </li>
+    </ul>
   )
 }
 
