@@ -73,3 +73,16 @@ type DailyClickCount struct {
 	Source ClickSource
 	Clicks int64
 }
+
+// DailyAudience is the unique visitors and robot visits of one day.
+type DailyAudience struct {
+	Day            time.Time
+	UniqueVisitors int64
+	RobotVisits    int64
+}
+
+// CountryClicks is the number of clicks from one country.
+type CountryClicks struct {
+	Country string
+	Clicks  int64
+}

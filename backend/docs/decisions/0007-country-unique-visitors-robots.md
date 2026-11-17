@@ -34,7 +34,7 @@ A API faz tudo no redirect, a partir do IP do cliente (o mesmo do rate limit, `C
 
 | Campo do evento | Conteúdo |
 | --- | --- |
-| `robot` | `true` quando o User-Agent é de um robô conhecido (abaixo) ou está vazio |
+| `robot` | `true` quando o User-Agent é de um robô conhecido (abaixo) |
 | `country` | Código ISO 3166-1 alfa-2 (`BR`), ou ausente quando a base não conhece o IP |
 | `visitor` | `HMAC-SHA256(sal do dia, url_id ‖ IP ‖ User-Agent)`, truncado em 16 bytes |
 
@@ -42,7 +42,7 @@ IP e User-Agent não vão para a fila, o banco nem os logs. Um robô não leva p
 
 ### Robôs
 
-Reconhecidos por trechos fixos do User-Agent, sem diferenciar maiúsculas: robôs de prévia (WhatsApp, Telegram, Slack, Discord, Facebook/Meta, X, LinkedIn, Skype, Pinterest, Reddit, Embedly, Iframely, VK) e de busca (Google, Bing, DuckDuckGo, Yandex, Apple, Baidu). Não se usa o trecho genérico `bot`, que pega aparelhos reais (por exemplo, celulares Cubot).
+Reconhecidos por trechos fixos do User-Agent, sem diferenciar maiúsculas: robôs de prévia (WhatsApp, Telegram, Slack, Discord, Facebook/Meta, X, LinkedIn, Skype, Pinterest, Reddit, Embedly, Iframely, VK) e de busca (Google, Bing, DuckDuckGo, Yandex, Apple, Baidu). Não se usa o trecho genérico `bot`, que pega aparelhos reais (por exemplo, celulares Cubot). Um User-Agent vazio ou de ferramenta (`curl`) conta como pessoa: a lista pega só robôs que se identificam.
 
 Uma visita de robô não soma em `urls.click_count`, em `url_daily_clicks` nem nos países: soma só em `url_daily_audience.robot_visits`. Antes desta mudança, as prévias contavam como clique; esses números antigos não são corrigidos.
 

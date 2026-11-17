@@ -30,19 +30,30 @@ func NewClickStatsHandler(serv ClickStatsService) *ClickStatsHandler {
 }
 
 type dayClicksResponse struct {
-	Date string `json:"date"`
-	Link int64  `json:"link"`
-	QR   int64  `json:"qr"`
+	Date     string `json:"date"`
+	Link     int64  `json:"link"`
+	QR       int64  `json:"qr"`
+	Visitors int64  `json:"visitors"`
+	Robots   int64  `json:"robots"`
 }
 
 type clickTotalsResponse struct {
-	Link int64 `json:"link"`
-	QR   int64 `json:"qr"`
+	Link      int64 `json:"link"`
+	QR        int64 `json:"qr"`
+	Visitors  int64 `json:"visitors"`
+	Robots    int64 `json:"robots"`
+	NoCountry int64 `json:"no_country"`
+}
+
+type countryClicksResponse struct {
+	Country string `json:"country"`
+	Clicks  int64  `json:"clicks"`
 }
 
 type clickStatsResponse struct {
-	Days   []dayClicksResponse `json:"days"`
-	Totals clickTotalsResponse `json:"totals"`
+	Days      []dayClicksResponse     `json:"days"`
+	Totals    clickTotalsResponse     `json:"totals"`
+	Countries []countryClicksResponse `json:"countries"`
 }
 
 // DailyClicks answers GET /urls/{code}/clicks?days=7|30|90 for the owner.
@@ -81,11 +92,27 @@ func (h *ClickStatsHandler) DailyClicks(w http.ResponseWriter, r *http.Request) 
 	}
 
 	response := clickStatsResponse{
-		Days:   make([]dayClicksResponse, len(stats.Days)),
-		Totals: clickTotalsResponse{Link: stats.Link, QR: stats.QR},
+		Days: make([]dayClicksResponse, len(stats.Days)),
+		Totals: clickTotalsResponse{
+			Link:      stats.Link,
+			QR:        stats.QR,
+			Visitors:  stats.Visitors,
+			Robots:    stats.Robots,
+			NoCountry: stats.NoCountry,
+		},
+		Countries: make([]countryClicksResponse, len(stats.Countries)),
 	}
 	for i, day := range stats.Days {
-		response.Days[i] = dayClicksResponse{Date: day.Day.Format(time.DateOnly), Link: day.Link, QR: day.QR}
+		response.Days[i] = dayClicksResponse{
+			Date:     day.Day.Format(time.DateOnly),
+			Link:     day.Link,
+			QR:       day.QR,
+			Visitors: day.Visitors,
+			Robots:   day.Robots,
+		}
+	}
+	for i, country := range stats.Countries {
+		response.Countries[i] = countryClicksResponse{Country: country.Country, Clicks: country.Clicks}
 	}
 
 	// Clicks keep arriving; the page asks again when it wants fresh numbers.

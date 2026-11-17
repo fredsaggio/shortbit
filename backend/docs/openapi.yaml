@@ -741,11 +741,14 @@ paths:
       operationId: getDailyClicks
       summary: Ver os cliques de um link meu por dia
       description: |
-        Cliques por dia e por origem no período pedido, sempre terminando
-        hoje. O dia é a data em America/Sao_Paulo e dias sem clique vêm com
-        zero. `link` conta quem abriu o link curto; `qr`, quem leu o QR code
-        (o redirect recebeu `?qr=1`). `totals` soma só o período; o total de
-        sempre continua em `click_count`.
+        Cliques por dia, por origem e por país no período pedido, com
+        visitantes únicos e visitas de robôs, sempre terminando hoje. O dia é
+        a data em America/Sao_Paulo e dias sem clique vêm com zero. `link`
+        conta quem abriu o link curto; `qr`, quem leu o QR code (o redirect
+        recebeu `?qr=1`). `visitors` são pessoas diferentes no dia; o total
+        do período é a soma dos dias. `robots` são robôs de prévia e
+        buscadores, fora dos cliques e dos países. `totals` soma só o
+        período; o total de sempre continua em `click_count`.
       security:
         - userSession: []
       parameters:
@@ -972,13 +975,13 @@ components:
   schemas:
     DailyClicksResponse:
       type: object
-      required: [days, totals]
+      required: [days, totals, countries]
       properties:
         days:
           type: array
           items:
             type: object
-            required: [date, link, qr]
+            required: [date, link, qr, visitors, robots]
             properties:
               date:
                 type: string
@@ -994,9 +997,21 @@ components:
                 format: int64
                 minimum: 0
                 example: 4
+              visitors:
+                type: integer
+                format: int64
+                minimum: 0
+                description: Pessoas diferentes no dia.
+                example: 3
+              robots:
+                type: integer
+                format: int64
+                minimum: 0
+                description: Visitas de robôs de prévia e buscadores, que não são cliques.
+                example: 0
         totals:
           type: object
-          required: [link, qr]
+          required: [link, qr, visitors, robots, no_country]
           properties:
             link:
               type: integer
@@ -1008,6 +1023,40 @@ components:
               format: int64
               minimum: 0
               example: 4
+            visitors:
+              type: integer
+              format: int64
+              minimum: 0
+              description: Soma dos visitantes únicos de cada dia; quem voltou em outro dia conta de novo.
+              example: 5
+            robots:
+              type: integer
+              format: int64
+              minimum: 0
+              example: 1
+            no_country:
+              type: integer
+              format: int64
+              minimum: 0
+              description: Cliques do período sem país conhecido, inclusive os de antes da contagem por país.
+              example: 1
+        countries:
+          type: array
+          description: Cliques de pessoas por país, do maior para o menor; só países com clique.
+          items:
+            type: object
+            required: [country, clicks]
+            properties:
+              country:
+                type: string
+                pattern: '^[A-Z]{2}$'
+                description: Código ISO 3166-1 alfa-2.
+                example: BR
+              clicks:
+                type: integer
+                format: int64
+                minimum: 1
+                example: 5
     Problem:
       type: object
       description: |

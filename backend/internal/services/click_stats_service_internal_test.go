@@ -12,12 +12,14 @@ import (
 )
 
 type clickStatsRepoStub struct {
-	link     models.URL
-	findErr  error
-	counts   []models.DailyClickCount
-	gotFrom  time.Time
-	gotTo    time.Time
-	gotURLID int64
+	link      models.URL
+	findErr   error
+	counts    []models.DailyClickCount
+	audience  []models.DailyAudience
+	countries []models.CountryClicks
+	gotFrom   time.Time
+	gotTo     time.Time
+	gotURLID  int64
 }
 
 func (s *clickStatsRepoStub) GetByShortcode(context.Context, uuid.UUID, string) (models.URL, error) {
@@ -27,6 +29,14 @@ func (s *clickStatsRepoStub) GetByShortcode(context.Context, uuid.UUID, string) 
 func (s *clickStatsRepoStub) DailyClicks(_ context.Context, urlID int64, from, to time.Time) ([]models.DailyClickCount, error) {
 	s.gotURLID, s.gotFrom, s.gotTo = urlID, from, to
 	return s.counts, nil
+}
+
+func (s *clickStatsRepoStub) DailyAudience(context.Context, int64, time.Time, time.Time) ([]models.DailyAudience, error) {
+	return s.audience, nil
+}
+
+func (s *clickStatsRepoStub) CountryClicks(context.Context, int64, time.Time, time.Time) ([]models.CountryClicks, error) {
+	return s.countries, nil
 }
 
 func day(text string) time.Time {
@@ -94,5 +104,44 @@ func TestClickStatsRejectsOtherPeriodsAndMissingLinks(t *testing.T) {
 	}
 	if _, err := service.DailyClicks(t.Context(), uuid.Nil(), "Ab3dX9", 30); !errors.Is(err, ErrUnauthenticated) {
 		t.Errorf("DailyClicks(no user) error = %v, want ErrUnauthenticated", err)
+	}
+}
+
+func TestClickStatsAddsVisitorsRobotsAndCountries(t *testing.T) {
+	repo := &clickStatsRepoStub{
+		link: models.URL{ID: 42},
+		counts: []models.DailyClickCount{
+			{Day: day("2026-11-13"), Source: models.ClickSourceLink, Clicks: 6},
+			{Day: day("2026-11-14"), Source: models.ClickSourceQR, Clicks: 4},
+		},
+		audience: []models.DailyAudience{
+			{Day: day("2026-11-13"), UniqueVisitors: 3, RobotVisits: 2},
+			{Day: day("2026-11-14"), UniqueVisitors: 2},
+			{Day: day("2026-10-01"), UniqueVisitors: 99}, // outside the period
+		},
+		countries: []models.CountryClicks{{Country: "BR", Clicks: 7}, {Country: "PT", Clicks: 1}},
+	}
+	service, err := NewClickStatsService(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.now = func() time.Time { return time.Date(2026, 11, 14, 15, 0, 0, 0, time.UTC) }
+
+	stats, err := service.DailyClicks(t.Context(), uuid.NewV7(), "Ab3dX9", 7)
+	if err != nil {
+		t.Fatalf("DailyClicks() error = %v", err)
+	}
+
+	if got := stats.Days[5]; got.Visitors != 3 || got.Robots != 2 {
+		t.Errorf("2026-11-13 = %+v, want 3 visitors and 2 robots", got)
+	}
+	if stats.Visitors != 5 || stats.Robots != 2 {
+		t.Errorf("totals = %d visitors, %d robots; want 5 and 2", stats.Visitors, stats.Robots)
+	}
+	if len(stats.Countries) != 2 || stats.Countries[0].Country != "BR" {
+		t.Errorf("countries = %+v, want BR then PT", stats.Countries)
+	}
+	if stats.NoCountry != 2 {
+		t.Errorf("no country = %d, want 10 clicks minus 8 with a country", stats.NoCountry)
 	}
 }

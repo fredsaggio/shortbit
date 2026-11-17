@@ -19,14 +19,23 @@ import (
 
 type clickStatsBody struct {
 	Days []struct {
-		Date string `json:"date"`
-		Link int64  `json:"link"`
-		QR   int64  `json:"qr"`
+		Date     string `json:"date"`
+		Link     int64  `json:"link"`
+		QR       int64  `json:"qr"`
+		Visitors int64  `json:"visitors"`
+		Robots   int64  `json:"robots"`
 	} `json:"days"`
 	Totals struct {
-		Link int64 `json:"link"`
-		QR   int64 `json:"qr"`
+		Link      int64 `json:"link"`
+		QR        int64 `json:"qr"`
+		Visitors  int64 `json:"visitors"`
+		Robots    int64 `json:"robots"`
+		NoCountry int64 `json:"no_country"`
 	} `json:"totals"`
+	Countries []struct {
+		Country string `json:"country"`
+		Clicks  int64  `json:"clicks"`
+	} `json:"countries"`
 }
 
 func TestDailyClicksByLinkAndQRCodeIntegration(t *testing.T) {
@@ -52,6 +61,17 @@ func TestDailyClicksByLinkAndQRCodeIntegration(t *testing.T) {
 		response.Body.Close()
 		if response.StatusCode != http.StatusFound {
 			t.Fatalf("open %s status = %d, want 302", path, response.StatusCode)
+		}
+	}
+
+	// A link preview robot and a second browser on the same network.
+	for _, agent := range []string{"WhatsApp/2.23.20.0 A", "Mozilla/5.0 (X11; Linux x86_64) Firefox/133.0"} {
+		request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/"+public, nil)
+		request.Header.Set("User-Agent", agent)
+		recorder := httptest.NewRecorder()
+		router.ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusFound {
+			t.Fatalf("open %s as %q status = %d, want 302", public, agent, recorder.Code)
 		}
 	}
 
@@ -98,8 +118,17 @@ func TestDailyClicksByLinkAndQRCodeIntegration(t *testing.T) {
 		t.Fatalf("stats = %d with %d days, want 200 and 7 days", response.StatusCode, len(body.Days))
 	}
 	last := body.Days[6]
-	if last.Date != today || last.Link != 2 || last.QR != 3 || body.Totals.Link != 2 || body.Totals.QR != 3 {
-		t.Errorf("public link stats = %+v, want today %s with 2 by link and 3 by QR code", body, today)
+	if last.Date != today || last.Link != 3 || last.QR != 3 || body.Totals.Link != 3 || body.Totals.QR != 3 {
+		t.Errorf("public link stats = %+v, want today %s with 3 by link and 3 by QR code", body, today)
+	}
+	// Same IP: the five opens without a User-Agent are one visitor, Firefox
+	// another. The robot is apart, and without GEOIP_DB_PATH no click has a
+	// country.
+	if last.Visitors != 2 || last.Robots != 1 || body.Totals.Visitors != 2 || body.Totals.Robots != 1 {
+		t.Errorf("public link audience = %+v, want 2 visitors and 1 robot today", body)
+	}
+	if len(body.Countries) != 0 || body.Totals.NoCountry != 6 {
+		t.Errorf("countries = %+v, no country = %d; want none and 6", body.Countries, body.Totals.NoCountry)
 	}
 
 	if _, body := stats(private, "", owner); len(body.Days) != 30 || body.Totals.QR != 1 || body.Totals.Link != 0 {

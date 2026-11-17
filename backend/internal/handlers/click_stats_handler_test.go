@@ -12,6 +12,7 @@ import (
 
 	"github.com/fredsaggio/url-shortener/internal/ctxval"
 	"github.com/fredsaggio/url-shortener/internal/handlers"
+	"github.com/fredsaggio/url-shortener/internal/models"
 	"github.com/fredsaggio/url-shortener/internal/problem/problemtest"
 	"github.com/fredsaggio/url-shortener/internal/services"
 )
@@ -39,10 +40,14 @@ func TestClickStatsHandler(t *testing.T) {
 		return services.ClickStats{
 			Days: []services.DayClicks{
 				{Day: time.Date(2026, 11, 13, 0, 0, 0, 0, time.UTC), Link: 2},
-				{Day: time.Date(2026, 11, 14, 0, 0, 0, 0, time.UTC), Link: 1, QR: 4},
+				{Day: time.Date(2026, 11, 14, 0, 0, 0, 0, time.UTC), Link: 1, QR: 4, Visitors: 3, Robots: 2},
 			},
-			Link: 3,
-			QR:   4,
+			Link:      3,
+			QR:        4,
+			Visitors:  4,
+			Robots:    2,
+			Countries: []models.CountryClicks{{Country: "BR", Clicks: 6}},
+			NoCountry: 1,
 		}, nil
 	}))
 
@@ -57,20 +62,35 @@ func TestClickStatsHandler(t *testing.T) {
 	}
 	var body struct {
 		Days []struct {
-			Date string `json:"date"`
-			Link int64  `json:"link"`
-			QR   int64  `json:"qr"`
+			Date     string `json:"date"`
+			Link     int64  `json:"link"`
+			QR       int64  `json:"qr"`
+			Visitors int64  `json:"visitors"`
+			Robots   int64  `json:"robots"`
 		} `json:"days"`
 		Totals struct {
-			Link int64 `json:"link"`
-			QR   int64 `json:"qr"`
+			Link      int64 `json:"link"`
+			QR        int64 `json:"qr"`
+			Visitors  int64 `json:"visitors"`
+			Robots    int64 `json:"robots"`
+			NoCountry int64 `json:"no_country"`
 		} `json:"totals"`
+		Countries []struct {
+			Country string `json:"country"`
+			Clicks  int64  `json:"clicks"`
+		} `json:"countries"`
 	}
 	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
 	if len(body.Days) != 2 || body.Days[1].Date != "2026-11-14" || body.Days[1].QR != 4 || body.Totals.Link != 3 || body.Totals.QR != 4 {
 		t.Errorf("body = %+v", body)
+	}
+	if body.Days[1].Visitors != 3 || body.Days[1].Robots != 2 || body.Totals.Visitors != 4 || body.Totals.Robots != 2 || body.Totals.NoCountry != 1 {
+		t.Errorf("visitors and robots = %+v", body)
+	}
+	if len(body.Countries) != 1 || body.Countries[0].Country != "BR" || body.Countries[0].Clicks != 6 {
+		t.Errorf("countries = %+v, want BR with 6", body.Countries)
 	}
 
 	// No period means 30 days.

@@ -12,8 +12,8 @@ func TestIsRobot(t *testing.T) {
 		userAgent string
 		want      bool
 	}{
-		{"empty", "", true},
-		{"blank", "   ", true},
+		{"empty", "", false},
+		{"curl", "curl/8.11.1", false},
 		{"WhatsApp preview", "WhatsApp/2.23.20.0 A", true},
 		{"Telegram preview", "TelegramBot (like TwitterBot)", true},
 		{"Slack preview", "Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots)", true},

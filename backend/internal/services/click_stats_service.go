@@ -24,18 +24,31 @@ const ClickDayZone = "America/Sao_Paulo"
 type ClickStatsRepository interface {
 	GetByShortcode(ctx context.Context, userID uuid.UUID, shortCode string) (models.URL, error)
 	DailyClicks(ctx context.Context, urlID int64, from, to time.Time) ([]models.DailyClickCount, error)
+	DailyAudience(ctx context.Context, urlID int64, from, to time.Time) ([]models.DailyAudience, error)
+	CountryClicks(ctx context.Context, urlID int64, from, to time.Time) ([]models.CountryClicks, error)
 }
 
+// DayClicks is one day of a link: clicks by source, unique visitors and
+// robot visits, which are not clicks (ADR 0007).
 type DayClicks struct {
-	Day  time.Time
-	Link int64
-	QR   int64
+	Day      time.Time
+	Link     int64
+	QR       int64
+	Visitors int64
+	Robots   int64
 }
 
+// ClickStats sums the period. Visitors is the sum of the daily unique
+// visitors, so someone back on another day counts again. NoCountry is the
+// clicks whose country is unknown, older clicks included.
 type ClickStats struct {
-	Days []DayClicks
-	Link int64
-	QR   int64
+	Days      []DayClicks
+	Link      int64
+	QR        int64
+	Visitors  int64
+	Robots    int64
+	Countries []models.CountryClicks
+	NoCountry int64
 }
 
 type ClickStatsService struct {
@@ -78,6 +91,14 @@ func (s *ClickStatsService) DailyClicks(ctx context.Context, userID uuid.UUID, s
 	if err != nil {
 		return ClickStats{}, fmt.Errorf("daily clicks: %w", err)
 	}
+	audience, err := s.repo.DailyAudience(ctx, link.ID, from, to)
+	if err != nil {
+		return ClickStats{}, fmt.Errorf("daily audience: %w", err)
+	}
+	countries, err := s.repo.CountryClicks(ctx, link.ID, from, to)
+	if err != nil {
+		return ClickStats{}, fmt.Errorf("country clicks: %w", err)
+	}
 
 	stats := ClickStats{Days: make([]DayClicks, days)}
 	index := make(map[string]int, days)
@@ -100,6 +121,23 @@ func (s *ClickStatsService) DailyClicks(ctx context.Context, userID uuid.UUID, s
 			stats.Link += count.Clicks
 		}
 	}
+	for _, day := range audience {
+		i, ok := index[day.Day.Format(time.DateOnly)]
+		if !ok {
+			continue
+		}
+		stats.Days[i].Visitors += day.UniqueVisitors
+		stats.Days[i].Robots += day.RobotVisits
+		stats.Visitors += day.UniqueVisitors
+		stats.Robots += day.RobotVisits
+	}
+
+	stats.Countries = countries
+	stats.NoCountry = stats.Link + stats.QR
+	for _, country := range countries {
+		stats.NoCountry -= country.Clicks
+	}
+	stats.NoCountry = max(stats.NoCountry, 0)
 	return stats, nil
 }
 

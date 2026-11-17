@@ -35,13 +35,10 @@ var robotMarkers = []string{
 	"baiduspider",
 }
 
-// IsRobot reports whether the User-Agent belongs to a known robot. Browsers
-// always send one, so an empty User-Agent is a script and counts as a robot.
+// IsRobot reports whether the User-Agent belongs to a known robot. Anything
+// else, an empty User-Agent included, counts as a person.
 func IsRobot(userAgent string) bool {
-	agent := strings.ToLower(strings.TrimSpace(userAgent))
-	if agent == "" {
-		return true
-	}
+	agent := strings.ToLower(userAgent)
 	for _, marker := range robotMarkers {
 		if strings.Contains(agent, marker) {
 			return true

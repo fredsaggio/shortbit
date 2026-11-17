@@ -1,7 +1,7 @@
 # API HTTP
 
 > Status: contratos implementados e planejados
-> Última atualização: 14 de novembro de 2026
+> Última atualização: 16 de novembro de 2026
 
 Base local:
 
@@ -479,19 +479,28 @@ retorna `404`.
 
 ### `GET /urls/{code}/clicks` ✅
 
-Cliques de um link do usuário da sessão, por dia e por origem, para o gráfico da página do link. `days` escolhe o período: `7`, `30` (padrão) ou `90`, sempre terminando hoje. O dia é a data em `America/Sao_Paulo`, e dias sem clique vêm com zero.
+Cliques de um link do usuário da sessão, por dia, por origem e por país, com visitantes únicos e visitas de robôs, para a página do link. `days` escolhe o período: `7`, `30` (padrão) ou `90`, sempre terminando hoje. O dia é a data em `America/Sao_Paulo`, e dias sem clique vêm com zero.
 
 ```json
 {
   "days": [
-    { "date": "2026-11-13", "link": 2, "qr": 0 },
-    { "date": "2026-11-14", "link": 1, "qr": 4 }
+    { "date": "2026-11-13", "link": 2, "qr": 0, "visitors": 2, "robots": 1 },
+    { "date": "2026-11-14", "link": 1, "qr": 4, "visitors": 3, "robots": 0 }
   ],
-  "totals": { "link": 3, "qr": 4 }
+  "totals": { "link": 3, "qr": 4, "visitors": 5, "robots": 1, "no_country": 1 },
+  "countries": [
+    { "country": "BR", "clicks": 5 },
+    { "country": "PT", "clicks": 1 }
+  ]
 }
 ```
 
-`link` são cliques de quem abriu o link curto; `qr`, de quem leu o QR code (o redirect recebeu `?qr=1`, veja [ADR 0005](decisions/0005-daily-clicks-and-qr-source.md)). `totals` soma só o período pedido; o total de sempre continua em `click_count`. Os cliques anteriores à contagem por dia aparecem só no total. A resposta traz `Cache-Control: no-store`.
+- `link` são cliques de quem abriu o link curto; `qr`, de quem leu o QR code (o redirect recebeu `?qr=1`, veja [ADR 0005](decisions/0005-daily-clicks-and-qr-source.md)).
+- `visitors` são pessoas diferentes no dia. Em `totals`, é a soma dos dias: quem voltou em outro dia conta de novo ([ADR 0007](decisions/0007-country-unique-visitors-robots.md)).
+- `robots` são visitas de robôs de prévia e buscadores. Elas não entram em `link`, `qr`, `click_count` nem nos países.
+- `countries` traz os cliques de pessoas por país (ISO 3166-1 alfa-2), do maior para o menor, só de países com clique. `totals.no_country` são os cliques do período sem país conhecido, inclusive os de antes da contagem por país.
+
+`totals` soma só o período pedido; o total de sempre continua em `click_count`. Os cliques anteriores à contagem por dia aparecem só no total. A resposta traz `Cache-Control: no-store`.
 
 | Status | Motivo |
 |---:|---|
