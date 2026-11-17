@@ -155,7 +155,7 @@ function ShortenCard() {
 
 const headlineWords = ['Encurte,', 'proteja', 'e', 'conte', 'cada']
 
-// Each word rises in turn, then an orange stroke is drawn under "acesso".
+// Each word rises in turn, then an orange stroke is drawn under "clique".
 function HeroTitle() {
   return (
     <h1 className="mx-auto max-w-4xl text-[clamp(2.25rem,6vw,4.25rem)] leading-[1.05] font-extrabold tracking-tight">
@@ -173,7 +173,7 @@ function HeroTitle() {
         className="relative inline-block text-brand motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-4 motion-safe:duration-700 motion-safe:[animation-fill-mode:both]"
         style={{ animationDelay: `${headlineWords.length * 70}ms` }}
       >
-        acesso
+        clique
         <svg aria-hidden="true" viewBox="0 0 200 20" preserveAspectRatio="none" className="absolute -bottom-1 left-0 h-3 w-full overflow-visible sm:-bottom-2 sm:h-4">
           <path
             d="M3 15 C 55 3, 130 3, 197 11"
