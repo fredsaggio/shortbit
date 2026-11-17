@@ -1,7 +1,7 @@
 # Decisões arquiteturais
 
 > Status: atual
-> Última atualização: 14 de novembro de 2026
+> Última atualização: 16 de novembro de 2026
 
 Esta pasta recebe Architecture Decision Records (ADRs). Um ADR registra por que uma decisão importante foi tomada, quais alternativas foram consideradas e quais consequências foram aceitas.
 
@@ -50,3 +50,4 @@ Quais benefícios, limitações e trabalhos futuros surgem dessa escolha?
 - [0004 — Regras de composição na senha da conta](0004-account-password-composition.md) — aceita; implementada.
 - [0005 — Cliques por dia e por origem (link ou QR code)](0005-daily-clicks-and-qr-source.md) — aceita; implementada.
 - [0006 — Métricas e logs por OpenTelemetry, no Grafana Cloud](0006-opentelemetry-grafana-cloud.md) — aceita; implementada.
+- [0007 — País, visitantes únicos e robôs nos cliques](0007-country-unique-visitors-robots.md) — aceita; implementada.
