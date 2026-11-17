@@ -36,6 +36,12 @@ type DestinationCache interface {
 	Delete(ctx context.Context, shortCodes ...string) error
 }
 
+// VisitAnalyzer keeps what may be stored about a visit: whether it is a
+// robot, the country and the visitor hash (ADR 0007).
+type VisitAnalyzer interface {
+	Analyze(ctx context.Context, urlID int64, visit models.Visit, at time.Time) models.VisitDetails
+}
+
 type ClickPublisher interface {
 	Publish(ctx context.Context, event messaging.ClickEvent) error
 }
@@ -53,10 +59,13 @@ type RedirectService struct {
 	hotThreshold int64
 	publisher    ClickPublisher
 	clicks       ClickEventStore
+	visits       VisitAnalyzer
 	now          func() time.Time
 }
 
-func NewRedirectService(public PublicLinkResolver, private PrivateLinkResolver, heat HeatTracker, cache DestinationCache, hotThreshold int64, publisher ClickPublisher, clicks ClickEventStore) *RedirectService {
+// A nil visits keeps nothing about the visitor: every click is a person with
+// no country and no visitor hash.
+func NewRedirectService(public PublicLinkResolver, private PrivateLinkResolver, heat HeatTracker, cache DestinationCache, hotThreshold int64, publisher ClickPublisher, clicks ClickEventStore, visits VisitAnalyzer) *RedirectService {
 	return &RedirectService{
 		public:       public,
 		private:      private,
@@ -65,13 +74,15 @@ func NewRedirectService(public PublicLinkResolver, private PrivateLinkResolver, 
 		hotThreshold: hotThreshold,
 		publisher:    publisher,
 		clicks:       clicks,
+		visits:       visits,
 		now:          time.Now,
 	}
 }
 
-// Resolve finds where a short link goes and counts the click with its source.
-func (s *RedirectService) Resolve(ctx context.Context, shortCode, token string, source models.ClickSource) (RedirectResult, error) {
-	originalURL, err := s.ResolvePublic(ctx, shortCode, source)
+// Resolve finds where a short link goes and counts the click with what may be
+// kept about the visit.
+func (s *RedirectService) Resolve(ctx context.Context, shortCode, token string, visit models.Visit) (RedirectResult, error) {
+	originalURL, err := s.ResolvePublic(ctx, shortCode, visit)
 	if err == nil {
 		return RedirectResult{OriginalURL: originalURL}, nil
 	}
@@ -98,14 +109,14 @@ func (s *RedirectService) Resolve(ctx context.Context, shortCode, token string, 
 		return RedirectResult{}, fmt.Errorf("resolve private URL: %w", err)
 	}
 
-	if err := s.countClick(ctx, linkID, source); err != nil {
+	if err := s.countClick(ctx, linkID, visit); err != nil {
 		return RedirectResult{}, err
 	}
 
 	return RedirectResult{OriginalURL: originalURL}, nil
 }
 
-func (s *RedirectService) ResolvePublic(ctx context.Context, shortCode string, source models.ClickSource) (string, error) {
+func (s *RedirectService) ResolvePublic(ctx context.Context, shortCode string, visit models.Visit) (string, error) {
 	urlID, originalURL, cached, err := s.cache.Get(ctx, shortCode)
 	switch {
 	case err != nil:
@@ -128,7 +139,7 @@ func (s *RedirectService) ResolvePublic(ctx context.Context, shortCode string, s
 		}
 	}
 
-	if err := s.countClick(ctx, urlID, source); err != nil {
+	if err := s.countClick(ctx, urlID, visit); err != nil {
 		return "", err
 	}
 
@@ -151,8 +162,13 @@ func (s *RedirectService) ResolvePublic(ctx context.Context, shortCode string, s
 
 // The fallback reuses the event ID: if a publish that timed out still reaches
 // the queue, the worker finds the event already processed.
-func (s *RedirectService) countClick(ctx context.Context, urlID int64, source models.ClickSource) error {
-	event := messaging.NewClickEvent(urlID, source, s.now())
+func (s *RedirectService) countClick(ctx context.Context, urlID int64, visit models.Visit) error {
+	now := s.now()
+	var details models.VisitDetails
+	if s.visits != nil {
+		details = s.visits.Analyze(ctx, urlID, visit, now)
+	}
+	event := messaging.NewClickEvent(urlID, visit.Source, now).WithDetails(details)
 
 	publishErr := s.publisher.Publish(ctx, event)
 	if publishErr == nil {

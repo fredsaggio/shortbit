@@ -1,7 +1,7 @@
 # Links e shortcodes
 
 > Status: geração Sqids, criação, listagem, metadados individuais, redirects público/privado com contagem pelo RabbitMQ e cache Redis de destinos implementados
-> Última atualização: 12 de novembro de 2026
+> Última atualização: 16 de novembro de 2026
 
 ## Objetivo do domínio
 
@@ -172,7 +172,13 @@ URLs criadas não expiram automaticamente. A sessão temporária usada para desb
 
 Cada link tem o total (`click_count`) e a contagem por dia e por origem em `url_daily_clicks` ([ADR 0005](decisions/0005-daily-clicks-and-qr-source.md)). A origem é `qr` quando o redirect recebe `?qr=1`, a marca que o QR code do front leva, e `link` nos outros casos. A marca só rotula o clique: o destino e o cache não mudam. No link privado, a página de senha mantém a marca no formulário e no redirect depois do desbloqueio. Consultar qualquer dado de cliques exige que `urls.user_id` seja o usuário autenticado.
 
-Localização, dispositivo e eventos individuais ficam fora do MVP.
+Desde o [ADR 0007](decisions/0007-country-unique-visitors-robots.md), o redirect também guarda, de cada clique:
+
+- **Robô ou pessoa.** User-Agent vazio ou de robôs de prévia e buscadores conhecidos (WhatsApp, Telegram, Slack, Discord, Facebook, X, LinkedIn, Google, Bing...) conta só como visita de robô, fora do total, do gráfico e dos países.
+- **País**, pela base IP→país local da DB-IP (`GEOIP_DB_PATH`). Sem país conhecido, o clique conta, mas fica sem país.
+- **Visitante único por dia**, por um hash do IP e do User-Agent com um sal que muda e é apagado todo dia.
+
+O IP e o User-Agent são lidos durante a requisição e descartados: só o país e o hash vão para a fila. Dispositivo, navegador e eventos individuais não são guardados.
 
 ## Cache seletivo e contagem pela fila ✅
 

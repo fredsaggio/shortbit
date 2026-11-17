@@ -27,8 +27,8 @@ func TestRedirectReadsTheQRMarker(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.path, func(t *testing.T) {
 			var got models.ClickSource
-			handler := newURLHandler(urlServiceStub{resolveFunc: func(_ context.Context, _, _ string, source models.ClickSource) (services.RedirectResult, error) {
-				got = source
+			handler := newURLHandler(urlServiceStub{resolveFunc: func(_ context.Context, _, _ string, visit models.Visit) (services.RedirectResult, error) {
+				got = visit.Source
 				return services.RedirectResult{OriginalURL: "https://example.com/article"}, nil
 			}})
 			request := httptest.NewRequest(http.MethodGet, tt.path, nil)
@@ -49,7 +49,7 @@ func TestRedirectReadsTheQRMarker(t *testing.T) {
 }
 
 func TestPrivateLinkKeepsTheQRMarkerThroughThePasswordForm(t *testing.T) {
-	handler := newURLHandler(urlServiceStub{resolveFunc: func(context.Context, string, string, models.ClickSource) (services.RedirectResult, error) {
+	handler := newURLHandler(urlServiceStub{resolveFunc: func(context.Context, string, string, models.Visit) (services.RedirectResult, error) {
 		return services.RedirectResult{PasswordRequired: true}, nil
 	}})
 	for path, wantAction := range map[string]string{
@@ -96,5 +96,23 @@ func TestPrivateLinkKeepsTheQRMarkerThroughThePasswordForm(t *testing.T) {
 	handlers.NewLinkAccessSessionHandler(wrong, false).RedirectPrivateLink(response, request)
 	if !strings.Contains(response.Body.String(), `action="/Qz7Rt2/access?qr=1"`) {
 		t.Error("wrong password page lost the QR marker")
+	}
+}
+
+func TestRedirectPassesTheVisitorIPAndUserAgent(t *testing.T) {
+	var got models.Visit
+	handler := newURLHandler(urlServiceStub{resolveFunc: func(_ context.Context, _, _ string, visit models.Visit) (services.RedirectResult, error) {
+		got = visit
+		return services.RedirectResult{OriginalURL: "https://example.com/article"}, nil
+	}})
+	request := httptest.NewRequest(http.MethodGet, "/Ab3dX9", nil)
+	request.SetPathValue("code", "Ab3dX9")
+	request.RemoteAddr = "203.0.113.7:51234"
+	request.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64)")
+
+	handler.Redirect(httptest.NewRecorder(), request)
+
+	if got.IP != "203.0.113.7" || got.UserAgent != "Mozilla/5.0 (X11; Linux x86_64)" {
+		t.Errorf("visit = %+v, want the peer IP and the User-Agent", got)
 	}
 }

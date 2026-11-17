@@ -1,7 +1,7 @@
 # Modelo de dados
 
-> Status: migrations `00001` a `00008`
-> Última atualização: 14 de novembro de 2026
+> Status: migrations `00001` a `00010`
+> Última atualização: 16 de novembro de 2026
 
 PostgreSQL é a fonte da verdade. Tokens secretos são armazenados somente como hash.
 
@@ -16,6 +16,9 @@ erDiagram
     users ||--o{ urls : "possui"
     urls ||--o{ link_access_sessions : "libera acesso com"
     urls ||--o{ url_daily_clicks : "conta por dia em"
+    urls ||--o{ url_daily_countries : "conta por país em"
+    urls ||--o{ url_daily_audience : "conta visitantes e robôs em"
+    urls ||--o{ url_daily_visitor_hashes : "deduplica visitantes com"
 
     users {
         uuid id PK
@@ -90,6 +93,31 @@ erDiagram
         date day PK
         text source PK
         bigint clicks
+    }
+
+    url_daily_countries {
+        bigint url_id PK,FK
+        date day PK
+        text country PK
+        bigint clicks
+    }
+
+    url_daily_audience {
+        bigint url_id PK,FK
+        date day PK
+        bigint unique_visitors
+        bigint robot_visits
+    }
+
+    url_daily_visitor_hashes {
+        bigint url_id PK,FK
+        date day PK
+        bytea visitor_hash PK
+    }
+
+    visitor_salts {
+        date day PK
+        bytea salt
     }
 ```
 
@@ -184,6 +212,22 @@ O worker apaga eventos com `processed_at` mais antigo que `PROCESSED_CLICK_EVENT
 
 Cliques de cada link por dia e por origem: `link` (alguém abriu o link curto) ou `qr` (alguém leu o QR code, que leva `?qr=1`). O dia é a data do clique em `America/Sao_Paulo`. Só existem linhas para dias com clique; a API completa os outros com zero. O worker e o fallback somam aqui na mesma transação de `processed_click_events` e `urls.click_count`, então reentregas não contam de novo ([ADR 0005](decisions/0005-daily-clicks-and-qr-source.md)). Apagar a URL apaga as linhas (`ON DELETE CASCADE`).
 
+### `url_daily_countries` ✅
+
+Cliques de pessoas por link, dia e país (código ISO de duas letras), vindo da base IP→país local ([ADR 0007](decisions/0007-country-unique-visitors-robots.md)). Cliques sem país conhecido não têm linha: são a diferença para `url_daily_clicks`, calculada pela API. Robôs não entram.
+
+### `url_daily_audience` ✅
+
+Por link e dia: `unique_visitors` (pessoas diferentes, pelo hash do dia) e `robot_visits` (robôs de prévia e buscadores, que ficam fora de `click_count`, `url_daily_clicks` e dos países). Os únicos são por dia: a soma de um período conta de novo quem voltou em outro dia.
+
+### `url_daily_visitor_hashes` ✅
+
+Visitantes já contados num link num dia: `HMAC-SHA256(sal do dia, url_id ‖ IP ‖ User-Agent)` truncado em 16 bytes, calculado pela API. O worker insere com `ON CONFLICT DO NOTHING` e só soma em `unique_visitors` se a linha entrou, na mesma transação de `processed_click_events`. O job horário do worker apaga os dias anteriores a ontem.
+
+### `visitor_salts` ✅
+
+Um sal aleatório de 32 bytes por dia de `America/Sao_Paulo`, criado pela primeira instância da API que precisa dele. O job horário do worker apaga os sais de dias passados; sem o sal, um hash guardado não pode ser refeito a partir de um IP.
+
 ## Regras de exclusão
 
 | Relação | Comportamento |
@@ -192,5 +236,6 @@ Cliques de cada link por dia e por origem: `link` (alguém abriu o link curto) o
 | Usuário → URLs | `ON DELETE RESTRICT` |
 | URL → sessões de acesso | `ON DELETE CASCADE` |
 | URL → cliques por dia | `ON DELETE CASCADE` |
+| URL → países, visitantes e robôs por dia | `ON DELETE CASCADE` |
 
 Não existe endpoint de exclusão de conta no MVP; essas regras protegem consistência futura.

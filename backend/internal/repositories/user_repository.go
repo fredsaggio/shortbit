@@ -192,6 +192,12 @@ func (r *UserRepository) FindByID(ctx context.Context, userID uuid.UUID) (models
 	return user, nil
 }
 
+func isForeignKeyViolation(err error) bool {
+	var pgErr *pgconn.PgError
+
+	return errors.As(err, &pgErr) && pgErr.Code == "23503"
+}
+
 func isConstraintConflict(err error, constraintName string) bool {
 	var pgErr *pgconn.PgError
 

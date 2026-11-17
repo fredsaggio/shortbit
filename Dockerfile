@@ -18,15 +18,20 @@ RUN go mod download
 COPY backend/ ./
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/api ./cmd/api \
  && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/worker ./cmd/worker
+# IP to country database for the country of each click (ADR 0007). It runs
+# after the backend copy, so each backend change brings the month's edition.
+RUN sh scripts/download-geoip.sh /out/geoip/dbip-country-lite.mmdb
 
 # Distroless: no shell or package manager, runs as a non-root user, and ships
 # the CA certificates needed for TLS to Postgres, Redis, RabbitMQ and Google.
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=go /out/api /app/api
 COPY --from=go /out/worker /app/worker
+COPY --from=go /out/geoip /app/geoip
 COPY --from=web /web/dist /app/web
 ENV HTTP_ADDR=:8080 \
-    FRONTEND_DIST_DIR=/app/web
+    FRONTEND_DIST_DIR=/app/web \
+    GEOIP_DB_PATH=/app/geoip/dbip-country-lite.mmdb
 EXPOSE 8080
 USER nonroot:nonroot
 ENTRYPOINT ["/app/api"]

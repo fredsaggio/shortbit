@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 	"uuid"
 
 	"github.com/fredsaggio/url-shortener/internal/messaging"
@@ -53,6 +54,7 @@ func (p *clickPublisherStub) Publish(_ context.Context, event messaging.ClickEve
 type clickEventStoreStub struct {
 	err     error
 	sources []models.ClickSource
+	robots  []bool
 	calls   []struct {
 		eventID uuid.UUID
 		urlID   int64
@@ -65,6 +67,7 @@ func (s *clickEventStoreStub) CountClickOnce(_ context.Context, click models.Cli
 		urlID   int64
 	}{click.EventID, click.URLID})
 	s.sources = append(s.sources, click.Source)
+	s.robots = append(s.robots, click.Robot)
 	return s.err == nil, s.err
 }
 
@@ -126,7 +129,7 @@ func newRedirectService(public publicLinkResolverStub, private services.PrivateL
 func newCachedRedirectService(public publicLinkResolverStub, private services.PrivateLinkResolver, heat heatTrackerStub, cache *destinationCacheStub) (*services.RedirectService, *clickPublisherStub, *clickEventStoreStub, *destinationCacheStub) {
 	publisher := &clickPublisherStub{}
 	clicks := &clickEventStoreStub{}
-	return services.NewRedirectService(public, private, heat, cache, testHotThreshold, publisher, clicks), publisher, clicks, cache
+	return services.NewRedirectService(public, private, heat, cache, testHotThreshold, publisher, clicks, nil), publisher, clicks, cache
 }
 
 func heatCount(count int64) heatTrackerStub {
@@ -145,7 +148,7 @@ func TestRedirectServiceResolvePublicServesCacheHitWithoutDatabase(t *testing.T)
 	service, publisher, _, cache := newCachedRedirectService(unexpectedPublicResolver(t), nil, heatCount(100),
 		&destinationCacheStub{urlID: 7, originalURL: "https://example.com/hot", found: true})
 
-	got, err := service.ResolvePublic(t.Context(), "Ab3dX9", models.ClickSourceLink)
+	got, err := service.ResolvePublic(t.Context(), "Ab3dX9", models.Visit{Source: models.ClickSourceLink})
 	if err != nil || got != "https://example.com/hot" {
 		t.Fatalf("ResolvePublic() = (%q, %v), want cached destination", got, err)
 	}
@@ -174,7 +177,7 @@ func TestRedirectServiceResolvePublicAdmitsHotDestination(t *testing.T) {
 				return 7, "https://example.com/article", nil
 			}, nil, heatCount(tt.heat), &destinationCacheStub{})
 
-			if _, err := service.ResolvePublic(t.Context(), "Ab3dX9", models.ClickSourceLink); err != nil {
+			if _, err := service.ResolvePublic(t.Context(), "Ab3dX9", models.Visit{Source: models.ClickSourceLink}); err != nil {
 				t.Fatalf("ResolvePublic() error = %v", err)
 			}
 
@@ -198,7 +201,7 @@ func TestRedirectServiceResolvePublicFallsBackToDatabaseOnCacheError(t *testing.
 		return 7, "https://example.com/article", nil
 	}, nil, heatCount(1), &destinationCacheStub{getErr: errors.New("Redis unavailable")})
 
-	got, err := service.ResolvePublic(t.Context(), "Ab3dX9", models.ClickSourceLink)
+	got, err := service.ResolvePublic(t.Context(), "Ab3dX9", models.Visit{Source: models.ClickSourceLink})
 	if err != nil || got != "https://example.com/article" || !resolved {
 		t.Errorf("ResolvePublic() = (%q, %v), resolved = %v; want database destination", got, err, resolved)
 	}
@@ -209,7 +212,7 @@ func TestRedirectServiceResolvePublicIgnoresCacheWriteError(t *testing.T) {
 		return 7, "https://example.com/article", nil
 	}, nil, heatCount(testHotThreshold), &destinationCacheStub{setErr: errors.New("Redis unavailable")})
 
-	got, err := service.ResolvePublic(t.Context(), "Ab3dX9", models.ClickSourceLink)
+	got, err := service.ResolvePublic(t.Context(), "Ab3dX9", models.Visit{Source: models.ClickSourceLink})
 	if err != nil || got != "https://example.com/article" {
 		t.Errorf("ResolvePublic() = (%q, %v), want destination despite cache write error", got, err)
 	}
@@ -222,7 +225,7 @@ func TestRedirectServiceResolvePublicDoesNotCacheWithoutHeat(t *testing.T) {
 		return 0, errors.New("Redis unavailable")
 	}, &destinationCacheStub{})
 
-	if _, err := service.ResolvePublic(t.Context(), "Ab3dX9", models.ClickSourceLink); err != nil {
+	if _, err := service.ResolvePublic(t.Context(), "Ab3dX9", models.Visit{Source: models.ClickSourceLink}); err != nil {
 		t.Fatalf("ResolvePublic() error = %v", err)
 	}
 	if len(cache.sets) != 0 {
@@ -236,7 +239,7 @@ func TestRedirectServiceResolveNeverCachesPrivateLinks(t *testing.T) {
 		resolveFunc: func(context.Context, int64, []byte) (string, error) { return "https://example.com/private", nil },
 	}, heatCount(testHotThreshold+10), &destinationCacheStub{})
 
-	if _, err := service.Resolve(t.Context(), "Qz7Rt2", "raw-link-token", models.ClickSourceLink); err != nil {
+	if _, err := service.Resolve(t.Context(), "Qz7Rt2", "raw-link-token", models.Visit{Source: models.ClickSourceLink}); err != nil {
 		t.Fatalf("Resolve() error = %v", err)
 	}
 	if len(cache.sets) != 0 {
@@ -263,7 +266,7 @@ func TestRedirectServiceResolvePublicReturnsOriginalURL(t *testing.T) {
 		return 1, nil
 	})
 
-	got, err := service.ResolvePublic(ctx, "Ab3dX9", models.ClickSourceLink)
+	got, err := service.ResolvePublic(ctx, "Ab3dX9", models.Visit{Source: models.ClickSourceLink})
 	if err != nil || got != "https://example.com/article" || !called || !heatCalled {
 		t.Errorf("ResolvePublic() = (%q, %v), repository called = %t, heat called = %t; want original URL, nil, true, true", got, err, called, heatCalled)
 	}
@@ -281,7 +284,7 @@ func TestRedirectServiceResolvePublicFallsBackToSynchronousCount(t *testing.T) {
 	}, nil, noOpHeatTracker)
 	publisher.err = messaging.ErrPublisherUnavailable
 
-	got, err := service.ResolvePublic(t.Context(), "Ab3dX9", models.ClickSourceLink)
+	got, err := service.ResolvePublic(t.Context(), "Ab3dX9", models.Visit{Source: models.ClickSourceLink})
 	if err != nil || got != "https://example.com/article" {
 		t.Fatalf("ResolvePublic() = (%q, %v), want original URL", got, err)
 	}
@@ -302,7 +305,7 @@ func TestRedirectServiceResolvePublicFailsWhenClickCannotBeRecorded(t *testing.T
 	publisher.err = messaging.ErrPublisherUnavailable
 	clicks.err = storeErr
 
-	got, err := service.ResolvePublic(t.Context(), "Ab3dX9", models.ClickSourceLink)
+	got, err := service.ResolvePublic(t.Context(), "Ab3dX9", models.Visit{Source: models.ClickSourceLink})
 	if got != "" || !errors.Is(err, services.ErrClickNotRecorded) || !errors.Is(err, storeErr) {
 		t.Errorf("ResolvePublic() = (%q, %v), want empty URL and ErrClickNotRecorded wrapping the store error", got, err)
 	}
@@ -311,7 +314,7 @@ func TestRedirectServiceResolvePublicFailsWhenClickCannotBeRecorded(t *testing.T
 func TestRedirectServiceResolvePublicMapsNotFound(t *testing.T) {
 	service, publisher, _ := newRedirectService(publicNotFound, nil, unexpectedHeatTracker(t))
 
-	got, err := service.ResolvePublic(t.Context(), "missing", models.ClickSourceLink)
+	got, err := service.ResolvePublic(t.Context(), "missing", models.Visit{Source: models.ClickSourceLink})
 	if got != "" || !errors.Is(err, services.ErrURLNotFound) {
 		t.Errorf("ResolvePublic() = (%q, %v), want empty URL and ErrURLNotFound", got, err)
 	}
@@ -326,7 +329,7 @@ func TestRedirectServiceResolvePublicWrapsRepositoryError(t *testing.T) {
 		return 0, "", wantErr
 	}, nil, unexpectedHeatTracker(t))
 
-	got, err := service.ResolvePublic(t.Context(), "Ab3dX9", models.ClickSourceLink)
+	got, err := service.ResolvePublic(t.Context(), "Ab3dX9", models.Visit{Source: models.ClickSourceLink})
 	if got != "" || !errors.Is(err, wantErr) {
 		t.Errorf("ResolvePublic() = (%q, %v), want empty URL and wrapped repository error", got, err)
 	}
@@ -340,7 +343,7 @@ func TestRedirectServiceResolvePublicIgnoresHeatError(t *testing.T) {
 		return 0, heatErr
 	})
 
-	got, err := service.ResolvePublic(t.Context(), "Ab3dX9", models.ClickSourceLink)
+	got, err := service.ResolvePublic(t.Context(), "Ab3dX9", models.Visit{Source: models.ClickSourceLink})
 	if err != nil || got != "https://example.com/article" {
 		t.Errorf("ResolvePublic() = (%q, %v), want original URL despite Redis error", got, err)
 	}
@@ -358,7 +361,7 @@ func TestRedirectServiceResolvePublic(t *testing.T) {
 		return 7, "https://example.com/public", nil
 	}, private, noOpHeatTracker)
 
-	result, err := service.Resolve(t.Context(), "Ab3dX9", "ignored-cookie-token", models.ClickSourceLink)
+	result, err := service.Resolve(t.Context(), "Ab3dX9", "ignored-cookie-token", models.Visit{Source: models.ClickSourceLink})
 	if err != nil || result.OriginalURL != "https://example.com/public" || result.PasswordRequired {
 		t.Errorf("Resolve() = (%+v, %v), want public destination without password", result, err)
 	}
@@ -379,7 +382,7 @@ func TestRedirectServiceResolvePrivateWithoutCookie(t *testing.T) {
 	}
 	service, publisher, _ := newRedirectService(publicNotFound, private, unexpectedHeatTracker(t))
 
-	result, err := service.Resolve(t.Context(), "Qz7Rt2", "", models.ClickSourceLink)
+	result, err := service.Resolve(t.Context(), "Qz7Rt2", "", models.Visit{Source: models.ClickSourceLink})
 	if err != nil || !result.PasswordRequired || result.OriginalURL != "" {
 		t.Errorf("Resolve() = (%+v, %v), want password page without destination", result, err)
 	}
@@ -412,7 +415,7 @@ func TestRedirectServiceResolvePrivateWithValidCookie(t *testing.T) {
 		return 0, "", repositories.ErrURLNotFound
 	}, private, unexpectedHeatTracker(t))
 
-	result, err := service.Resolve(ctx, "Qz7Rt2", "raw-link-token", models.ClickSourceLink)
+	result, err := service.Resolve(ctx, "Qz7Rt2", "raw-link-token", models.Visit{Source: models.ClickSourceLink})
 	if err != nil || result.OriginalURL != "https://example.com/private" || result.PasswordRequired {
 		t.Errorf("Resolve() = (%+v, %v), want private destination without password page", result, err)
 	}
@@ -429,7 +432,7 @@ func TestRedirectServiceResolvePrivateFailsWhenClickCannotBeRecorded(t *testing.
 	publisher.err = messaging.ErrPublisherUnavailable
 	clicks.err = errors.New("database unavailable")
 
-	result, err := service.Resolve(t.Context(), "Qz7Rt2", "raw-link-token", models.ClickSourceLink)
+	result, err := service.Resolve(t.Context(), "Qz7Rt2", "raw-link-token", models.Visit{Source: models.ClickSourceLink})
 	if !errors.Is(err, services.ErrClickNotRecorded) || result != (services.RedirectResult{}) {
 		t.Errorf("Resolve() = (%+v, %v), want empty result and ErrClickNotRecorded", result, err)
 	}
@@ -443,7 +446,7 @@ func TestRedirectServiceResolvePrivateWithInvalidOrExpiredCookie(t *testing.T) {
 		},
 	}, unexpectedHeatTracker(t))
 
-	result, err := service.Resolve(t.Context(), "Qz7Rt2", "invalid-token", models.ClickSourceLink)
+	result, err := service.Resolve(t.Context(), "Qz7Rt2", "invalid-token", models.Visit{Source: models.ClickSourceLink})
 	if err != nil || !result.PasswordRequired || result.OriginalURL != "" {
 		t.Errorf("Resolve() = (%+v, %v), want password page without destination", result, err)
 	}
@@ -457,7 +460,7 @@ func TestRedirectServiceResolveMissingLink(t *testing.T) {
 		return 0, "", repositories.ErrURLNotFound
 	}}, unexpectedHeatTracker(t))
 
-	result, err := service.Resolve(t.Context(), "MissingCode", "", models.ClickSourceLink)
+	result, err := service.Resolve(t.Context(), "MissingCode", "", models.Visit{Source: models.ClickSourceLink})
 	if !errors.Is(err, services.ErrURLNotFound) || result != (services.RedirectResult{}) {
 		t.Errorf("Resolve() = (%+v, %v), want empty result and ErrURLNotFound", result, err)
 	}
@@ -492,7 +495,7 @@ func TestRedirectServiceResolvePropagatesInfrastructureErrors(t *testing.T) {
 				return 0, "", tt.publicErr
 			}, private, unexpectedHeatTracker(t))
 
-			result, err := service.Resolve(t.Context(), "Qz7Rt2", "raw-link-token", models.ClickSourceLink)
+			result, err := service.Resolve(t.Context(), "Qz7Rt2", "raw-link-token", models.Visit{Source: models.ClickSourceLink})
 			if !errors.Is(err, tt.wantErr) || result != (services.RedirectResult{}) {
 				t.Errorf("Resolve() = (%+v, %v), want empty result and wrapped error %v", result, err, tt.wantErr)
 			}
@@ -505,7 +508,7 @@ func TestRedirectServicePublishesTheClickSource(t *testing.T) {
 		return 42, "https://example.com", nil
 	}, nil, heatTrackerStub(func(context.Context, string) (int64, error) { return 1, nil }))
 
-	if _, err := service.ResolvePublic(t.Context(), "Ab3dX9", models.ClickSourceQR); err != nil {
+	if _, err := service.ResolvePublic(t.Context(), "Ab3dX9", models.Visit{Source: models.ClickSourceQR}); err != nil {
 		t.Fatalf("ResolvePublic() error = %v", err)
 	}
 
@@ -520,11 +523,64 @@ func TestRedirectServiceFallbackKeepsTheClickSource(t *testing.T) {
 	}, nil, heatTrackerStub(func(context.Context, string) (int64, error) { return 1, nil }))
 	publisher.err = errors.New("broker unavailable")
 
-	if _, err := service.ResolvePublic(t.Context(), "Ab3dX9", models.ClickSourceQR); err != nil {
+	if _, err := service.ResolvePublic(t.Context(), "Ab3dX9", models.Visit{Source: models.ClickSourceQR}); err != nil {
 		t.Fatalf("ResolvePublic() error = %v", err)
 	}
 
 	if len(clicks.sources) != 1 || clicks.sources[0] != models.ClickSourceQR {
 		t.Errorf("counted sources = %v, want the QR code click counted synchronously", clicks.sources)
+	}
+}
+
+type visitAnalyzerStub struct {
+	details models.VisitDetails
+	visits  []models.Visit
+	urlIDs  []int64
+}
+
+func (a *visitAnalyzerStub) Analyze(_ context.Context, urlID int64, visit models.Visit, _ time.Time) models.VisitDetails {
+	a.visits = append(a.visits, visit)
+	a.urlIDs = append(a.urlIDs, urlID)
+	return a.details
+}
+
+func TestRedirectServicePublishesWhatTheAnalyzerKeeps(t *testing.T) {
+	analyzer := &visitAnalyzerStub{details: models.VisitDetails{Country: "BR", Visitor: bytes.Repeat([]byte{7}, models.VisitorHashSize)}}
+	publisher := &clickPublisherStub{}
+	service := services.NewRedirectService(publicLinkResolverStub(func(context.Context, string) (int64, string, error) {
+		return 42, "https://example.com", nil
+	}), nil, heatCount(1), &destinationCacheStub{}, testHotThreshold, publisher, &clickEventStoreStub{}, analyzer)
+	visit := models.Visit{Source: models.ClickSourceLink, IP: "203.0.113.7", UserAgent: "Mozilla/5.0"}
+
+	if _, err := service.ResolvePublic(t.Context(), "Ab3dX9", visit); err != nil {
+		t.Fatalf("ResolvePublic() error = %v", err)
+	}
+
+	if len(analyzer.visits) != 1 || analyzer.visits[0] != visit || analyzer.urlIDs[0] != 42 {
+		t.Errorf("analyzed = %+v for %v, want the visit to link 42", analyzer.visits, analyzer.urlIDs)
+	}
+	if len(publisher.events) != 1 {
+		t.Fatalf("published %d events, want 1", len(publisher.events))
+	}
+	event := publisher.events[0]
+	if event.Robot || event.Country != "BR" || !bytes.Equal(event.Visitor, analyzer.details.Visitor) {
+		t.Errorf("published event = %+v, want the analyzer's details", event)
+	}
+}
+
+func TestRedirectServiceFallbackKeepsARobotARobot(t *testing.T) {
+	analyzer := &visitAnalyzerStub{details: models.VisitDetails{Robot: true}}
+	publisher := &clickPublisherStub{err: errors.New("broker unavailable")}
+	clicks := &clickEventStoreStub{}
+	service := services.NewRedirectService(publicLinkResolverStub(func(context.Context, string) (int64, string, error) {
+		return 42, "https://example.com", nil
+	}), nil, heatCount(1), &destinationCacheStub{}, testHotThreshold, publisher, clicks, analyzer)
+
+	if _, err := service.ResolvePublic(t.Context(), "Ab3dX9", models.Visit{Source: models.ClickSourceLink, UserAgent: "WhatsApp/2.23"}); err != nil {
+		t.Fatalf("ResolvePublic() error = %v", err)
+	}
+
+	if len(clicks.robots) != 1 || !clicks.robots[0] {
+		t.Errorf("counted robots = %v, want the robot visit counted synchronously as a robot", clicks.robots)
 	}
 }

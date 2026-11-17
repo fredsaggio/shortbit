@@ -1,3 +1,5 @@
 .env
 PROJECT_CONTEXT.md
 IMPLEMENTATION_PLAN.md
+# Base IP->país baixada por make geoip (ADR 0007).
+backend/.geoip/

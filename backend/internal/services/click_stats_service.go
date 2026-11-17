@@ -17,9 +17,9 @@ var ErrInvalidClickPeriod = errors.New("click period must be 7, 30 or 90 days")
 // ClickPeriods are the periods the link page offers, in days.
 var ClickPeriods = []int{7, 30, 90}
 
-// clickDayZone is where a day starts and ends; it matches the AT TIME ZONE
+// ClickDayZone is where a day starts and ends; it matches the AT TIME ZONE
 // of the click counting query (ADR 0005).
-const clickDayZone = "America/Sao_Paulo"
+const ClickDayZone = "America/Sao_Paulo"
 
 type ClickStatsRepository interface {
 	GetByShortcode(ctx context.Context, userID uuid.UUID, shortCode string) (models.URL, error)
@@ -45,9 +45,9 @@ type ClickStatsService struct {
 }
 
 func NewClickStatsService(repo ClickStatsRepository) (*ClickStatsService, error) {
-	location, err := time.LoadLocation(clickDayZone)
+	location, err := time.LoadLocation(ClickDayZone)
 	if err != nil {
-		return nil, fmt.Errorf("load %s: %w", clickDayZone, err)
+		return nil, fmt.Errorf("load %s: %w", ClickDayZone, err)
 	}
 	return &ClickStatsService{repo: repo, location: location, now: time.Now}, nil
 }

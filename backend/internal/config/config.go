@@ -63,6 +63,13 @@ type Config struct {
 	HotURL               HotURLConfig
 	RabbitMQ             RabbitMQConfig
 	ClickWorker          ClickWorkerConfig
+	Visits               VisitsConfig
+}
+
+// VisitsConfig points to the local IP to country database (ADR 0007). Empty,
+// clicks are counted without a country.
+type VisitsConfig struct {
+	CountryDBPath string
 }
 
 type SessionConfig struct {
@@ -347,6 +354,7 @@ func Load(getEnv func(string) string) (Config, error) {
 			RabbitMQPrefetch:             prefetch,
 			ProcessedClickEventRetention: retention,
 		},
+		Visits: VisitsConfig{CountryDBPath: getEnv("GEOIP_DB_PATH")},
 	}
 
 	if cfg.DatabaseURL == "" {

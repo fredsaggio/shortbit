@@ -1,7 +1,7 @@
 # Desenvolvimento local
 
 > Status: atual
-> Última atualização: 24 de outubro de 2026
+> Última atualização: 16 de novembro de 2026
 
 ## Requisitos
 
@@ -60,6 +60,7 @@ RUN_CLICK_WORKER=false
 FRONTEND_DIST_DIR=
 REDIS_URL=
 CLIENT_IP_HEADER=
+GEOIP_DB_PATH=
 
 # Opcionais: métricas e logs por OTLP (veja observability.md). Sem o endpoint,
 # nada sai do processo.
@@ -74,6 +75,7 @@ As variáveis do último bloco são opcionais e ficam desligadas no desenvolvime
 - `FRONTEND_DIST_DIR` aponta para o build do frontend (`frontend/dist`). A API passa a servir o app nas rotas dele, com CSP. Localmente, o Vite continua sendo o caminho.
 - `REDIS_URL` (`redis://` ou `rediss://`, com senha) substitui `REDIS_ADDR` em Redis hospedado.
 - `OTEL_EXPORTER_OTLP_ENDPOINT` liga o envio de métricas e logs por OpenTelemetry (OTLP/HTTP), para o Grafana local do Compose (`http://localhost:4318`) ou para o Grafana Cloud. `OTEL_EXPORTER_OTLP_HEADERS` leva o token (`Authorization=Basic ...`) e é segredo. Vazio, a API e o worker funcionam igual e não mandam nada. Os exportadores também entendem as outras variáveis `OTEL_*` padrão, como `OTEL_METRIC_EXPORT_INTERVAL`. Detalhes em [observability.md](observability.md).
+- `GEOIP_DB_PATH` aponta para a base IP→país da DB-IP, que dá o país de cada clique ([ADR 0007](decisions/0007-country-unique-visitors-robots.md)). `make geoip` baixa a do mês para `backend/.geoip/dbip-country-lite.mmdb`; use o caminho absoluto. Vazia, os cliques contam sem país. Em `localhost` todo clique fica sem país de qualquer jeito, porque o IP é local. O teste `go -C backend test ./internal/visits` também lê essa variável e pula a checagem da base sem ela.
 - `CLIENT_IP_HEADER` faz o rate limit ler o IP do cliente de um cabeçalho que o proxy sobrescreve (`True-Client-IP` no Render). Sem proxy, deixe vazio: o cliente poderia mandar o cabeçalho e escolher o próprio limite. `X-Forwarded-For` é recusado.
 
 `FRONTEND_URL` é opcional e assume `http://localhost:5173`, onde o Vite roda o frontend. É o destino do redirect do login com Google e precisa ser só a origem (esquema, host e porta), sem caminho nem query. Em produção, use a origem pública do frontend.

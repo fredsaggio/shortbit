@@ -10,3 +10,4 @@ frontend/dist
 **/*.log
 IMPLEMENTATION_PLAN.md
 PROJECT_CONTEXT.md
+backend/.geoip

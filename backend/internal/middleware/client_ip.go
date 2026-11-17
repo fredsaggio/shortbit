@@ -34,6 +34,12 @@ func ClientIP(header string) func(http.Handler) http.Handler {
 	}
 }
 
+// ClientIPOf is the client address the rate limiters use, for code that
+// needs it during the request only, such as the country of a click.
+func ClientIPOf(r *http.Request) string {
+	return clientIP(r)
+}
+
 func clientIP(r *http.Request) string {
 	if ip, ok := r.Context().Value(clientIPContextKey{}).(string); ok {
 		return ip

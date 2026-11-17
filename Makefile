@@ -23,6 +23,7 @@ help:
 	@echo "  make test/integration"
 	@echo "  make run"
 	@echo "  make worker"
+	@echo "  make geoip"
 	@echo "  make front/install"
 	@echo "  make front/dev"
 	@echo "  make front/build"
@@ -97,6 +98,13 @@ run:
 .PHONY: worker
 worker:
 	@go -C $(BACKEND_DIR) run ./cmd/worker
+
+# Baixa a base IP->país da DB-IP para backend/.geoip (ADR 0007). Aponte
+# GEOIP_DB_PATH para o arquivo no .env para os cliques terem país.
+# Exemplo: make geoip
+.PHONY: geoip
+geoip:
+	@sh $(BACKEND_DIR)/scripts/download-geoip.sh $(BACKEND_DIR)/.geoip/dbip-country-lite.mmdb
 
 # Exemplo: make front/install
 .PHONY: front/install

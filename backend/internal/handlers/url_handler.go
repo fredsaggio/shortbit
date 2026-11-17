@@ -15,6 +15,7 @@ import (
 	"uuid"
 
 	"github.com/fredsaggio/url-shortener/internal/ctxval"
+	"github.com/fredsaggio/url-shortener/internal/middleware"
 	"github.com/fredsaggio/url-shortener/internal/models"
 	"github.com/fredsaggio/url-shortener/internal/repositories"
 	"github.com/fredsaggio/url-shortener/internal/services"
@@ -31,7 +32,7 @@ type URLService interface {
 }
 
 type RedirectService interface {
-	Resolve(ctx context.Context, shortCode, token string, source models.ClickSource) (services.RedirectResult, error)
+	Resolve(ctx context.Context, shortCode, token string, visit models.Visit) (services.RedirectResult, error)
 }
 
 type createURLRequest struct {
@@ -262,7 +263,8 @@ func (h *URLHandler) Redirect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	source := clickSourceOf(r)
-	result, err := h.redirect.Resolve(ctx, shortCode, token, source)
+	visit := models.Visit{Source: source, IP: middleware.ClientIPOf(r), UserAgent: r.UserAgent()}
+	result, err := h.redirect.Resolve(ctx, shortCode, token, visit)
 
 	if err != nil {
 		if errors.Is(err, services.ErrURLNotFound) {

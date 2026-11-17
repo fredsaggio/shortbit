@@ -19,6 +19,7 @@ import (
 	"github.com/fredsaggio/url-shortener/internal/sessiontoken"
 	"github.com/fredsaggio/url-shortener/internal/shortcodes"
 	"github.com/fredsaggio/url-shortener/internal/verificationcode"
+	"github.com/fredsaggio/url-shortener/internal/visits"
 )
 
 const (
@@ -90,7 +91,11 @@ func CompositionRoot(pool db.DB, cfg config.Config, googleClient services.Google
 
 	// O cliente Redis é criado na main, que é responsável por fechá-lo ao desligar a aplicação.
 	clickEventRepository := repositories.NewClickEventRepository(pool)
-	redirectService := services.NewRedirectService(urlRepository, urlRepository, heatTracker, destinationCache, cfg.HotURL.Threshold, clickPublisher, clickEventRepository)
+	visitAnalyzer, err := newVisitAnalyzer(cfg.Visits, repositories.NewVisitorSaltRepository(pool))
+	if err != nil {
+		return nil, nil, err
+	}
+	redirectService := services.NewRedirectService(urlRepository, urlRepository, heatTracker, destinationCache, cfg.HotURL.Threshold, clickPublisher, clickEventRepository, visitAnalyzer)
 	urlHandler := handlers.NewURLHandler(urlService, redirectService)
 	linkAccessSessionRepository := repositories.NewLinkAccessSessionRepository(pool)
 	linkAccessSessionService := services.NewLinkAccessSessionService(urlRepository, linkAccessSessionRepository, cfg.LinkAccessSession.TTL, sessiontoken.Generate, passwordHasher)
@@ -139,4 +144,23 @@ func CompositionRoot(pool db.DB, cfg config.Config, googleClient services.Google
 		ChangePasswordHandler:    changePasswordHandler,
 		DeleteMeHandler:          deleteMeHandler,
 	}, passwordRegisterCleanup, nil
+}
+
+// newVisitAnalyzer opens the country database, which stays open for the life
+// of the process. Without GEOIP_DB_PATH clicks have no country.
+func newVisitAnalyzer(cfg config.VisitsConfig, salts visits.SaltStore) (*visits.Analyzer, error) {
+	location, err := time.LoadLocation(services.ClickDayZone)
+	if err != nil {
+		return nil, fmt.Errorf("load %s: %w", services.ClickDayZone, err)
+	}
+
+	var countries visits.CountryLocator
+	if cfg.CountryDBPath != "" {
+		db, err := visits.OpenCountryDB(cfg.CountryDBPath)
+		if err != nil {
+			return nil, fmt.Errorf("GEOIP_DB_PATH: %w", err)
+		}
+		countries = db
+	}
+	return visits.NewAnalyzer(countries, salts, location), nil
 }

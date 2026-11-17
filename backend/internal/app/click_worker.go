@@ -35,5 +35,17 @@ func RunClickWorker(ctx context.Context, pool *pgxpool.Pool, rabbitMQURL string,
 		cleanup.Run(ctx)
 	})
 
+	// The zone data is embedded (time/tzdata), so loading it does not fail
+	// in practice; if it did, the salts would only outlive their day.
+	location, err := time.LoadLocation(services.ClickDayZone)
+	if err != nil {
+		slog.Error("visitor data cleanup disabled", "error", err)
+	} else {
+		visitorCleanup := jobs.NewVisitorDataCleanup(clickEventRepository, location)
+		wg.Go(func() {
+			visitorCleanup.Run(ctx)
+		})
+	}
+
 	wg.Wait()
 }
