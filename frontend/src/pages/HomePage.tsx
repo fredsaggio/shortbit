@@ -10,6 +10,7 @@ import { Button } from '../components/Button.tsx'
 import { buttonSizes, buttonTones } from '../components/buttonStyles.ts'
 import { CreatedLinkBanner } from '../components/CreatedLinkBanner.tsx'
 import { ClickBars } from '../components/home/ClickBars.tsx'
+import { ClickStatsShowcase } from '../components/home/ClickStatsShowcase.tsx'
 import { FloatingLinks } from '../components/home/FloatingLinks.tsx'
 import { LinkMarquee } from '../components/home/LinkMarquee.tsx'
 import { LinkShrinkDemo } from '../components/home/LinkShrinkDemo.tsx'
@@ -410,6 +411,22 @@ export function HomePage() {
 
       <section className="border-t bg-surface">
         <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6">
+          <Reveal className="mx-auto max-w-3xl text-center">
+            <p className="text-sm font-bold tracking-widest text-brand-700 uppercase">Acessos</p>
+            <h2 className="mt-3 text-[clamp(1.875rem,4vw,3rem)] leading-tight font-extrabold">Saiba de onde vêm os seus acessos</h2>
+            <p className="mx-auto mt-3 max-w-2xl text-muted-foreground">
+              Cada link tem estes números no seu painel. Os de baixo são de exemplo: troque o período e passe o mouse nos dias.
+            </p>
+          </Reveal>
+
+          <Reveal delay={80}>
+            <ClickStatsShowcase />
+          </Reveal>
+        </div>
+      </section>
+
+      <section className="border-t bg-card">
+        <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6">
           <Reveal>
             <h2 className="text-center text-[clamp(1.875rem,4vw,2.5rem)] font-extrabold">Como funciona</h2>
           </Reveal>
@@ -418,7 +435,7 @@ export function HomePage() {
       </section>
 
       {state.status !== 'authenticated' && (
-        <section className="border-t bg-card">
+        <section className="border-t bg-surface">
           <Reveal className="mx-auto flex max-w-7xl flex-col items-center gap-6 px-4 py-16 text-center sm:px-6">
             <h2 className="text-[clamp(1.75rem,4vw,2.5rem)] font-extrabold">Pronto para encurtar o primeiro link?</h2>
             <Magnetic strength={8}>

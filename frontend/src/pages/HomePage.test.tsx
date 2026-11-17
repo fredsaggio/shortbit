@@ -139,4 +139,19 @@ describe('HomePage', () => {
     await actions.click(screen.getByRole('button', { name: 'Ver tela de senha novamente' }))
     expect(await screen.findByRole('heading', { name: 'Vamos abrir?' })).toBeInTheDocument()
   })
+
+  it('shows the numbers of a link page with example data', async () => {
+    fakeApi(signedOut)
+    const { user: actions } = renderApp('/')
+
+    const showcase = await screen.findByRole('region', { name: 'Acessos por dia' })
+    expect(within(showcase).getByText('Exemplo')).toBeInTheDocument()
+    const totals = within(showcase).getByRole('list', { name: 'Total no período' })
+    const visitors30 = within(totals).getByText('Visitantes únicos').nextSibling?.textContent
+    expect(within(showcase).getByRole('list', { name: 'Países' })).toHaveTextContent('Brasil')
+
+    await actions.click(within(showcase).getByRole('radio', { name: '7 dias' }))
+
+    expect(within(totals).getByText('Visitantes únicos').nextSibling?.textContent).not.toBe(visitors30)
+  })
 })

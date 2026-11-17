@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from 'react'
-import type { KeyboardEvent } from 'react'
+import type { KeyboardEvent, ReactNode } from 'react'
 import { isAbortError, messageOf } from '../api/client.ts'
 import { getDailyClicks } from '../api/links.ts'
 import type { ClickPeriod, DailyClicks, DayClicks } from '../api/types.ts'
@@ -67,7 +67,6 @@ type ClickChartProps = {
 }
 
 export function ClickChart({ code, reloadKey }: ClickChartProps) {
-  const titleId = useId()
   const [period, setPeriod] = useState<ClickPeriod>(30)
   const [state, setState] = useState<ChartState>({ status: 'loading' })
 
@@ -90,17 +89,45 @@ export function ClickChart({ code, reloadKey }: ClickChartProps) {
   }, [code, period, reloadKey])
 
   return (
+    <ClickStatsCard period={period} onPeriodChange={setPeriod}>
+      {state.status === 'loading' && <Skeleton className="mt-6 h-64 rounded-xl bg-surface-200" role="status" aria-label="Carregando os acessos…" />}
+      {state.status === 'error' && (
+        <Alert tone="error" className="mt-6">
+          {state.error}
+        </Alert>
+      )}
+      {state.status === 'ready' && <ClickStats data={state.data} refreshing={refreshing} />}
+    </ClickStatsCard>
+  )
+}
+
+type ClickStatsCardProps = {
+  period: ClickPeriod
+  onPeriodChange: (period: ClickPeriod) => void
+  // Shown next to the title, such as "Exemplo" on the home page.
+  badge?: ReactNode
+  headingLevel?: 'h2' | 'h3'
+  children: ReactNode
+}
+
+// The card of the link's numbers: title, period switch and what goes below.
+export function ClickStatsCard({ period, onPeriodChange, badge, headingLevel: Heading = 'h2', children }: ClickStatsCardProps) {
+  const titleId = useId()
+  return (
     <section aria-labelledby={titleId} className="rounded-3xl border bg-card p-6 shadow-card sm:p-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h2 id={titleId} className="text-lg font-bold">
-          Acessos por dia
-        </h2>
+        <div className="flex items-center gap-3">
+          <Heading id={titleId} className="text-lg font-bold">
+            Acessos por dia
+          </Heading>
+          {badge}
+        </div>
         <ToggleGroup
           type="single"
           value={String(period)}
           onValueChange={(next) => {
             if (next) {
-              setPeriod(Number(next) as ClickPeriod)
+              onPeriodChange(Number(next) as ClickPeriod)
             }
           }}
           aria-label="Período"
@@ -113,22 +140,20 @@ export function ClickChart({ code, reloadKey }: ClickChartProps) {
           ))}
         </ToggleGroup>
       </div>
-
-      {state.status === 'loading' && <Skeleton className="mt-6 h-64 rounded-xl bg-surface-200" role="status" aria-label="Carregando os acessos…" />}
-      {state.status === 'error' && (
-        <Alert tone="error" className="mt-6">
-          {state.error}
-        </Alert>
-      )}
-      {state.status === 'ready' && (
-        <div className={cn('transition-opacity duration-200', refreshing && 'opacity-50')} aria-busy={refreshing}>
-          <ChartLegend data={state.data} />
-          <ChartPlot days={state.data.days} />
-          <ChartTable days={state.data.days} />
-          <CountryList data={state.data} />
-        </div>
-      )}
+      {children}
     </section>
+  )
+}
+
+// Totals, the chart, the table and the countries of one period.
+export function ClickStats({ data, refreshing = false }: { data: DailyClicks; refreshing?: boolean }) {
+  return (
+    <div className={cn('transition-opacity duration-200', refreshing && 'opacity-50')} aria-busy={refreshing}>
+      <ChartLegend data={data} />
+      <ChartPlot days={data.days} />
+      <ChartTable days={data.days} />
+      <CountryList data={data} />
+    </div>
   )
 }
 
