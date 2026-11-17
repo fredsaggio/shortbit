@@ -255,7 +255,14 @@ export function Layout() {
           </div>
         </div>
         <div className="border-t border-white/10">
-          <p className="mx-auto max-w-7xl px-4 py-5 text-xs sm:px-6">© {currentYear} shortbit. Todos os direitos reservados.</p>
+          <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-x-6 gap-y-2 px-4 py-5 text-xs sm:px-6">
+            <p>© {currentYear} shortbit. Todos os direitos reservados.</p>
+            {/* The free country database (CC BY 4.0) asks for a link to it on
+                every page that shows its countries. */}
+            <a href="https://db-ip.com" target="_blank" rel="noreferrer" className="rounded-sm transition-colors hover:text-white">
+              DB-IP
+            </a>
+          </div>
         </div>
       </footer>
     </div>

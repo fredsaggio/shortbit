@@ -75,7 +75,9 @@ describe('ClickChart', () => {
     expect(items[0]).toHaveTextContent(/Brasil\s*6 cliques/)
     expect(items[1]).toHaveTextContent(/Portugal\s*3 cliques/)
     expect(items[2]).toHaveTextContent(/País não identificado\s*1 clique$/)
-    expect(within(chart).getByRole('link', { name: 'DB-IP' })).toHaveAttribute('href', 'https://db-ip.com')
+    expect(within(chart).queryByRole('link', { name: 'DB-IP' })).not.toBeInTheDocument()
+    // The country database's license asks for this link on the page.
+    expect(within(screen.getByRole('contentinfo')).getByRole('link', { name: 'DB-IP' })).toHaveAttribute('href', 'https://db-ip.com')
   })
 
   it('adds up the countries past the eighth in one row', async () => {

@@ -80,14 +80,6 @@ export function CountryList({ data }: { data: DailyClicks }) {
           ))}
         </ul>
       )}
-      {/* DB-IP's license (CC BY 4.0) asks for this link wherever its data shows. */}
-      <p className="mt-4 text-xs text-muted-foreground">
-        Países identificados pela{' '}
-        <a href="https://db-ip.com" target="_blank" rel="noreferrer" className="font-semibold text-action underline-offset-4 hover:underline">
-          DB-IP
-        </a>
-        .
-      </p>
     </section>
   )
 }

@@ -53,7 +53,7 @@ Uma visita de robô não soma em `urls.click_count`, em `url_daily_clicks` nem n
 - Base `dbip-country-lite` em formato MMDB, lida com `github.com/oschwald/maxminddb-golang/v2`. O caminho vem de `GEOIP_DB_PATH`, opcional: vazio, ninguém tem país e o resto funciona.
 - A imagem Docker baixa a base do mês no build (com a do mês anterior como reserva, para o começo do mês). Localmente, `make geoip` baixa para `backend/.geoip/`.
 - Tabela `url_daily_countries (url_id, day, country, clicks)`. Só cliques de pessoas com país conhecido têm linha; os sem país são a diferença para o total de `url_daily_clicks`, calculada na API.
-- A licença CC BY 4.0 exige atribuição: a página que mostra os países tem link para db-ip.com.
+- A licença CC BY 4.0 exige um link para db-ip.com nas páginas que mostram os países. Ele fica no rodapé do site, que aparece em todas as páginas, como um link discreto "DB-IP".
 
 ### Visitantes únicos
 
