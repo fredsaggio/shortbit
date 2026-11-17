@@ -30,6 +30,9 @@ type Visit struct {
 	Source    ClickSource
 	IP        string
 	UserAgent string
+	// Head is a HEAD request: a link checker asking where the link goes,
+	// never a browser opening it.
+	Head bool
 }
 
 // VisitDetails is what is kept from a visit (ADR 0007). A robot carries no

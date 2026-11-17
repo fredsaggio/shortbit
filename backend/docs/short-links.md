@@ -174,7 +174,7 @@ Cada link tem o total (`click_count`) e a contagem por dia e por origem em `url_
 
 Desde o [ADR 0007](decisions/0007-country-unique-visitors-robots.md), o redirect também guarda, de cada clique:
 
-- **Robô ou pessoa.** User-Agent de robôs de prévia e buscadores conhecidos (WhatsApp, Telegram, Slack, Discord, Facebook, X, LinkedIn, Google, Bing...) conta só como visita de robô, fora do total, do gráfico e dos países.
+- **Robô ou pessoa.** Requisição `HEAD` (verificadores de link e monitores) ou User-Agent de robôs de prévia e buscadores conhecidos (WhatsApp, Telegram, Slack, Discord, Facebook, X, LinkedIn, Google, Bing...) conta só como visita de robô, fora do total, do gráfico e dos países.
 - **País**, pela base IP→país local da DB-IP (`GEOIP_DB_PATH`). Sem país conhecido, o clique conta, mas fica sem país.
 - **Visitante único por dia**, por um hash do IP e do User-Agent com um sal que muda e é apagado todo dia.
 

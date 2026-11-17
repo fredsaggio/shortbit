@@ -54,7 +54,7 @@ func NewAnalyzer(countries CountryLocator, salts SaltStore, location *time.Locat
 }
 
 func (a *Analyzer) Analyze(ctx context.Context, urlID int64, visit models.Visit, at time.Time) models.VisitDetails {
-	if IsRobot(visit.UserAgent) {
+	if visit.Head || IsRobot(visit.UserAgent) {
 		return models.VisitDetails{Robot: true}
 	}
 

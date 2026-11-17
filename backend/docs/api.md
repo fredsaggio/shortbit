@@ -497,7 +497,7 @@ Cliques de um link do usuário da sessão, por dia, por origem e por país, com 
 
 - `link` são cliques de quem abriu o link curto; `qr`, de quem leu o QR code (o redirect recebeu `?qr=1`, veja [ADR 0005](decisions/0005-daily-clicks-and-qr-source.md)).
 - `visitors` são pessoas diferentes no dia. Em `totals`, é a soma dos dias: quem voltou em outro dia conta de novo ([ADR 0007](decisions/0007-country-unique-visitors-robots.md)).
-- `robots` são visitas de robôs de prévia e buscadores. Elas não entram em `link`, `qr`, `click_count` nem nos países.
+- `robots` são visitas de robôs de prévia e buscadores e requisições `HEAD` de verificadores de link. Elas não entram em `link`, `qr`, `click_count` nem nos países.
 - `countries` traz os cliques de pessoas por país (ISO 3166-1 alfa-2), do maior para o menor, só de países com clique. `totals.no_country` são os cliques do período sem país conhecido, inclusive os de antes da contagem por país.
 
 `totals` soma só o período pedido; o total de sempre continua em `click_count`. Os cliques anteriores à contagem por dia aparecem só no total. A resposta traz `Cache-Control: no-store`.
@@ -511,6 +511,8 @@ Cliques de um link do usuário da sessão, por dia, por origem e por país, com 
 ### `GET /{code}` ✅
 
 Não exige sessão de conta. `?qr=1`, a marca que o QR code leva, faz o clique contar como vindo do QR code; o destino não muda. Para um link público existente, registra o clique e retorna `302 Found`, com `Location` apontando para a URL original e `Cache-Control: no-store`. Para um link privado sem cookie de acesso válido, retorna `200 OK` com a página HTML de senha, sem contar clique. Com cookie válido para aquele link, registra o clique e retorna `302 Found`.
+
+`HEAD /{code}` recebe a mesma resposta, mas conta como visita de robô, não como clique, assim como os robôs de prévia reconhecidos pelo User-Agent ([ADR 0007](decisions/0007-country-unique-visitors-robots.md)).
 
 O clique é registrado como um evento no RabbitMQ, confirmado pelo broker antes do redirect, e o worker incrementa `click_count` depois. Se a publicação falhar, a API incrementa o contador no PostgreSQL antes de responder. Se nem o RabbitMQ nem o PostgreSQL registrarem o clique, retorna `503 Service Unavailable`, sem redirect. Código inexistente retorna `404`; outras falhas retornam `500`. O rate limit global pode retornar `429`.
 

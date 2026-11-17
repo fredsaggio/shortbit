@@ -263,7 +263,7 @@ func (h *URLHandler) Redirect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	source := clickSourceOf(r)
-	visit := models.Visit{Source: source, IP: middleware.ClientIPOf(r), UserAgent: r.UserAgent()}
+	visit := models.Visit{Source: source, IP: middleware.ClientIPOf(r), UserAgent: r.UserAgent(), Head: r.Method == http.MethodHead}
 	result, err := h.redirect.Resolve(ctx, shortCode, token, visit)
 
 	if err != nil {

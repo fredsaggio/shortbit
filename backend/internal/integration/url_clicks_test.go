@@ -64,14 +64,20 @@ func TestDailyClicksByLinkAndQRCodeIntegration(t *testing.T) {
 		}
 	}
 
-	// A link preview robot and a second browser on the same network.
-	for _, agent := range []string{"WhatsApp/2.23.20.0 A", "Mozilla/5.0 (X11; Linux x86_64) Firefox/133.0"} {
-		request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/"+public, nil)
-		request.Header.Set("User-Agent", agent)
+	// A link preview robot, a link checker asking with HEAD and a second
+	// browser on the same network.
+	firefox := "Mozilla/5.0 (X11; Linux x86_64) Firefox/133.0"
+	for _, visit := range []struct{ method, agent string }{
+		{http.MethodGet, "WhatsApp/2.23.20.0 A"},
+		{http.MethodHead, firefox},
+		{http.MethodGet, firefox},
+	} {
+		request := httptest.NewRequestWithContext(t.Context(), visit.method, "/"+public, nil)
+		request.Header.Set("User-Agent", visit.agent)
 		recorder := httptest.NewRecorder()
 		router.ServeHTTP(recorder, request)
 		if recorder.Code != http.StatusFound {
-			t.Fatalf("open %s as %q status = %d, want 302", public, agent, recorder.Code)
+			t.Fatalf("%s %s as %q status = %d, want 302", visit.method, public, visit.agent, recorder.Code)
 		}
 	}
 
@@ -122,10 +128,10 @@ func TestDailyClicksByLinkAndQRCodeIntegration(t *testing.T) {
 		t.Errorf("public link stats = %+v, want today %s with 3 by link and 3 by QR code", body, today)
 	}
 	// Same IP: the five opens without a User-Agent are one visitor, Firefox
-	// another. The robot is apart, and without GEOIP_DB_PATH no click has a
-	// country.
-	if last.Visitors != 2 || last.Robots != 1 || body.Totals.Visitors != 2 || body.Totals.Robots != 1 {
-		t.Errorf("public link audience = %+v, want 2 visitors and 1 robot today", body)
+	// another. The preview robot and the HEAD request are apart, and without
+	// GEOIP_DB_PATH no click has a country.
+	if last.Visitors != 2 || last.Robots != 2 || body.Totals.Visitors != 2 || body.Totals.Robots != 2 {
+		t.Errorf("public link audience = %+v, want 2 visitors and 2 robots today", body)
 	}
 	if len(body.Countries) != 0 || body.Totals.NoCountry != 6 {
 		t.Errorf("countries = %+v, no country = %d; want none and 6", body.Countries, body.Totals.NoCountry)

@@ -60,6 +60,20 @@ func TestAnalyzeRobotKeepsNothingElse(t *testing.T) {
 	}
 }
 
+func TestAnalyzeHeadRequestIsARobot(t *testing.T) {
+	salts := &saltStoreStub{}
+	analyzer := NewAnalyzer(countriesStub{"203.0.113.7": "BR"}, salts, saoPaulo(t))
+
+	got := analyzer.Analyze(t.Context(), 42, models.Visit{IP: "203.0.113.7", UserAgent: browserAgent, Head: true}, time.Now())
+
+	if !got.Robot || got.Country != "" || got.Visitor != nil {
+		t.Errorf("Analyze() = %+v, want a HEAD request counted as a robot even with a browser User-Agent", got)
+	}
+	if len(salts.days) != 0 {
+		t.Errorf("salt read for a HEAD request")
+	}
+}
+
 func TestAnalyzePersonGetsCountryAndVisitor(t *testing.T) {
 	analyzer := NewAnalyzer(countriesStub{"203.0.113.7": "BR"}, &saltStoreStub{}, saoPaulo(t))
 	visit := models.Visit{IP: "203.0.113.7", UserAgent: browserAgent}

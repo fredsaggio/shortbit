@@ -112,7 +112,19 @@ func TestRedirectPassesTheVisitorIPAndUserAgent(t *testing.T) {
 
 	handler.Redirect(httptest.NewRecorder(), request)
 
-	if got.IP != "203.0.113.7" || got.UserAgent != "Mozilla/5.0 (X11; Linux x86_64)" {
-		t.Errorf("visit = %+v, want the peer IP and the User-Agent", got)
+	if got.IP != "203.0.113.7" || got.UserAgent != "Mozilla/5.0 (X11; Linux x86_64)" || got.Head {
+		t.Errorf("visit = %+v, want the peer IP and the User-Agent of a GET", got)
+	}
+
+	head := httptest.NewRequest(http.MethodHead, "/Ab3dX9", nil)
+	head.SetPathValue("code", "Ab3dX9")
+	response := httptest.NewRecorder()
+	handler.Redirect(response, head)
+
+	if !got.Head {
+		t.Errorf("visit = %+v, want a HEAD request marked as such", got)
+	}
+	if response.Code != http.StatusFound || response.Header().Get("Location") != "https://example.com/article" {
+		t.Errorf("HEAD = %d to %q, want the same redirect as a GET", response.Code, response.Header().Get("Location"))
 	}
 }
