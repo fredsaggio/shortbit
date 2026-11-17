@@ -56,18 +56,28 @@ export const user = {
 }
 
 // Daily clicks as the API answers them: one entry per day ending on
-// 2026-11-14, zero unless given.
-export function dailyClicks(days: number, counts: Record<string, { link?: number; qr?: number }> = {}) {
+// 2026-11-14, zero unless given. Without countries, every click has an
+// unknown country.
+type DayCounts = { link?: number; qr?: number; visitors?: number; robots?: number }
+
+export function dailyClicks(days: number, counts: Record<string, DayCounts> = {}, countries: { country: string; clicks: number }[] = []) {
   const end = Date.UTC(2026, 10, 14)
   const entries = Array.from({ length: days }, (_, i) => {
     const date = new Date(end - (days - 1 - i) * 86_400_000).toISOString().slice(0, 10)
-    return { date, link: counts[date]?.link ?? 0, qr: counts[date]?.qr ?? 0 }
+    const day = counts[date] ?? {}
+    return { date, link: day.link ?? 0, qr: day.qr ?? 0, visitors: day.visitors ?? 0, robots: day.robots ?? 0 }
   })
+  const sum = (key: 'link' | 'qr' | 'visitors' | 'robots') => entries.reduce((total, day) => total + day[key], 0)
+  const clicks = sum('link') + sum('qr')
   return {
     days: entries,
     totals: {
-      link: entries.reduce((sum, day) => sum + day.link, 0),
-      qr: entries.reduce((sum, day) => sum + day.qr, 0),
+      link: sum('link'),
+      qr: sum('qr'),
+      visitors: sum('visitors'),
+      robots: sum('robots'),
+      no_country: Math.max(0, clicks - countries.reduce((total, country) => total + country.clicks, 0)),
     },
+    countries,
   }
 }

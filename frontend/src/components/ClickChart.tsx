@@ -5,6 +5,7 @@ import { getDailyClicks } from '../api/links.ts'
 import type { ClickPeriod, DailyClicks, DayClicks } from '../api/types.ts'
 import { clicksLabel, formatCount, formatLongDay, formatShortDay } from '../format.ts'
 import { Alert } from './Alert.tsx'
+import { CountryList } from './CountryList.tsx'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
@@ -45,9 +46,18 @@ function dayTotal(day: DayClicks): number {
   return day.link + day.qr
 }
 
+function visitorsLabel(value: number): string {
+  return value === 1 ? 'visitante único' : 'visitantes únicos'
+}
+
+function robotsLabel(value: number): string {
+  return value === 1 ? 'prévia de robô' : 'prévias de robôs'
+}
+
 function daySummary(day: DayClicks): string {
   const total = dayTotal(day)
-  return `${formatLongDay(day.date)}: ${formatCount(total)} ${clicksLabel(total)}, ${formatCount(day.link)} pelo link e ${formatCount(day.qr)} pelo QR code`
+  const robots = day.robots > 0 ? `, ${formatCount(day.robots)} ${robotsLabel(day.robots)}` : ''
+  return `${formatLongDay(day.date)}: ${formatCount(total)} ${clicksLabel(total)}, ${formatCount(day.link)} pelo link e ${formatCount(day.qr)} pelo QR code, ${formatCount(day.visitors)} ${visitorsLabel(day.visitors)}${robots}`
 }
 
 type ClickChartProps = {
@@ -115,6 +125,7 @@ export function ClickChart({ code, reloadKey }: ClickChartProps) {
           <ChartLegend data={state.data} />
           <ChartPlot days={state.data.days} />
           <ChartTable days={state.data.days} />
+          <CountryList data={state.data} />
         </div>
       )}
     </section>
@@ -123,15 +134,29 @@ export function ClickChart({ code, reloadKey }: ClickChartProps) {
 
 function ChartLegend({ data }: { data: DailyClicks }) {
   return (
-    <ul className="mt-5 flex flex-wrap gap-x-6 gap-y-2" aria-label="Total no período">
-      {sources.map((source) => (
-        <li key={source.key} className="flex items-center gap-2">
-          <span className={cn('size-3 rounded-[3px]', source.fill)} aria-hidden="true" />
-          <span className="text-sm text-muted-foreground">{source.label}</span>
-          <span className="font-bold text-navy">{formatCount(data.totals[source.key])}</span>
+    <>
+      <ul className="mt-5 flex flex-wrap gap-x-6 gap-y-2" aria-label="Total no período">
+        {sources.map((source) => (
+          <li key={source.key} className="flex items-center gap-2">
+            <span className={cn('size-3 rounded-[3px]', source.fill)} aria-hidden="true" />
+            <span className="text-sm text-muted-foreground">{source.label}</span>
+            <span className="font-bold text-navy">{formatCount(data.totals[source.key])}</span>
+          </li>
+        ))}
+        <li className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Visitantes únicos</span>
+          <span className="font-bold text-navy">{formatCount(data.totals.visitors)}</span>
         </li>
-      ))}
-    </ul>
+        <li className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Prévias de robôs</span>
+          <span className="font-bold text-navy">{formatCount(data.totals.robots)}</span>
+        </li>
+      </ul>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Os visitantes únicos somam os de cada dia: quem volta em outro dia conta de novo. Prévias de robôs, como a que o
+        WhatsApp monta ao receber o link, não contam como clique.
+      </p>
+    </>
   )
 }
 
@@ -269,12 +294,22 @@ function ChartTooltip({ day, position }: { day: DayClicks; position: number }) {
           <span className="text-muted-foreground">{source.inline}</span>
         </p>
       ))}
+      <p className="mt-1 flex items-center gap-2 border-t pt-1">
+        <span className="font-bold text-navy tabular-nums">{formatCount(day.visitors)}</span>
+        <span className="text-muted-foreground">{visitorsLabel(day.visitors)}</span>
+      </p>
+      {day.robots > 0 && (
+        <p className="mt-1 flex items-center gap-2">
+          <span className="font-bold text-navy tabular-nums">{formatCount(day.robots)}</span>
+          <span className="text-muted-foreground">{robotsLabel(day.robots)}</span>
+        </p>
+      )}
     </div>
   )
 }
 
 function ChartTable({ days }: { days: DayClicks[] }) {
-  const withClicks = [...days].reverse().filter((day) => dayTotal(day) > 0)
+  const withClicks = [...days].reverse().filter((day) => dayTotal(day) > 0 || day.robots > 0)
   return (
     <details className="group mt-5 text-sm">
       <summary className="inline-flex cursor-pointer items-center gap-1 rounded-md font-semibold text-action hover:underline">
@@ -283,24 +318,28 @@ function ChartTable({ days }: { days: DayClicks[] }) {
       {withClicks.length === 0 ? (
         <p className="mt-3 text-muted-foreground">Nenhum clique neste período.</p>
       ) : (
-        <div className="mt-3 max-h-72 overflow-y-auto rounded-lg border">
+        <div className="mt-3 max-h-72 overflow-auto rounded-lg border">
           <table className="w-full text-left">
-            <caption className="sr-only">Cliques por dia, do mais recente ao mais antigo; dias sem clique ficam de fora</caption>
+            <caption className="sr-only">Cliques por dia, do mais recente ao mais antigo; dias sem clique nem prévia ficam de fora</caption>
             <thead className="sticky top-0 bg-surface text-muted-foreground">
               <tr>
                 <th scope="col" className="px-3 py-2 font-medium">Dia</th>
                 <th scope="col" className="px-3 py-2 text-right font-medium">Pelo link</th>
                 <th scope="col" className="px-3 py-2 text-right font-medium">Pelo QR code</th>
                 <th scope="col" className="px-3 py-2 text-right font-medium">Total</th>
+                <th scope="col" className="px-3 py-2 text-right font-medium">Visitantes únicos</th>
+                <th scope="col" className="px-3 py-2 text-right font-medium">Prévias de robôs</th>
               </tr>
             </thead>
             <tbody className="tabular-nums">
               {withClicks.map((day) => (
                 <tr key={day.date} className="border-t">
-                  <th scope="row" className="px-3 py-2 font-medium">{formatLongDay(day.date)}</th>
+                  <th scope="row" className="px-3 py-2 font-medium whitespace-nowrap">{formatLongDay(day.date)}</th>
                   <td className="px-3 py-2 text-right">{formatCount(day.link)}</td>
                   <td className="px-3 py-2 text-right">{formatCount(day.qr)}</td>
                   <td className="px-3 py-2 text-right font-semibold">{formatCount(dayTotal(day))}</td>
+                  <td className="px-3 py-2 text-right">{formatCount(day.visitors)}</td>
+                  <td className="px-3 py-2 text-right">{formatCount(day.robots)}</td>
                 </tr>
               ))}
             </tbody>

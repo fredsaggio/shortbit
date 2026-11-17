@@ -12,7 +12,7 @@ ShortBit is a URL shortener for public or password-protected links. It tracks cl
 | **Redirect** | Redirect público e privado; o clique vai para o RabbitMQ e um worker incrementa o contador, com fallback síncrono no PostgreSQL; links privados exigem senha e criam uma sessão temporária por link |
 | **Cache** | Links públicos com 20 acessos em 60 segundos têm o destino guardado no Redis por 5 minutos; sem Redis, a leitura volta ao PostgreSQL |
 | **Proteções** | Rate limiting, limite de tamanho do corpo e limpeza de cadastros pendentes |
-| **Frontend** | Landing page, cadastro com nome, login (senha ou Google), recuperação de senha, painel para criar e listar links, detalhe com cliques e página Minha conta ([`frontend/`](frontend/README.md)) |
+| **Frontend** | Landing page, cadastro com nome, login (senha ou Google), recuperação de senha, painel para criar e listar links, detalhe com cliques por dia, países e visitantes únicos, e página Minha conta ([`frontend/`](frontend/README.md)) |
 
 ---
 
@@ -28,7 +28,7 @@ Tudo da tabela acima está implementado e testado. A Fase 13 tirou a contagem de
 | Redirect contando pela fila, com fallback síncrono | ✅ |
 | Cache Redis dos destinos mais acessados | ✅ |
 
-Analytics além do contador total ficam fora do MVP.
+Além do total, cada link tem cliques por dia e por origem (link ou QR code, [ADR 0005](backend/docs/decisions/0005-daily-clicks-and-qr-source.md)) e, desde o [ADR 0007](backend/docs/decisions/0007-country-unique-visitors-robots.md), país, visitantes únicos por dia e prévias de robôs contadas à parte. O IP e o User-Agent não são guardados.
 
 ---
 

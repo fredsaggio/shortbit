@@ -19,7 +19,7 @@ export function PrivacyPage() {
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 sm:py-14">
       <header>
         <h1 className="text-[clamp(1.875rem,4vw,2.5rem)] font-extrabold">Política de privacidade</h1>
-        <p className="mt-2 text-muted-foreground">Atualizada em 14 de novembro de 2026.</p>
+        <p className="mt-2 text-muted-foreground">Atualizada em 16 de novembro de 2026.</p>
       </header>
 
       <div className="mt-8 grid gap-8 rounded-3xl border bg-card p-6 shadow-card sm:p-10">
@@ -45,14 +45,27 @@ export function PrivacyPage() {
             <li>O endereço de destino, o link curto, a data de criação e se o link é público ou privado.</li>
             <li>A senha dos links privados, protegida do mesmo jeito que a senha da sua conta.</li>
             <li>Quantas vezes cada link foi aberto em cada dia, e se foi pelo link ou pelo QR code.</li>
+            <li>De que países vieram os acessos e quantas pessoas diferentes abriram cada link em cada dia.</li>
+            <li>Quantas vezes robôs abriram o link, como os que montam a prévia num app de conversa.</li>
           </ul>
         </Section>
 
         <Section title="Quem abre os seus links">
           <p>
-            Não guardamos nada sobre quem abre um link: nem quem é, nem de onde veio, nem qual aparelho usou. Cada acesso só
-            soma um na contagem. Para barrar abusos, como alguém tentando adivinhar a senha de um link, olhamos o endereço de
-            internet de quem acessa por alguns minutos, sem gravar.
+            Quando alguém abre um link, olhamos o endereço de internet e o navegador dessa pessoa só durante aquele acesso,
+            sem gravá-los. Deles tiramos três coisas: o país de onde veio o acesso, se quem abriu foi um robô e um código
+            para não contar a mesma pessoa duas vezes no mesmo dia.
+          </p>
+          <p>
+            Esse código é feito com uma chave sorteada a cada dia e apagada quando o dia acaba. Depois disso, ninguém, nem a
+            nossa equipe, consegue saber de quem ele era. O próprio código é apagado em até dois dias. O dono do link vê só
+            números somados: quantos acessos por dia e por país, e quantas pessoas diferentes. Não guardamos quem a pessoa é,
+            a cidade, o aparelho nem o navegador.
+          </p>
+          <p>
+            Fazemos isso para o dono do link saber o alcance dele, que é um interesse legítimo previsto na LGPD. Para barrar
+            abusos, como alguém tentando adivinhar a senha de um link, também olhamos o endereço de internet de quem acessa por
+            alguns minutos, sem gravar.
           </p>
         </Section>
 
@@ -76,8 +89,8 @@ export function PrivacyPage() {
         <Section title="Por quanto tempo">
           <p>
             Seus dados e seus links ficam guardados enquanto a sua conta existir. Os códigos que enviamos por email valem por
-            poucos minutos, os registros internos de cliques são apagados em 7 dias, e os registros técnicos do funcionamento
-            do site, em poucas semanas.
+            poucos minutos, os códigos que evitam contar a mesma pessoa duas vezes são apagados em até dois dias, os registros
+            internos de cliques em 7 dias, e os registros técnicos do funcionamento do site, em poucas semanas.
           </p>
         </Section>
 

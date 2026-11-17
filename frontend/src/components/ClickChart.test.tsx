@@ -41,6 +41,60 @@ describe('ClickChart', () => {
     expect(within(chart).getByRole('radio', { name: '30 dias' })).toBeChecked()
   })
 
+  it('shows the unique visitors and the robot previews of the period', async () => {
+    fakeApi({
+      ...base,
+      'GET /urls/Ab3dX9/clicks?days=30': {
+        status: 200,
+        body: dailyClicks(30, { '2026-11-13': { link: 2, visitors: 2, robots: 1 }, '2026-11-14': { link: 3, visitors: 2, robots: 4 } }),
+      },
+    })
+    const { chart } = await openChart()
+
+    const totals = await within(chart).findByRole('list', { name: 'Total no período' })
+    expect(within(totals).getByText('Visitantes únicos').nextSibling).toHaveTextContent('4')
+    expect(within(totals).getByText('Prévias de robôs').nextSibling).toHaveTextContent('5')
+  })
+
+  it('lists the clicks by country, most first, with the unknown ones last', async () => {
+    fakeApi({
+      ...base,
+      'GET /urls/Ab3dX9/clicks?days=30': {
+        status: 200,
+        body: dailyClicks(30, { '2026-11-14': { link: 10 } }, [
+          { country: 'BR', clicks: 6 },
+          { country: 'PT', clicks: 3 },
+        ]),
+      },
+    })
+    const { chart } = await openChart()
+
+    const countries = await within(chart).findByRole('list', { name: 'Países' })
+    const items = within(countries).getAllByRole('listitem')
+    expect(items).toHaveLength(3)
+    expect(items[0]).toHaveTextContent(/Brasil\s*6 cliques/)
+    expect(items[1]).toHaveTextContent(/Portugal\s*3 cliques/)
+    expect(items[2]).toHaveTextContent(/País não identificado\s*1 clique$/)
+    expect(within(chart).getByRole('link', { name: 'DB-IP' })).toHaveAttribute('href', 'https://db-ip.com')
+  })
+
+  it('adds up the countries past the eighth in one row', async () => {
+    const codes = ['BR', 'PT', 'US', 'AR', 'MX', 'FR', 'DE', 'ES', 'IT', 'JP']
+    fakeApi({
+      ...base,
+      'GET /urls/Ab3dX9/clicks?days=30': {
+        status: 200,
+        body: dailyClicks(30, { '2026-11-14': { link: 55 } }, codes.map((country, i) => ({ country, clicks: 10 - i }))),
+      },
+    })
+    const { chart } = await openChart()
+
+    const countries = await within(chart).findByRole('list', { name: 'Países' })
+    const items = within(countries).getAllByRole('listitem')
+    expect(items).toHaveLength(9)
+    expect(items[8]).toHaveTextContent(/Outros 2 países\s*3 cliques/)
+  })
+
   it('switches the period', async () => {
     const api = fakeApi({
       ...base,
@@ -62,7 +116,7 @@ describe('ClickChart', () => {
       ...base,
       'GET /urls/Ab3dX9/clicks?days=30': {
         status: 200,
-        body: dailyClicks(30, { '2026-11-13': { link: 2 }, '2026-11-14': { link: 1, qr: 4 } }),
+        body: dailyClicks(30, { '2026-11-13': { link: 2, visitors: 1 }, '2026-11-14': { link: 1, qr: 4, visitors: 4, robots: 2 } }),
       },
     })
     const { chart, user: actions } = await openChart()
@@ -70,10 +124,10 @@ describe('ClickChart', () => {
     const plot = await within(chart).findByRole('group', { name: /Gráfico de cliques por dia/ })
     await actions.click(plot)
     await actions.keyboard('{End}')
-    expect(within(chart).getByText(/^14 de novembro: 5 cliques, 1 pelo link e 4 pelo QR code$/)).toBeInTheDocument()
+    expect(within(chart).getByText(/^14 de novembro: 5 cliques, 1 pelo link e 4 pelo QR code, 4 visitantes únicos, 2 prévias de robôs$/)).toBeInTheDocument()
 
     await actions.keyboard('{ArrowLeft}')
-    expect(within(chart).getByText(/^13 de novembro: 2 cliques, 2 pelo link e 0 pelo QR code$/)).toBeInTheDocument()
+    expect(within(chart).getByText(/^13 de novembro: 2 cliques, 2 pelo link e 0 pelo QR code, 1 visitante único$/)).toBeInTheDocument()
   })
 
   it('lists the days with clicks in a table, newest first', async () => {
@@ -81,7 +135,7 @@ describe('ClickChart', () => {
       ...base,
       'GET /urls/Ab3dX9/clicks?days=30': {
         status: 200,
-        body: dailyClicks(30, { '2026-11-02': { qr: 1 }, '2026-11-14': { link: 1, qr: 4 } }),
+        body: dailyClicks(30, { '2026-11-02': { qr: 1, visitors: 1 }, '2026-11-08': { robots: 3 }, '2026-11-14': { link: 1, qr: 4, visitors: 3, robots: 1 } }),
       },
     })
     const { chart, user: actions } = await openChart()
@@ -89,9 +143,12 @@ describe('ClickChart', () => {
     await actions.click(await within(chart).findByText('Ver os números em tabela'))
     const rows = within(within(chart).getByRole('table')).getAllByRole('row').slice(1)
 
-    expect(rows).toHaveLength(2)
-    expect(rows[0]).toHaveTextContent('14 de novembro145')
-    expect(rows[1]).toHaveTextContent('2 de novembro011')
+    // Day, by link, by QR code, total, unique visitors and robot previews; a
+    // day with robot previews only is listed too.
+    expect(rows).toHaveLength(3)
+    expect(rows[0]).toHaveTextContent('14 de novembro14531')
+    expect(rows[1]).toHaveTextContent('8 de novembro00003')
+    expect(rows[2]).toHaveTextContent('2 de novembro01110')
   })
 
   it('asks for the clicks again when the page refreshes', async () => {
