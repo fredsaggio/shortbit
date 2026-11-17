@@ -51,7 +51,7 @@ export function CountryList({ data }: { data: DailyClicks }) {
         Países
       </h3>
       {rows.length === 0 ? (
-        <p className="mt-3 text-sm text-muted-foreground">Nenhum clique neste período.</p>
+        <p className="mt-3 text-sm text-muted-foreground">Nenhum acesso neste período.</p>
       ) : (
         <ul className="mt-4 grid gap-3" aria-labelledby={titleId}>
           {rows.map((row) => (

@@ -188,7 +188,7 @@ export function LinkShrinkDemo({ onShortLink }: LinkShrinkDemoProps) {
             <p className="text-xl leading-none font-extrabold text-navy tabular-nums">
               <Clicks key={index} target={example.clicks} active={counting} />
             </p>
-            <p className="mt-1 text-[11px] font-medium text-muted-foreground">cliques</p>
+            <p className="mt-1 text-[11px] font-medium text-muted-foreground">acessos</p>
           </div>
         </div>
       </div>

@@ -93,7 +93,7 @@ export function ClickChart({ code, reloadKey }: ClickChartProps) {
     <section aria-labelledby={titleId} className="rounded-3xl border bg-card p-6 shadow-card sm:p-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h2 id={titleId} className="text-lg font-bold">
-          Cliques por dia
+          Acessos por dia
         </h2>
         <ToggleGroup
           type="single"
@@ -114,7 +114,7 @@ export function ClickChart({ code, reloadKey }: ClickChartProps) {
         </ToggleGroup>
       </div>
 
-      {state.status === 'loading' && <Skeleton className="mt-6 h-64 rounded-xl bg-surface-200" role="status" aria-label="Carregando os cliques…" />}
+      {state.status === 'loading' && <Skeleton className="mt-6 h-64 rounded-xl bg-surface-200" role="status" aria-label="Carregando os acessos…" />}
       {state.status === 'error' && (
         <Alert tone="error" className="mt-6">
           {state.error}
@@ -194,7 +194,7 @@ function ChartPlot({ days }: { days: DayClicks[] }) {
           <div
             role="group"
             tabIndex={0}
-            aria-label="Gráfico de cliques por dia. Use as setas para ver cada dia."
+            aria-label="Gráfico de acessos por dia. Use as setas para ver cada dia."
             onKeyDown={onKeyDown}
             onFocus={() => setActive((current) => current ?? days.length - 1)}
             onBlur={() => setActive(null)}
@@ -211,7 +211,7 @@ function ChartPlot({ days }: { days: DayClicks[] }) {
             ))}
 
             {empty && (
-              <p className="absolute inset-0 grid place-items-center text-sm text-muted-foreground">Nenhum clique neste período.</p>
+              <p className="absolute inset-0 grid place-items-center text-sm text-muted-foreground">Nenhum acesso neste período.</p>
             )}
 
             {/* Each day is a full-height hit area; the 2px gap between days and
@@ -310,11 +310,11 @@ function ChartTable({ days }: { days: DayClicks[] }) {
         Ver os números em tabela
       </summary>
       {withClicks.length === 0 ? (
-        <p className="mt-3 text-muted-foreground">Nenhum clique neste período.</p>
+        <p className="mt-3 text-muted-foreground">Nenhum acesso neste período.</p>
       ) : (
         <div className="mt-3 max-h-72 overflow-auto rounded-lg border">
           <table className="w-full text-left">
-            <caption className="sr-only">Cliques por dia, do mais recente ao mais antigo; dias sem clique nem prévia ficam de fora</caption>
+            <caption className="sr-only">Acessos por dia, do mais recente ao mais antigo; dias sem acesso nem prévia ficam de fora</caption>
             <thead className="sticky top-0 bg-surface text-muted-foreground">
               <tr>
                 <th scope="col" className="px-3 py-2 font-medium">Dia</th>

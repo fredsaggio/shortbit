@@ -182,11 +182,11 @@ export function LinkDetailPage() {
               )}
             </section>
 
-            <aside aria-label="Cliques" className="relative overflow-hidden rounded-3xl bg-navy p-6 text-white shadow-card sm:p-8">
+            <aside aria-label="Acessos" className="relative overflow-hidden rounded-3xl bg-navy p-6 text-white shadow-card sm:p-8">
               <div aria-hidden="true" className="pointer-events-none absolute -top-16 -right-16 size-48 rounded-full bg-brand/30 blur-2xl" />
               <div className="relative">
                 <span className="inline-flex items-center gap-2 text-sm font-bold tracking-wide text-brand uppercase">
-                  <BarChart3 className="size-5" aria-hidden="true" /> Cliques
+                  <BarChart3 className="size-5" aria-hidden="true" /> Acessos
                 </span>
                 <p className="mt-4 text-6xl leading-none font-extrabold tracking-tight">{formatCount(state.link.click_count)}</p>
                 <p className="mt-2 text-navy-300">{clicksLabel(state.link.click_count)} no total</p>
@@ -194,7 +194,7 @@ export function LinkDetailPage() {
                   {!state.refreshing && <RotateCw className="size-4" aria-hidden="true" />}
                   Atualizar
                 </Button>
-                <p className="mt-4 text-sm text-navy-300">Os cliques podem levar alguns segundos para aparecer.</p>
+                <p className="mt-4 text-sm text-navy-300">Os acessos podem levar alguns segundos para aparecer.</p>
               </div>
             </aside>
           </div>

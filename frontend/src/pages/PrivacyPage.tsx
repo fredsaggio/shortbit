@@ -90,7 +90,7 @@ export function PrivacyPage() {
           <p>
             Seus dados e seus links ficam guardados enquanto a sua conta existir. Os códigos que enviamos por email valem por
             poucos minutos, os códigos que evitam contar a mesma pessoa duas vezes são apagados em até dois dias, os registros
-            internos de cliques em 7 dias, e os registros técnicos do funcionamento do site, em poucas semanas.
+            internos de acessos em 7 dias, e os registros técnicos do funcionamento do site, em poucas semanas.
           </p>
         </Section>
 

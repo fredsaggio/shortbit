@@ -11,7 +11,7 @@ export function formatCount(value: number): string {
 }
 
 export function clicksLabel(value: number): string {
-  return value === 1 ? 'clique' : 'cliques'
+  return value === 1 ? 'acesso' : 'acessos'
 }
 
 const longDateFormat = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' })

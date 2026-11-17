@@ -217,7 +217,7 @@ function DeleteAccountCard({ account }: { account: Account }) {
           }
         }}
         title="Excluir sua conta?"
-        description="Sua conta, seus links e a contagem de cliques serão apagados para sempre, e você sai de todos os aparelhos."
+        description="Sua conta, seus links e a contagem de acessos serão apagados para sempre, e você sai de todos os aparelhos."
         confirmLabel="Excluir conta"
         busyLabel="Excluindo…"
         confirmDisabled={confirmation.trim() === ''}

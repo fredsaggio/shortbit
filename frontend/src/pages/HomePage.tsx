@@ -31,7 +31,7 @@ import { cn } from '@/lib/utils'
 const steps = [
   { title: 'Cole a URL', text: 'Qualquer endereço http ou https, do tamanho que for.' },
   { title: 'Escolha o acesso', text: 'Público para todo mundo, ou privado: abre só com a senha.' },
-  { title: 'Compartilhe e acompanhe', text: 'Copie o link curto e veja os cliques no painel.' },
+  { title: 'Compartilhe e acompanhe', text: 'Copie o link curto e veja os acessos no painel.' },
 ]
 
 function ShortenCard() {
@@ -155,7 +155,7 @@ function ShortenCard() {
 
 const headlineWords = ['Encurte,', 'proteja', 'e', 'conte', 'cada']
 
-// Each word rises in turn, then an orange stroke is drawn under "clique".
+// Each word rises in turn, then an orange stroke is drawn under "acesso".
 function HeroTitle() {
   return (
     <h1 className="mx-auto max-w-4xl text-[clamp(2.25rem,6vw,4.25rem)] leading-[1.05] font-extrabold tracking-tight">
@@ -173,7 +173,7 @@ function HeroTitle() {
         className="relative inline-block text-brand motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-4 motion-safe:duration-700 motion-safe:[animation-fill-mode:both]"
         style={{ animationDelay: `${headlineWords.length * 70}ms` }}
       >
-        clique
+        acesso
         <svg aria-hidden="true" viewBox="0 0 200 20" preserveAspectRatio="none" className="absolute -bottom-1 left-0 h-3 w-full overflow-visible sm:-bottom-2 sm:h-4">
           <path
             d="M3 15 C 55 3, 130 3, 197 11"
@@ -354,7 +354,7 @@ export function HomePage() {
             <TiltCard className="rounded-3xl">
               <article className={cn(cardClass, 'bg-card')}>
                 <span className="inline-flex items-center gap-2 text-sm font-bold tracking-wide text-brand-700 uppercase">
-                  <BarChart3 className="size-5 text-brand" aria-hidden="true" /> Cliques
+                  <BarChart3 className="size-5 text-brand" aria-hidden="true" /> Acessos
                 </span>
                 <h3 className="mt-3 text-2xl font-bold">Cada acesso contado</h3>
                 <p className="mt-2 text-muted-foreground">Veja no painel quantas vezes cada link foi aberto.</p>

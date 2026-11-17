@@ -8,7 +8,7 @@ describe('HomePage', () => {
     fakeApi(signedOut)
     renderApp('/')
 
-    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Encurte, proteja e conte cada clique')
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Encurte, proteja e conte cada acesso')
     expect(screen.queryByText(/plano grátis/i)).not.toBeInTheDocument()
   })
 

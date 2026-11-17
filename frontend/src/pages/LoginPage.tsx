@@ -55,7 +55,7 @@ export function LoginPage() {
   return (
     <AuthCard
       title="Entrar"
-      description="Que bom te ver de novo. Acesse seus links e cliques."
+      description="Que bom te ver de novo. Veja seus links e acessos."
       footer={
         <>
           Ainda não tem conta?{' '}

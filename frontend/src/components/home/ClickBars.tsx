@@ -13,7 +13,7 @@ export function ClickBars() {
   return (
     <div ref={ref} aria-hidden="true" className="mt-6">
       <p className="text-3xl font-extrabold text-navy tabular-nums">
-        {formatCount(clicks)} <span className="text-base font-semibold text-muted-foreground">cliques · exemplo</span>
+        {formatCount(clicks)} <span className="text-base font-semibold text-muted-foreground">acessos · exemplo</span>
       </p>
       <div className="mt-4 flex h-24 items-end gap-2">
         {bars.map((height, index) => (

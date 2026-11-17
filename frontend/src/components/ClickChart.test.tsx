@@ -20,7 +20,7 @@ const base = {
 
 async function openChart() {
   const view = renderApp('/painel/links/Ab3dX9')
-  const chart = await screen.findByRole('region', { name: 'Cliques por dia' })
+  const chart = await screen.findByRole('region', { name: 'Acessos por dia' })
   return { ...view, chart }
 }
 
@@ -72,9 +72,9 @@ describe('ClickChart', () => {
     const countries = await within(chart).findByRole('list', { name: 'Países' })
     const items = within(countries).getAllByRole('listitem')
     expect(items).toHaveLength(3)
-    expect(items[0]).toHaveTextContent(/Brasil\s*6 cliques/)
-    expect(items[1]).toHaveTextContent(/Portugal\s*3 cliques/)
-    expect(items[2]).toHaveTextContent(/País não identificado\s*1 clique$/)
+    expect(items[0]).toHaveTextContent(/Brasil\s*6 acessos/)
+    expect(items[1]).toHaveTextContent(/Portugal\s*3 acessos/)
+    expect(items[2]).toHaveTextContent(/País não identificado\s*1 acesso$/)
     expect(within(chart).queryByRole('link', { name: 'DB-IP' })).not.toBeInTheDocument()
     // The country database's license asks for this link on the page.
     expect(within(screen.getByRole('contentinfo')).getByRole('link', { name: 'DB-IP' })).toHaveAttribute('href', 'https://db-ip.com')
@@ -94,7 +94,7 @@ describe('ClickChart', () => {
     const countries = await within(chart).findByRole('list', { name: 'Países' })
     const items = within(countries).getAllByRole('listitem')
     expect(items).toHaveLength(9)
-    expect(items[8]).toHaveTextContent(/Outros 2 países\s*3 cliques/)
+    expect(items[8]).toHaveTextContent(/Outros 2 países\s*3 acessos/)
   })
 
   it('switches the period', async () => {
@@ -105,7 +105,7 @@ describe('ClickChart', () => {
     })
     const { chart, user: actions } = await openChart()
 
-    await within(chart).findByText('Nenhum clique neste período.', { selector: 'p.absolute' })
+    await within(chart).findByText('Nenhum acesso neste período.', { selector: 'p.absolute' })
     await actions.click(within(chart).getByRole('radio', { name: '7 dias' }))
 
     const totals = within(chart).getByRole('list', { name: 'Total no período' })
@@ -123,13 +123,13 @@ describe('ClickChart', () => {
     })
     const { chart, user: actions } = await openChart()
 
-    const plot = await within(chart).findByRole('group', { name: /Gráfico de cliques por dia/ })
+    const plot = await within(chart).findByRole('group', { name: /Gráfico de acessos por dia/ })
     await actions.click(plot)
     await actions.keyboard('{End}')
-    expect(within(chart).getByText(/^14 de novembro: 5 cliques, 1 pelo link e 4 pelo QR code, 4 visitantes únicos, 2 prévias de robôs$/)).toBeInTheDocument()
+    expect(within(chart).getByText(/^14 de novembro: 5 acessos, 1 pelo link e 4 pelo QR code, 4 visitantes únicos, 2 prévias de robôs$/)).toBeInTheDocument()
 
     await actions.keyboard('{ArrowLeft}')
-    expect(within(chart).getByText(/^13 de novembro: 2 cliques, 2 pelo link e 0 pelo QR code, 1 visitante único$/)).toBeInTheDocument()
+    expect(within(chart).getByText(/^13 de novembro: 2 acessos, 2 pelo link e 0 pelo QR code, 1 visitante único$/)).toBeInTheDocument()
   })
 
   it('lists the days with clicks in a table, newest first', async () => {
